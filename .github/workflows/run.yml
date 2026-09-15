@@ -1,0 +1,46 @@
+name: forecast-run
+
+# 9am / 12pm / 9pm / 12am America/Indiana expressed in UTC. Indiana is
+# UTC-4 in daylight time, so winter runs land one hour later local.
+on:
+  schedule:
+    - cron: "0 1,4,13,16 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: forecast-run
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Forecast run
+        run: uv run sunstack run
+        env:
+          CDSAPI_URL: ${{ secrets.CDSAPI_URL }}
+          CDSAPI_KEY: ${{ secrets.CDSAPI_KEY }}
+
+      - name: Export static site
+        run: uv run sunstack export --site-dir docs
+
+      - name: Publish results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs data/calibration
+          git diff --quiet --cached && echo "no changes" || git commit -m "Scheduled run $(date -u +%Y%m%d_%H%M)"
+          git push

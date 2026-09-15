@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-09-13T21:47:13.170751-04:00",
+  "coordinates": [
+    41.703293,
+    -86.238292
+  ],
+  "timezone": "America/Indiana/Indianapolis",
+  "strict": true,
+  "nasa_rows": 222408,
+  "openmeteo_historical_rows": 41160,
+  "previous_runs_rows": 96096,
+  "cams_eac4_rows": 67208,
+  "training_rows": 222408,
+  "local_reference_rows": 108744,
+  "skill_rows": 111,
+  "direct_cams_credentials": true,
+  "model_metrics": {
+    "rows": 108956,
+    "validation_split_year": 2024,
+    "uva": {
+      "mae": 0.3240924466093497,
+      "rmse": 0.47055100402114347,
+      "r2": 0.9989322264232272,
+      "median_absolute_error": 0.21340560900729244
+    },
+    "uvb": {
+      "mae": 0.02330294994781255,
+      "rmse": 0.0402699178122504,
+      "r2": 0.989823631934423,
+      "median_absolute_error": 0.010592917676502445
+    }
+  },
+  "absolute_score_definition": {
+    "uvi_reference": 20.0,
+    "uva_reference_wm2": 60.0,
+    "weights": {
+      "uvi": 0.55,
+      "uva": 0.3,
+      "interaction": 0.15
+    }
+  }
+}
