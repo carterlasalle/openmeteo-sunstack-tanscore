@@ -39,6 +39,7 @@ def export_static_site(
     }
     html = HTML
     html = _swap_once(html, "fetch(`/api/data?skin_type=${s}&min_temp=${m}`)", "fetch('./data.json')")
+    run_stamp = "".join(c for c in str(summary.get("run", "")) if c.isdigit()) or "0"
     start = html.index('<div class="controls">')
     end_marker = "Calendar</a></div></div>"
     if html.count(end_marker) != 1:
@@ -56,7 +57,7 @@ def export_static_site(
     html = _swap_once(
         html,
         "const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch('./data.json');",
-        "const s='',m='';const r=await fetch('./data.json');",
+        f"const s='',m='';const r=await fetch('./data.json?v={run_stamp}');",
     )
     html = _swap_once(
         html,
