@@ -182,6 +182,16 @@ def build_30min_forecast(hourly: pd.DataFrame, hrrr15: pd.DataFrame | None = Non
     h = h.loc[~h["dt"].duplicated(keep="first")].copy()
     h = h.sort_values("dt").set_index("dt")
     numeric = h.select_dtypes(include=[np.number, "bool"]).copy()
+    # Some feeds deliver numeric-looking columns as strings/None, which the
+    # dtype filter silently drops (the UI then falls back to a different
+    # product for those cells). Coerce the display-critical ones explicitly.
+    for _col in (
+        "uv_index", "predicted_uva_wm2", "predicted_uvb_wm2",
+        "shortwave_radiation_instant", "overall_tan_opportunity_0_100",
+        "tan_score_absolute_0_100",
+    ):
+        if _col in h.columns and _col not in numeric.columns:
+            numeric[_col] = pd.to_numeric(h[_col], errors="coerce")
     idx = pd.date_range(h.index.min(), h.index.max(), freq="30min")
     union_idx = numeric.index.union(idx)
     # Boolean flags cannot hold reindex gaps (numpy bool upcasts to object and

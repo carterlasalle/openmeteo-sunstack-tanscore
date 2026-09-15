@@ -555,3 +555,24 @@ def test_30min_survives_non_numeric_ghi_dtype():
     out = build_30min_forecast(hourly, None)
     slot = out.loc[out["time"] == "2026-09-15T12:30"].iloc[0]
     assert float(slot["shortwave_radiation_instant"]) > 0.0
+
+
+def test_30min_keeps_string_dtype_uv_index():
+    # uv_index can arrive as strings (dropped by the numeric-only resample,
+    # leaving the UI on a different product via fallback). It must survive
+    # with the interpolated value.
+    from sunstack.opportunity import build_30min_forecast
+
+    hourly = pd.DataFrame({
+        "time": ["2026-09-15T12:00", "2026-09-15T13:00", "2026-09-15T14:00"],
+        "temperature_2m": [80.0, 82.0, 83.0],
+        "shortwave_radiation_instant": [400.0, 500.0, 600.0],
+        "uv_index": ["4.0", "5.0", "5.2"],
+        "predicted_uva_wm2": [30.0, 40.0, 42.0],
+        "overall_tan_opportunity_0_100": [30.0, 40.0, 42.0],
+        "tan_score_absolute_0_100": [28.0, 38.0, 40.0],
+    })
+    out = build_30min_forecast(hourly, None)
+    slot = out.loc[out["time"] == "2026-09-15T12:30"].iloc[0]
+    # Linear would give 4.5; the bounded geometry correction stays near it.
+    assert 3.0 < float(slot["uv_index"]) < 6.0
