@@ -31,6 +31,7 @@ jobs:
         run: uv run sunstack run
         env:
           CDSAPI_URL: ${{ secrets.CDSAPI_URL }}
+          CDSAPI_KEY: ${{ secrets.CDSAPI_KEY }}
 
       - name: Export static site
         run: uv run sunstack export --site-dir docs
