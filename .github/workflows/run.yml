@@ -37,7 +37,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs data/calibration
+          git add docs && git add -f data/calibration
           git diff --quiet --cached && echo "no changes" || git commit -m "Scheduled run $(date -u +%Y%m%d_%H%M)"
           # Local pushes may land mid-run; rebase so the fresh export wins.
           git pull --rebase -X ours || (git rebase --abort && exit 1)
