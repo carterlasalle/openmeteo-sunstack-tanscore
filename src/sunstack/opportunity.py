@@ -212,7 +212,10 @@ def build_30min_forecast(hourly: pd.DataFrame, hrrr15: pd.DataFrame | None = Non
         stamps = pd.to_datetime(out["dt"])
         kt_30 = kt_h.reindex(h.index.union(stamps)).sort_index().interpolate(method="time").reindex(stamps)
         toa_30 = _toa_wm2(_as_utc(stamps))
-        lin_ghi = pd.to_numeric(out["shortwave_radiation_instant"], errors="coerce").to_numpy()
+        lin_ghi = np.asarray(
+            ghi_h.reindex(h.index.union(stamps)).sort_index().interpolate(method="time").reindex(stamps),
+            dtype=float,
+        )
         kt_ghi = kt_30.to_numpy(dtype=float) * toa_30
         night = toa_30 <= 1
         improved = np.where(night, 0.0, np.where(np.isfinite(kt_ghi), kt_ghi, lin_ghi))

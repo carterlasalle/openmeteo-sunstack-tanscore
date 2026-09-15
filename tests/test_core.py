@@ -534,3 +534,24 @@ def test_30min_uses_clear_sky_index_not_linear_blend(monkeypatch):
     slot = out.loc[out["time"] == "2026-09-15T06:30"].iloc[0]
     assert float(slot["shortwave_radiation_instant"]) == 312.5
     assert float(slot["predicted_uva_wm2"]) == 31.25
+
+
+def test_30min_survives_non_numeric_ghi_dtype():
+    # Some feeds deliver radiation as strings/None (object dtype), which the
+    # numeric-only resample silently drops. The kt block must coerce, never
+    # assume the interpolated frame carries the column (CI KeyError).
+    from sunstack.opportunity import build_30min_forecast
+
+    hourly = pd.DataFrame({
+        "time": ["2026-09-15T12:00", "2026-09-15T13:00", "2026-09-15T14:00"],
+        "temperature_2m": [80.0, 82.0, 83.0],
+        "shortwave_radiation_instant": ["400.0", None, "600.0"],
+        "predicted_uva_wm2": [30.0, 40.0, 42.0],
+        "uv_index": [4.0, 5.0, 5.2],
+        "overall_tan_opportunity_0_100": [30.0, 40.0, 42.0],
+        "tan_score_absolute_0_100": [28.0, 38.0, 40.0],
+    })
+    assert not pd.api.types.is_numeric_dtype(hourly["shortwave_radiation_instant"])
+    out = build_30min_forecast(hourly, None)
+    slot = out.loc[out["time"] == "2026-09-15T12:30"].iloc[0]
+    assert float(slot["shortwave_radiation_instant"]) > 0.0
