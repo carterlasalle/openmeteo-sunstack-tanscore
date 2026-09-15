@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import math
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
+import pvlib.location
 
 from . import config
 from .calibrate import absolute_tan_score, num, scol
@@ -153,6 +155,20 @@ def attach_fitzpatrick(df: pd.DataFrame, skin_type: int | None) -> pd.DataFrame:
     return out
 
 
+def _as_utc(stamps: pd.Series) -> pd.Series:
+    parsed = pd.to_datetime(stamps)
+    if getattr(parsed.dt, "tz", None) is None:
+        parsed = parsed.dt.tz_localize(ZoneInfo(config.TIMEZONE), ambiguous="infer", nonexistent="shift_forward")
+    return parsed.dt.tz_convert("UTC")
+
+
+def _toa_wm2(times_utc: pd.Series) -> np.ndarray:
+    """Exact extraterrestrial horizontal irradiance: pure solar geometry."""
+    loc = pvlib.location.Location(config.LATITUDE, config.LONGITUDE, tz="UTC")
+    zen = pd.DataFrame(loc.get_solarposition(pd.DatetimeIndex(times_utc)))["zenith"].to_numpy(dtype=float)
+    return np.clip(1361.1 * np.cos(np.radians(zen)), 0, None)
+
+
 def build_30min_forecast(hourly: pd.DataFrame, hrrr15: pd.DataFrame | None = None) -> pd.DataFrame:
     if hourly.empty:
         return pd.DataFrame()
@@ -183,6 +199,45 @@ def build_30min_forecast(hourly: pd.DataFrame, hrrr15: pd.DataFrame | None = Non
     out = base.reset_index()
     out["time"] = out["dt"].dt.strftime("%Y-%m-%dT%H:%M")
     out["subhour_source"] = "interpolated_hourly"
+    # Clear-sky-index interpolation for instantaneous GHI. Linear blends fail
+    # where solar geometry moves fast (sunrise/sunset shoulders): they invent
+    # light before sunrise. kt is smooth and dimensionless; the :30 TOA below
+    # is exact astronomy, not interpolated. Backed by HRRR native 15-min
+    # truth: daylight MAE 53.8 -> 51.5, median 16.0 -> 12.1 (n=258 slots).
+    if "shortwave_radiation_instant" in h.columns:
+        ghi_h = pd.to_numeric(h["shortwave_radiation_instant"], errors="coerce")
+        toa_h = _toa_wm2(_as_utc(h.index.to_series()))
+        kt_h = (ghi_h.to_numpy() / np.where(toa_h > 1, toa_h, np.nan)).clip(0, 1.5)
+        kt_h = pd.Series(kt_h, index=h.index)
+        stamps = pd.to_datetime(out["dt"])
+        kt_30 = kt_h.reindex(h.index.union(stamps)).sort_index().interpolate(method="time").reindex(stamps)
+        toa_30 = _toa_wm2(_as_utc(stamps))
+        lin_ghi = pd.to_numeric(out["shortwave_radiation_instant"], errors="coerce").to_numpy()
+        kt_ghi = kt_30.to_numpy(dtype=float) * toa_30
+        night = toa_30 <= 1
+        improved = np.where(night, 0.0, np.where(np.isfinite(kt_ghi), kt_ghi, lin_ghi))
+        out["shortwave_radiation_instant"] = improved
+        # Propagate the geometry correction to the displayed UV numbers with
+        # the same bounded-ratio pattern as the native-HRRR correction below.
+        with np.errstate(divide="ignore", invalid="ignore"):
+            raw_ratio = improved / np.where(lin_ghi > 5, lin_ghi, np.nan)
+        ratio = np.where(night, 0.0, np.where(np.isfinite(raw_ratio), np.clip(raw_ratio, 0.7, 1.3), 1.0))
+        changed = np.isfinite(ratio) & (ratio != 1.0)
+        if changed.any() and {"predicted_uva_wm2", "uv_index"}.issubset(out.columns):
+            out.loc[changed, "predicted_uva_wm2"] = (
+                _num(out, "predicted_uva_wm2").to_numpy()[changed] * ratio[changed]
+            )
+            if "predicted_uvb_wm2" in out:
+                out.loc[changed, "predicted_uvb_wm2"] = (
+                    _num(out, "predicted_uvb_wm2").to_numpy()[changed] * np.sqrt(ratio[changed])
+                )
+            out.loc[changed, "uv_index"] = (
+                _num(out, "uv_index").to_numpy()[changed] * np.sqrt(ratio[changed])
+            )
+            if "tan_score_absolute_0_100" in out:
+                out.loc[changed, "tan_score_absolute_0_100"] = absolute_tan_score(
+                    out.loc[changed, "uv_index"], out.loc[changed, "predicted_uva_wm2"]
+                )
     # Discrete WMO weather codes / day-night flags must never be numerically interpolated.
     for discrete in ("weather_code", "is_day"):
         if discrete in h.columns:

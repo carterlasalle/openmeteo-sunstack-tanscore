@@ -101,3 +101,16 @@ biometers. No model change made.
 - Brewer/WOUDC absolute probe deferred: scale is CERES-consistent,
   ratios inside literature QC band (0.02-0.08), no evidence justifying days
   of spectral integration. Revisit only if SMARTS offline check disagrees.
+
+## 2026-09-15 — Sub-hourly interpolation grounded in HRRR truth
+720 native HRRR 15-min rows (10 runs) vs time-interpolation: pure
+interpolation error on daylight :15/:30/:45 slots (n=258) is linear-GHI
+MAE 53.8 / median 16.0 / p90 143.8. Clear-sky-index (kt x exact-TOA)
+wins: MAE 51.5, median 12.1 (-24%), low-sun MAE 23.3 -> 20.6. The big
+errors are cloud-edge passages no interpolator can see (p90 ~140 both).
+Shipped in build_30min_forecast for shortwave_radiation_instant only
+(the measured quantity): exact pvlib TOA at :30 stamps, night-zero
+instead of ghost light, bounded 0.7-1.3 propagation to UVA/UVB/UVI +
+absolute recompute, native-HRRR override keeps precedence. Pinned by
+pre-sunrise ghost test (6:30 slot exactly 0) and mocked-TOA kt-plumbing
+test (312.5, not linear 250.0).

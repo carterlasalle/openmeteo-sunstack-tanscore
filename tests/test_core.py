@@ -487,3 +487,50 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path):
     ics = (tmp_path / "site" / "calendar.ics").read_text()
     assert ics.count("BEGIN:VEVENT") == 1
     assert "UID:sunstack-best-2026-09-15@sunstack" in ics
+
+
+def test_30min_kills_pre_sunrise_ghost_light():
+    # Linear blends invent sunlight before sunrise (Sep 15 sunup ~7:14am
+    # local). The geometry-aware interpolator must report exactly zero.
+    from sunstack.opportunity import build_30min_forecast
+
+    hourly = pd.DataFrame({
+        "time": ["2026-09-15T06:00", "2026-09-15T07:00", "2026-09-15T08:00"],
+        "temperature_2m": [60.0, 61.0, 63.0],
+        "shortwave_radiation_instant": [0.0, 250.0, 500.0],
+        "predicted_uva_wm2": [0.0, 25.0, 45.0],
+        "uv_index": [0.0, 2.0, 4.0],
+        "overall_tan_opportunity_0_100": [0.0, 20.0, 35.0],
+        "tan_score_absolute_0_100": [0.0, 18.0, 32.0],
+    })
+    out = build_30min_forecast(hourly, None)
+    slot = out.loc[out["time"] == "2026-09-15T06:30"].iloc[0]
+    assert float(slot["shortwave_radiation_instant"]) == 0.0
+    assert float(slot["predicted_uva_wm2"]) == 0.0
+
+
+def test_30min_uses_clear_sky_index_not_linear_blend(monkeypatch):
+    # With TOA mocked nonlinear in wall time, constant-kt input must come
+    # back exact; a linear GHI blend would give 250.0 instead of 312.5.
+    import numpy as np
+
+    import sunstack.opportunity as opp
+
+    def fake_toa(times_utc):
+        minute = pd.to_datetime(times_utc).dt.minute.to_numpy()
+        return np.where(minute == 0, 100.0, 250.0)
+
+    monkeypatch.setattr(opp, "_toa_wm2", fake_toa)
+    hourly = pd.DataFrame({
+        "time": ["2026-09-15T06:00", "2026-09-15T07:00", "2026-09-15T08:00"],
+        "temperature_2m": [70.0, 72.0, 74.0],
+        "shortwave_radiation_instant": [100.0, 400.0, 700.0],
+        "predicted_uva_wm2": [10.0, 40.0, 70.0],
+        "uv_index": [1.0, 3.0, 5.0],
+        "overall_tan_opportunity_0_100": [10.0, 30.0, 50.0],
+        "tan_score_absolute_0_100": [9.0, 28.0, 48.0],
+    })
+    out = opp.build_30min_forecast(hourly, None)
+    slot = out.loc[out["time"] == "2026-09-15T06:30"].iloc[0]
+    assert float(slot["shortwave_radiation_instant"]) == 312.5
+    assert float(slot["predicted_uva_wm2"]) == 31.25
