@@ -413,6 +413,18 @@ def test_calendar_feed_lists_each_window_once_with_stable_uids():
     # Same date UID across reruns: subscribed calendars update in place.
     assert "UID:sunstack-best-2026-09-15@sunstack" in second
     assert "SEQUENCE:20260915010000" in second
+    # Hourly-fed descriptions carry per-day UV peaks, not just the score.
+    hourly = pd.DataFrame({
+        "time": ["2026-09-15T12:00", "2026-09-15T13:00", "2026-09-16T12:00"],
+        "uv_index": [5.0, 5.4, 1.0],
+        "predicted_uva_wm2": [40.0, 42.9, 10.0],
+        "predicted_uvb_wm2": [0.9, 1.0, 0.2],
+    })
+    rich = build_calendar_ics(daily, "20260915_004803", hourly)
+    flat = rich.replace("\r\n ", "")
+    assert "Peak UV 5.4 at 1:00 PM" in flat
+    assert "UVA 42.9 W/m2" in flat
+    assert "UVB 1 W/m2" in flat
 
 
 def test_export_static_site_publishes_data_and_calendar(tmp_path):

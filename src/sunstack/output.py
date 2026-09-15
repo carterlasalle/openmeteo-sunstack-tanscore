@@ -15,7 +15,7 @@ def _swap_once(text: str, old: str, new: str) -> str:
 
 def export_static_site(
     root: Path, out_dir: Path, skin_type: int | None = None, min_temp_f: float = 50.0
-) -> dict:
+) -> dict[str, object]:
     """Publish the latest run as a static site: index + data + calendar.
 
     Same payload shape as GET /api/data for the default UI view. Every
@@ -69,7 +69,7 @@ def export_static_site(
     (out_dir / "index.html").write_text(html, encoding="utf-8")
     (out_dir / "data.json").write_text(json.dumps(payload), encoding="utf-8")
     (out_dir / "calendar.ics").write_text(
-        build_calendar_ics(daily, str(summary.get("run", ""))), encoding="utf-8"
+        build_calendar_ics(daily, str(summary.get("run", "")), hourly), encoding="utf-8"
     )
     starts = daily.get("best_window_start")
     return {

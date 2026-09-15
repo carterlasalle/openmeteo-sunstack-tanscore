@@ -97,15 +97,47 @@ def _ics_hhmm(value: str) -> str:
     return local.strftime("%-I:%M %p")
 
 
-def build_calendar_ics(daily: pd.DataFrame, run_tag: str) -> str:
+def _day_col(sub: pd.DataFrame, name: str) -> np.ndarray:
+    if name not in sub:
+        return np.array([], dtype=float)
+    return np.asarray(pd.to_numeric(scol(sub, name), errors="coerce"), dtype=float)
+
+
+def _daily_uv_peaks(hourly: pd.DataFrame) -> dict[str, dict[str, str]]:
+    """Per-day UV peaks from the hourly table: UVI value and time, UVB, UVA."""
+    peaks: dict[str, dict[str, str]] = {}
+    if hourly.empty or "time" not in hourly:
+        return peaks
+    dates = np.asarray(scol(hourly, "time").astype(str).str.slice(0, 10))
+    for date in sorted(set(dates.tolist())):
+        sub = hourly.loc[dates == date]
+        entry: dict[str, str] = {}
+        uvi = _day_col(sub, "uv_index")
+        if uvi.size and bool(np.isfinite(uvi).any()):
+            i = int(np.nanargmax(uvi))
+            entry["uvi"] = f"{uvi[i]:g}"
+            entry["uvi_time"] = _ics_hhmm(str(np.asarray(scol(sub, "time").astype(str))[i]))
+        for key, col in (("uvb", "predicted_uvb_wm2"), ("uva", "predicted_uva_wm2")):
+            vals = _day_col(sub, col)
+            if vals.size and bool(np.isfinite(vals).any()):
+                entry[key] = f"{np.nanmax(vals):g}"
+        peaks[str(date)] = entry
+    return peaks
+
+
+def build_calendar_ics(
+    daily: pd.DataFrame, run_tag: str, hourly: pd.DataFrame | None = None
+) -> str:
     """Best-window VEVENTs, one per day with a window.
 
     UIDs are stable per date, so every rerun updates the same events in
-    place instead of duplicating them in subscribed calendars.
+    place instead of duplicating them in subscribed calendars. Pass the
+    hourly table for per-day UV peaks in the descriptions.
     """
     digits = "".join(c for c in run_tag if c.isdigit())
     sequence = int(digits) if digits else 0
     now = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    peaks = _daily_uv_peaks(hourly) if hourly is not None else {}
     events = []
     for _, row in daily.iterrows():
         start, end = row.get("best_window_start"), row.get("best_window_end")
@@ -115,18 +147,21 @@ def build_calendar_ics(daily: pd.DataFrame, run_tag: str) -> str:
         peak = fnum(row, "day_overall_peak_0_100")
         peak_s = str(int(peak)) if pd.notna(peak) else "?"
         parts = [f"Overall {peak_s}/100"]
-        uvi = fnum(row, "peak_uv_index")
-        if pd.notna(uvi):
-            parts.append(f"UV index {uvi:g}")
-        uva = fnum(row, "peak_predicted_uva_wm2")
-        if pd.notna(uva):
-            parts.append(f"UVA {uva:g} W/m2")
-        temp = fnum(row, "peak_temperature_f")
-        if pd.notna(temp):
-            parts.append(f"{temp:g}F")
-        conf = fnum(row, "day_confidence_at_peak_0_100")
-        if pd.notna(conf):
-            parts.append(f"confidence {conf:g}/100")
+        uv = peaks.get(date, {})
+        if uv.get("uvi"):
+            when = f" at {uv['uvi_time']}" if uv.get("uvi_time") else ""
+            parts.append(f"Peak UV {uv['uvi']}{when}")
+            if uv.get("uva"):
+                parts.append(f"UVA {uv['uva']} W/m2")
+            if uv.get("uvb"):
+                parts.append(f"UVB {uv['uvb']} W/m2")
+        else:
+            uvi = fnum(row, "peak_uv_index")
+            if pd.notna(uvi):
+                parts.append(f"UV index {uvi:g}")
+            uva = fnum(row, "peak_predicted_uva_wm2")
+            if pd.notna(uva):
+                parts.append(f"UVA {uva:g} W/m2")
         status = str(row.get("day_status") or "").strip()
         if status and status.lower() != "nan":
             parts.append(status)
@@ -290,8 +325,8 @@ def create_app(root: Path) -> FastAPI:
     def calendar(skin_type: str = Query(default=""), min_temp: float | None = Query(default=None)):
         try:
             st = int(skin_type) if skin_type else None
-            _, _, _, daily, summary = _filtered_payload(root, st, min_temp)
-            ics = build_calendar_ics(daily, str(summary.get("run", "")))
+            _, hourly, _, daily, summary = _filtered_payload(root, st, min_temp)
+            ics = build_calendar_ics(daily, str(summary.get("run", "")), hourly)
             return Response(content=ics, media_type="text/calendar; charset=utf-8")
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
