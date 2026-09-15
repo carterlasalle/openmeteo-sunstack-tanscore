@@ -1,0 +1,308 @@
+from __future__ import annotations
+
+import json
+import threading
+import webbrowser
+from datetime import UTC, datetime
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+import numpy as np
+import pandas as pd
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import HTMLResponse, Response
+
+from . import config
+from .calibrate import scol
+from .opportunity import (
+    apply_outdoor_feasibility,
+    attach_fitzpatrick,
+    build_daily_summary,
+)
+from .tanscore import fnum
+
+
+def _latest_dir(root: Path) -> Path:
+    latest = root / "latest"
+    if latest.exists() and latest.is_dir():
+        return latest
+    marker = root / "LATEST"
+    if marker.exists():
+        p = Path(marker.read_text().strip())
+        if p.exists():
+            return p
+    raise FileNotFoundError("No SunStack run found. Click Refresh or run `uv run sunstack run`.")
+
+
+def _read_table(run: Path, name: str) -> pd.DataFrame:
+    p = run / "tables" / f"{name}.parquet"
+    if p.exists():
+        return pd.read_parquet(p)
+    p = run / "tables" / f"{name}.csv"
+    if p.exists():
+        return pd.read_csv(p)
+    return pd.DataFrame()
+
+
+def _records(df: pd.DataFrame, limit: int | None = None):
+    if limit is not None:
+        df = df.head(limit)
+    clean = df.replace([np.inf, -np.inf], np.nan).copy()
+    text = clean.to_json(orient="records", date_format="iso")
+    if not isinstance(text, str):
+        raise TypeError("records JSON serialization must produce text")
+    return json.loads(text)
+
+
+def _filtered_payload(root: Path, skin_type: int | None, min_temp: float | None):
+    run = _latest_dir(root)
+    hourly = _read_table(run, "tan_forecast_hourly")
+    half = _read_table(run, "tan_forecast_30min")
+    if hourly.empty or half.empty:
+        raise RuntimeError("Latest run is missing TanScore output tables; refresh the data.")
+    if min_temp is not None:
+        hourly = apply_outdoor_feasibility(hourly, min_temp)
+        half = apply_outdoor_feasibility(half, min_temp)
+    hourly = attach_fitzpatrick(hourly, skin_type)
+    half = attach_fitzpatrick(half, skin_type)
+    daily = build_daily_summary(half)
+    summary_path = run / "summary.json"
+    summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
+    return run, hourly, half, daily, summary
+
+
+def _ics_text(value: object) -> str:
+    return (
+        str(value).replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+    )
+
+
+def _ics_fold(line: str) -> str:
+    parts = [line[:75]]
+    rest = line[75:]
+    while rest:
+        parts.append(" " + rest[:74])
+        rest = rest[74:]
+    return "\r\n".join(parts)
+
+
+def _ics_stamp(value: str) -> str:
+    """Local naive wall time to a UTC basic-format ICS stamp."""
+    local = datetime.fromisoformat(str(value)).replace(tzinfo=ZoneInfo(config.TIMEZONE))
+    return local.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _ics_hhmm(value: str) -> str:
+    local = datetime.fromisoformat(str(value)).replace(tzinfo=ZoneInfo(config.TIMEZONE))
+    return local.strftime("%-I:%M %p")
+
+
+def build_calendar_ics(daily: pd.DataFrame, run_tag: str) -> str:
+    """Best-window VEVENTs, one per day with a window.
+
+    UIDs are stable per date, so every rerun updates the same events in
+    place instead of duplicating them in subscribed calendars.
+    """
+    digits = "".join(c for c in run_tag if c.isdigit())
+    sequence = int(digits) if digits else 0
+    now = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    events = []
+    for _, row in daily.iterrows():
+        start, end = row.get("best_window_start"), row.get("best_window_end")
+        if not start or not end or pd.isna(start) or pd.isna(end):
+            continue
+        date = str(row.get("date", ""))
+        peak = fnum(row, "day_overall_peak_0_100")
+        peak_s = str(int(peak)) if pd.notna(peak) else "?"
+        parts = [f"Overall {peak_s}/100"]
+        uvi = fnum(row, "peak_uv_index")
+        if pd.notna(uvi):
+            parts.append(f"UV index {uvi:g}")
+        uva = fnum(row, "peak_predicted_uva_wm2")
+        if pd.notna(uva):
+            parts.append(f"UVA {uva:g} W/m2")
+        temp = fnum(row, "peak_temperature_f")
+        if pd.notna(temp):
+            parts.append(f"{temp:g}F")
+        conf = fnum(row, "day_confidence_at_peak_0_100")
+        if pd.notna(conf):
+            parts.append(f"confidence {conf:g}/100")
+        status = str(row.get("day_status") or "").strip()
+        if status and status.lower() != "nan":
+            parts.append(status)
+        parts.append("Times refresh with each SunStack run.")
+        desc = ". ".join(parts)
+        events.append("\r\n".join([
+            _ics_fold("BEGIN:VEVENT"),
+            _ics_fold(f"UID:sunstack-best-{date}@sunstack"),
+            _ics_fold(f"DTSTAMP:{now}"),
+            _ics_fold(f"SEQUENCE:{sequence}"),
+            _ics_fold(f"DTSTART:{_ics_stamp(start)}"),
+            _ics_fold(f"DTEND:{_ics_stamp(end)}"),
+            _ics_fold(f"SUMMARY:{_ics_text(f'Best sun {_ics_hhmm(start)}-{_ics_hhmm(end)} (overall {peak_s})')}"),
+            _ics_fold(f"DESCRIPTION:{_ics_text(desc)}"),
+            _ics_fold("END:VEVENT"),
+        ]))
+    body = "\r\n".join(events)
+    head = (
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SunStack//TanScore//EN\r\n"
+        "CALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\nX-WR-CALNAME:SunStack best sun windows"
+    )
+    return head + ("\r\n" + body if body else "") + "\r\nEND:VCALENDAR\r\n"
+
+
+HTML = r'''<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sunlight hours — SunStack</title>
+<style>
+:root{--paper:#faf6ee;--ink:#211c12;--muted:#6f6553;--line:#e2d7bf;--sun:#b25e00;--sunwash:#f6e3bd;--ok:#2e7d46;--mid:#b07d00;--low:#c25a1e;--poor:#9a938a}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.wrap{max-width:1120px;margin:0 auto;padding:28px 22px 60px;text-align:left}
+.top{display:flex;gap:16px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;border-bottom:2px solid var(--ink);padding-bottom:16px}
+h1{font-family:Georgia,"Times New Roman",serif;font-weight:600;font-size:34px;margin:0}
+.sub{color:var(--muted);font-size:13px;margin-top:4px}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+select,input,button{font:inherit;background:#fffdf7;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.controls a.btn{font:inherit;background:#fffdf7;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;text-decoration:none;font-weight:600}
+button{cursor:pointer;font-weight:600}button:hover{border-color:var(--sun)}
+button.primary{background:var(--sun);border-color:var(--sun);color:#fff}
+.hero{font-family:Georgia,serif;font-size:26px;line-height:1.35;margin:26px 0 4px;max-width:34em}
+.hero b{font-weight:700}
+.legend{color:var(--muted);font-size:13px;margin:0 0 6px;max-width:70em}
+.strip{display:flex;gap:10px;overflow-x:auto;padding:14px 2px;margin:8px 0 4px}
+.daycell{min-width:118px;text-align:left;background:#fffdf7;border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer}
+.daycell .dow{font-weight:700;font-size:14px}
+.daycell .dt{color:var(--muted);font-size:12px}
+.daycell .pk{font-family:Georgia,serif;font-size:24px;margin-top:6px}
+.daycell .uv{font-size:12px;color:var(--muted)}
+.daycell .bar{height:5px;border-radius:3px;margin-top:8px;background:#eee5cf}
+.daycell .bar i{display:block;height:100%;border-radius:3px}
+.daycell[aria-selected="true"]{border:2px solid var(--sun);background:#fff8e8}
+.daydetail{margin-top:22px}
+.daydetail h2{font-family:Georgia,serif;font-weight:600;font-size:24px;margin:0 0 2px}
+.bestline{font-size:15px;margin:0 0 14px}
+.bestline b{color:var(--sun)}
+h3{font-size:14px;margin:22px 0 8px;color:var(--muted);font-weight:600}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fffdf7}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:#fffdf7}
+thead th{background:#f3ecdb;color:#5c5342;font-weight:600}
+tr.inwindow td{background:var(--sunwash)}
+tr.inwindow td:first-child{font-weight:700}
+.uvdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:baseline}
+.note{color:var(--muted);font-size:12px}
+.status{padding:10px 12px;border-radius:9px;margin:12px 0;display:none;font-size:14px}
+.status.show{display:block}.error{background:#f7dfe0;color:#7c2327}.info{background:#eef0e4;color:#4c5540}
+details.debug{margin-top:26px;color:var(--muted);font-size:12px}
+details.debug pre{background:#f3ecdb;padding:12px;border-radius:8px;overflow:auto}
+:focus-visible{outline:2px solid var(--sun);outline-offset:2px}
+@media(max-width:640px){h1{font-size:26px}.hero{font-size:21px}.wrap{padding:18px 12px 50px}}
+</style></head><body><div class="wrap">
+<div class="top"><div><h1>Sunlight hours</h1><div class="sub" id="runline">Loading forecast…</div></div>
+<div class="controls"><label>Skin <select id="skin"><option value="">None</option><option value="1">I</option><option value="2">II</option><option value="3">III</option><option value="4">IV</option><option value="5">V</option><option value="6">VI</option></select></label>
+<label>Min °F <input id="mintemp" type="number" min="32" max="80" step="1" value="50" style="width:64px"></label>
+<button onclick="loadData()">Apply</button><button class="primary" onclick="refreshData()">Refresh forecast</button><a id="cal" class="btn" href="/api/calendar.ics" title="Subscribe to the best-window calendar">Calendar</a></div></div>
+<div id="msg" class="status"></div>
+<p class="hero" id="hero">Finding the best light…</p>
+<p class="legend">Overall blends four readings: absolute strength worldwide, how rare it is for South Bend, air clarity, and forecast confidence. UV is the raw index; clear is the cloud-free value.</p>
+<div class="strip" id="strip" role="tablist" aria-label="Days"></div>
+<div class="daydetail" id="detail"></div>
+<details class="debug"><summary>Source data</summary><pre id="debugtext">Loading…</pre></details>
+</div><script>
+function peakOf(list,key){let m=null;for(const x of list||[]){const v=+x[key];if(!Number.isNaN(v)&&(m==null||v>m))m=v;}return m;}
+function fmtTime(s){if(!s)return 'unknown time';const d=new Date(s);return Number.isNaN(d)?s:d.toLocaleString([],{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}
+const f0=n=>n==null||Number.isNaN(+n)?'—':Math.round(+n);
+const f1=n=>n==null||Number.isNaN(+n)?'—':(+n).toFixed(1);
+const f2=n=>n==null||Number.isNaN(+n)?'—':(+n).toFixed(2);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uvColor=v=>v==null||Number.isNaN(+v)?'#c9c0ab':+v<3?'#4d9e5f':+v<6?'#dfa700':+v<8?'#e07b00':+v<11?'#d33f27':'#7b4bd6';
+const scoreColor=v=>+v>=65?'var(--ok)':+v>=40?'var(--mid)':+v>=20?'var(--low)':'var(--poor)';
+function hhmm(s){const m=/T(\d\d):(\d\d)/.exec(s||'');if(!m)return '—';let h=+m[1];const ap=h<12?'AM':'PM';h=h%12||12;return m[2]==='00'?`${h} ${ap}`:`${h}:${m[2]} ${ap}`;}
+function dayName(ds){const d=new Date(ds+'T12:00:00');return Number.isNaN(d)?ds:d.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'});}
+function shortDay(ds){const d=new Date(ds+'T12:00:00');return Number.isNaN(d)?ds:d.toLocaleDateString([],{weekday:'short'})+', '+d.toLocaleDateString([],{month:'numeric',day:'numeric'});}
+function winStr(a,b){return a?`${hhmm(a)} – ${b?hhmm(b):'…'}`:'—';}
+let DATA=null,SEL=null;
+async function loadData(){show('Loading…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch(`/api/data?skin_type=${s}&min_temp=${m}`);const j=await r.json();if(!r.ok)throw new Error(j.detail||'Request failed');DATA=j;hide();render();}catch(e){show('Could not load forecast: '+e.message+'. Check the server log, then Refresh.','error');}}
+async function refreshData(){show('Calling live Open-Meteo and CAMS, rebuilding scores (takes minutes)…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch(`/api/refresh?skin_type=${s}&min_temp=${m}`,{method:'POST'});const j=await r.json();if(!r.ok)throw new Error(j.detail||'Refresh failed');show('Refresh complete.','info');await loadData();}catch(e){show('Refresh failed: '+e.message,'error');}}
+function show(t,c){const m=document.getElementById('msg');m.textContent=t;m.className='status show '+c;}function hide(){document.getElementById('msg').className='status';}
+function bestDay(){const d=(DATA.daily||[]).filter(x=>+x.day_overall_peak_0_100>0);d.sort((a,b)=>b.day_overall_peak_0_100-a.day_overall_peak_0_100);return d[0]||DATA.daily[0];}
+function render(){if(!DATA||!DATA.daily||!DATA.daily.length){show('No forecast data yet. Press Refresh forecast.','error');return;}
+document.getElementById('runline').textContent='Updated '+fmtTime((DATA.summary||{}).created_at)+' · '+(DATA.hourly||[]).length+' hourly rows · absolute is worldwide scale, local is South Bend percentile';
+document.getElementById('cal').href='webcal://'+location.host+'/api/calendar.ics?skin_type='+document.getElementById('skin').value+'&min_temp='+document.getElementById('mintemp').value;
+if(!SEL||!DATA.daily.some(d=>d.date===SEL)){const b=bestDay();SEL=b?b.date:DATA.daily[0].date;}
+const b=bestDay();
+document.getElementById('hero').innerHTML=b?`Best light <b>${dayName(b.date)} ${winStr(b.best_window_start,b.best_window_end)}</b> — overall ${f0(b.day_overall_peak_0_100)}, UV ${f1(b.peak_uv_index??peakOf(rowsFor(DATA.hourly,b.date),'uv_index'))}.`:'No usable light in this run.';
+document.getElementById('strip').innerHTML=DATA.daily.map(d=>{const pk=+d.day_overall_peak_0_100||0;return `<button class="daycell" role="tab" aria-selected="${d.date===SEL}" data-date="${d.date}"><div class="dow">${esc(shortDay(d.date))}</div><div class="dt">${esc(d.day_status||'')}</div><div class="pk" style="color:${scoreColor(pk)}">${f0(pk)}</div><div class="uv">UV ${f1(d.peak_uv_index??peakOf(rowsFor(DATA.hourly,d.date),'uv_index'))}</div><div class="bar"><i style="width:${Math.max(3,Math.min(100,pk))}%;background:${scoreColor(pk)}"></i></div></button>`;}).join('');
+document.querySelectorAll('.daycell').forEach(el=>el.addEventListener('click',()=>{SEL=el.dataset.date;render();}));
+renderDay();document.getElementById('debugtext').textContent=JSON.stringify(DATA.summary||{},null,2);}
+function rowsFor(list,date){return (list||[]).filter(x=>(x.time||'').slice(0,10)===date).sort((a,b)=>String(a.time).localeCompare(String(b.time)));}
+function inWin(t,a,c){t=String(t||'').slice(0,16);a=String(a||'').slice(0,16);c=String(c||'').slice(0,16);return a&&(!c||t<c)&&t>=a?true:false;}
+function renderDay(){const d=DATA.daily.find(x=>x.date===SEL);if(!d)return;const el=document.getElementById('detail');
+const hours=rowsFor(DATA.hourly,SEL),half=rowsFor(DATA.half_hour,SEL);
+const uvRows=hours.filter(x=>+x.uv_index>0);
+const hHtml=hours.map(x=>{const w=inWin(x.time,d.best_window_start,d.best_window_end);const note=x.outdoor_block_reason||'';return `<tr${w?' class="inwindow"':''}><td>${hhmm(x.time)}</td><td><span class="uvdot" style="background:${uvColor(x.uv_index)}"></span><b>${f1(x.uv_index)}</b></td><td>${f1(x.uv_index_clear_sky)}</td><td>${f1(x.predicted_uva_wm2)}</td><td>${f2(x.predicted_uvb_wm2)}</td><td>${f1(x.temperature_2m)}°</td><td>${f0(x.cloud_cover)}%</td><td>${f0(x.precipitation_probability)}%</td><td>${f0(x.direct_normal_irradiance_instant)}</td><td><b>${f0(x.overall_tan_opportunity_0_100)}</b></td><td>${f0(x.tan_score_absolute_0_100)}</td><td>${f0(x.local_tan_score_0_100)}</td><td>${f0(x.atmospheric_quality_percentile_0_100)}</td><td>${f0(x.tan_forecast_confidence_0_100)}</td><td class="note">${esc(note)}</td></tr>`;}).join('');
+const qHtml=half.map(x=>{const w=inWin(x.time,d.best_window_start,d.best_window_end);const uv=x.uv_index!=null?x.uv_index:x.air__uv_index;return `<tr${w?' class="inwindow"':''}><td>${hhmm(x.time)}</td><td><span class="uvdot" style="background:${uvColor(uv)}"></span><b>${f1(uv)}</b></td><td>${f1(x.predicted_uva_wm2)}</td><td><b>${f0(x.overall_tan_opportunity_0_100)}</b></td><td class="note">${esc(x.subhour_source==='native_HRRR_radiation_weather_plus_interpolated_UV'?'HRRR 15-min':(x.subhour_source||'').slice(0,24)||'hourly split')}</td><td class="note">${esc(x.outdoor_block_reason||'')}</td></tr>`;}).join('');
+el.innerHTML=`<h2>${dayName(d.date)} <span style="color:${scoreColor(d.day_overall_peak_0_100)}">· ${f0(d.day_overall_peak_0_100)}</span> <span class="note">${esc(d.day_status||'')}</span></h2>
+<p class="bestline">Best window <b>${winStr(d.best_window_start,d.best_window_end)}</b> · best hour ${hhmm(d.best_hour_start)} (${f0(d.best_hour_score_0_100)}) · peak UV ${f1(d.peak_uv_index??peakOf(hours,'uv_index'))} · ${f1(d.peak_temperature_f??peakOf(hours,'temperature_2m'))}°F · ${f0(d.blocked_half_hours)} blocked half-hours. Rows tinted below fall inside the best window.</p>
+<h3>Every hour — raw UV first</h3><div class="tablewrap"><table><thead><tr><th>Time</th><th>UV</th><th>Clear</th><th>UVA</th><th>UVB</th><th>Temp</th><th>Cloud</th><th>Rain</th><th>DNI</th><th>Overall</th><th>Abs</th><th>Local</th><th>Atm</th><th>Conf</th><th>Note</th></tr></thead><tbody>${hHtml||'<tr><td colspan="15">No hourly rows for this day.</td></tr>'}</tbody></table></div>
+<h3>Every 30 minutes</h3><div class="tablewrap"><table><thead><tr><th>Time</th><th>UV</th><th>UVA</th><th>Overall</th><th>Source</th><th>Note</th></tr></thead><tbody>${qHtml||'<tr><td colspan="6">No 30-minute rows for this day.</td></tr>'}</tbody></table></div>`;}
+loadData();
+</script></body></html>'''
+
+
+def create_app(root: Path) -> FastAPI:
+    app = FastAPI(title="SunStack TanScore")
+
+    @app.get("/", response_class=HTMLResponse)
+    def home():
+        return HTML
+
+    @app.get("/api/data")
+    def data(skin_type: str = Query(default=""), min_temp: float | None = Query(default=None)):
+        try:
+            st = int(skin_type) if skin_type else None
+            run, hourly, half, daily, summary = _filtered_payload(root, st, min_temp)
+            # Keep the UI useful: daylight-ish hours only, but source files retain everything.
+            ht = pd.to_datetime(scol(hourly, "time"))
+            hourly_ui = hourly.loc[(ht.dt.hour >= 7) & (ht.dt.hour <= 20)].copy()
+            qt = pd.to_datetime(scol(half, "time"))
+            half_ui = half.loc[(qt.dt.hour >= 7) & (qt.dt.hour <= 20)].copy()
+            return {
+                "run": str(run), "daily": _records(daily),
+                "hourly": _records(hourly_ui), "half_hour": _records(half_ui),
+                "summary": summary,
+            }
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.post("/api/refresh")
+    def refresh(skin_type: str = Query(default=""), min_temp: float | None = Query(default=None)):
+        try:
+            from .cli import run_live
+            st = int(skin_type) if skin_type else None
+            result = run_live(root, auto_calibrate=True, force_cams=True, strict=True, skin_type=st, min_temp_f=min_temp, fresh=True)
+            return {"ok": True, "run": str(result)}
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"LIVE REFRESH FAILED: {exc}") from exc
+
+    @app.get("/api/calendar.ics")
+    def calendar(skin_type: str = Query(default=""), min_temp: float | None = Query(default=None)):
+        try:
+            st = int(skin_type) if skin_type else None
+            _, _, _, daily, summary = _filtered_payload(root, st, min_temp)
+            ics = build_calendar_ics(daily, str(summary.get("run", "")))
+            return Response(content=ics, media_type="text/calendar; charset=utf-8")
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return app
+
+
+def serve(root: Path, host: str | None = None, port: int | None = None, open_browser: bool = True) -> None:
+    import uvicorn
+    host = host or config.UI_HOST
+    port = int(port or config.UI_PORT)
+    if open_browser:
+        threading.Timer(0.8, lambda: webbrowser.open(f"http://{host}:{port}")).start()
+    uvicorn.run(create_app(root), host=host, port=port, log_level="info")
