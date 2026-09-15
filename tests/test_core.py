@@ -427,6 +427,27 @@ def test_calendar_feed_lists_each_window_once_with_stable_uids():
     assert "UVB 1 W/m2" in flat
 
 
+def test_30min_handles_fall_back_duplicate_hours():
+    # DST fall-back repeats 1:00-2:00am in wall time. If the API returns both
+    # instances with identical naive labels, the 30-min resample must not
+    # crash the run (night rows never affect windows either way).
+    hourly = pd.DataFrame({
+        "time": [
+            "2026-11-01T00:00", "2026-11-01T01:00", "2026-11-01T01:30",
+            "2026-11-01T01:00", "2026-11-01T01:30", "2026-11-01T02:00",
+            "2026-11-01T12:00",
+        ],
+        "temperature_2m": [50.0, 49.0, 49.0, 48.0, 48.0, 48.0, 60.0],
+        "overall_tan_opportunity_0_100": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0],
+        "tan_score_absolute_0_100": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 35.0],
+    })
+    from sunstack.opportunity import build_30min_forecast
+
+    out = build_30min_forecast(hourly, None)
+    assert len(out) > 0
+    assert bool((out["time"] == "2026-11-01T12:00").any())
+
+
 def test_export_static_site_publishes_data_and_calendar(tmp_path):
     from sunstack.output import export_static_site
 

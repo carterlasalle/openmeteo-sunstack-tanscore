@@ -159,6 +159,11 @@ def build_30min_forecast(hourly: pd.DataFrame, hrrr15: pd.DataFrame | None = Non
     h = hourly.copy()
     local = pd.to_datetime(h["time"])
     h["dt"] = local
+    # DST fall-back repeats wall-clock labels (1:00-2:00am twice) when the API
+    # returns both instances. Input order is chronological, so the first label
+    # is the pre-transition instance; either way these are night rows that
+    # never affect windows. Dedupe so the resample below cannot abort the run.
+    h = h.loc[~h["dt"].duplicated(keep="first")].copy()
     h = h.sort_values("dt").set_index("dt")
     numeric = h.select_dtypes(include=[np.number, "bool"]).copy()
     idx = pd.date_range(h.index.min(), h.index.max(), freq="30min")
