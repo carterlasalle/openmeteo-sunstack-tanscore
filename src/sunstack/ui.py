@@ -167,6 +167,10 @@ def build_calendar_ics(
             parts.append(status)
         parts.append("Times refresh with each SunStack run.")
         desc = ". ".join(parts)
+        if uv.get("uvi"):
+            summary = f"Best sun {_ics_hhmm(start)}-{_ics_hhmm(end)} (UV {uv['uvi']}, overall {peak_s})"
+        else:
+            summary = f"Best sun {_ics_hhmm(start)}-{_ics_hhmm(end)} (overall {peak_s})"
         events.append("\r\n".join([
             _ics_fold("BEGIN:VEVENT"),
             _ics_fold(f"UID:sunstack-best-{date}@sunstack"),
@@ -174,7 +178,7 @@ def build_calendar_ics(
             _ics_fold(f"SEQUENCE:{sequence}"),
             _ics_fold(f"DTSTART:{_ics_stamp(start)}"),
             _ics_fold(f"DTEND:{_ics_stamp(end)}"),
-            _ics_fold(f"SUMMARY:{_ics_text(f'Best sun {_ics_hhmm(start)}-{_ics_hhmm(end)} (overall {peak_s})')}"),
+            _ics_fold(f"SUMMARY:{_ics_text(summary)}"),
             _ics_fold(f"DESCRIPTION:{_ics_text(desc)}"),
             _ics_fold("END:VEVENT"),
         ]))

@@ -272,6 +272,15 @@ def build_30min_forecast(hourly: pd.DataFrame, hrrr15: pd.DataFrame | None = Non
             "terrestrial_radiation", "shortwave_radiation_instant", "direct_radiation_instant",
             "diffuse_radiation_instant", "direct_normal_irradiance_instant", "terrestrial_radiation_instant",
         ]
+        # Snapshot the current (possibly kt-improved) GHI BEFORE native values
+        # overwrite it below. The correction ratio then measures native vs the
+        # best estimate so far — not a second independent bound stacked on the
+        # first (0.7 x 0.45 compounded to 0.31 in production data).
+        baseline_ghi = (
+            _num(out, "shortwave_radiation_instant").to_numpy()
+            if "shortwave_radiation_instant" in out
+            else None
+        )
         mask = out["dt"].isin(native.index.tolist())
         for col in solar_cols:
             if col in native and col in out:
@@ -279,10 +288,9 @@ def build_30min_forecast(hourly: pd.DataFrame, hrrr15: pd.DataFrame | None = Non
         out.loc[mask, "subhour_source"] = "native_HRRR_radiation_weather_plus_interpolated_UV"
 
         # Use the native HRRR broadband change as a bounded correction to UVA/UVB estimates.
-        if "shortwave_radiation_instant" in out and "predicted_uva_wm2" in out:
-            interp_ghi = scol(numeric, "shortwave_radiation_instant").reindex(numeric.index.union(idx)).sort_index().interpolate(method="time").reindex(idx).to_numpy()
+        if baseline_ghi is not None and "predicted_uva_wm2" in out:
             native_ghi = _num(out, "shortwave_radiation_instant").to_numpy()
-            ratio = np.divide(native_ghi, interp_ghi, out=np.ones_like(native_ghi, dtype=float), where=np.isfinite(interp_ghi) & (interp_ghi > 40))
+            ratio = np.divide(native_ghi, baseline_ghi, out=np.ones_like(native_ghi, dtype=float), where=np.isfinite(baseline_ghi) & (baseline_ghi > 40))
             ratio = np.clip(ratio, 0.45, 1.55)
             is_native = out["subhour_source"].str.startswith("native_HRRR").to_numpy()
             out.loc[is_native, "predicted_uva_wm2"] *= ratio[is_native]
@@ -290,9 +298,10 @@ def build_30min_forecast(hourly: pd.DataFrame, hrrr15: pd.DataFrame | None = Non
                 out.loc[is_native, "predicted_uvb_wm2"] *= np.sqrt(ratio[is_native])
             if "uv_index" in out:
                 out.loc[is_native, "uv_index"] *= np.sqrt(ratio[is_native])
-            out.loc[is_native, "tan_score_absolute_0_100"] = absolute_tan_score(
-                out.loc[is_native, "uv_index"], out.loc[is_native, "predicted_uva_wm2"]
-            )
+            if {"uv_index", "predicted_uva_wm2", "tan_score_absolute_0_100"}.issubset(out.columns):
+                out.loc[is_native, "tan_score_absolute_0_100"] = absolute_tan_score(
+                    out.loc[is_native, "uv_index"], out.loc[is_native, "predicted_uva_wm2"]
+                )
 
     # Reapply merged opportunity after sub-hour corrections.
     out = apply_outdoor_feasibility(out)

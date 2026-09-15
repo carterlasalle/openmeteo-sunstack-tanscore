@@ -426,6 +426,7 @@ def test_calendar_feed_lists_each_window_once_with_stable_uids():
     assert "Peak UV 5.4 at 1:00 PM" in flat
     assert "UVA 42.9 W/m2" in flat
     assert "UVB 1 W/m2" in flat
+    assert "Best sun 12:30 PM-4:30 PM (UV 5.4\\, overall 51)" in flat
 
 
 def test_30min_handles_fall_back_duplicate_hours():
@@ -577,6 +578,33 @@ def test_30min_keeps_string_dtype_uv_index():
     slot = out.loc[out["time"] == "2026-09-15T12:30"].iloc[0]
     # Linear would give 4.5; the bounded geometry correction stays near it.
     assert 3.0 < float(slot["uv_index"]) < 6.0
+
+
+def test_hrrr_correction_stays_bounded_against_kt_baseline():
+    # The HRRR ratio now measures native vs the kt-improved baseline instead
+    # of stacking a second independent bound on linear (0.7 x 0.45 = 0.31
+    # floor seen in production). Total stays within the composed clip.
+    from sunstack.opportunity import build_30min_forecast
+
+    hourly = pd.DataFrame({
+        "time": ["2026-09-15T12:00", "2026-09-15T13:00", "2026-09-15T14:00"],
+        "temperature_2m": [80.0, 82.0, 83.0],
+        "shortwave_radiation_instant": [400.0, 500.0, 600.0],
+        "predicted_uva_wm2": [30.0, 40.0, 42.0],
+        "uv_index": [4.0, 5.0, 5.2],
+        "overall_tan_opportunity_0_100": [30.0, 40.0, 42.0],
+        "tan_score_absolute_0_100": [28.0, 38.0, 40.0],
+    })
+    hrrr = pd.DataFrame({
+        "time": ["2026-09-15T12:00", "2026-09-15T12:30", "2026-09-15T13:00"],
+        "shortwave_radiation_instant": [450.0, 120.0, 520.0],
+    })
+    plain = build_30min_forecast(hourly, None)
+    fixed = build_30min_forecast(hourly, hrrr)
+    for stamp in ("2026-09-15T12:00", "2026-09-15T12:30", "2026-09-15T13:00"):
+        a = float(plain.loc[plain["time"] == stamp, "predicted_uva_wm2"].iloc[0])
+        b = float(fixed.loc[fixed["time"] == stamp, "predicted_uva_wm2"].iloc[0])
+        assert 0.3 * a <= b <= 2.1 * a
 
 
 def test_scheduled_workflow_is_complete_and_wired():
