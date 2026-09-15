@@ -580,6 +580,25 @@ def test_30min_keeps_string_dtype_uv_index():
     assert 3.0 < float(slot["uv_index"]) < 6.0
 
 
+def test_overnight_rows_score_zero_opportunity_not_residual():
+    from sunstack.opportunity import apply_outdoor_feasibility
+
+    df = pd.DataFrame({
+        "temperature_2m": [70.0, 65.0],
+        "sza": [50.0, 95.0],
+        "tan_score_absolute_0_100": [40.0, 30.0],
+        "local_tan_score_0_100": [80.0, 70.0],
+        "atmospheric_quality_percentile_0_100": [60.0, 50.0],
+        "tan_forecast_confidence_0_100": [50.0, 50.0],
+    })
+    out = apply_outdoor_feasibility(df, None)
+    assert float(out.loc[1, "overall_tan_opportunity_0_100"]) == 0.0
+    assert float(out.loc[1, "overall_components_unblocked_0_100"]) == 0.0
+    # Environmental score is physics, not usability: untouched.
+    assert float(out.loc[1, "tan_score_absolute_0_100"]) == 30.0
+    assert float(out.loc[0, "overall_tan_opportunity_0_100"]) > 0.0
+
+
 def test_hrrr_correction_stays_bounded_against_kt_baseline():
     # The HRRR ratio now measures native vs the kt-improved baseline instead
     # of stacking a second independent bound on linear (0.7 x 0.45 = 0.31

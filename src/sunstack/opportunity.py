@@ -115,6 +115,13 @@ def apply_outdoor_feasibility(scored: pd.DataFrame, min_temp_f: float | None = N
     out["overall_tan_opportunity_0_100"] = (
         out["overall_components_unblocked_0_100"] * multiplier
     ).clip(0, 100).round(1)
+    # No sun above the horizon means no opportunity, full stop. Mirrors the
+    # night-zero clamp on predicted UVA/UVB; kills the log-math floor (~1)
+    # that the geometric mean leaves on night rows.
+    sza = _num(out, "sza")
+    night = sza.notna() & (sza >= 90)
+    if bool(night.any()):
+        out.loc[night.to_numpy(), ["overall_components_unblocked_0_100", "overall_tan_opportunity_0_100"]] = 0.0
     return out
 
 
