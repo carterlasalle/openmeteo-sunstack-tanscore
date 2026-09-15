@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -584,7 +585,7 @@ def test_scheduled_workflow_is_complete_and_wired():
     # failed 15 minutes into a CI run. Pin the load-bearing surface here.
     import yaml
 
-    wf = yaml.safe_load(open(".github/workflows/run.yml"))
+    wf = yaml.safe_load(Path(".github/workflows/run.yml").read_text(encoding="utf-8"))
     steps = wf["jobs"]["run"]["steps"]
     by_name = {s.get("uses", s.get("name")): s for s in steps}
     assert "actions/checkout@v7.0.1" in by_name
