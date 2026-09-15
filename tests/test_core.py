@@ -576,3 +576,24 @@ def test_30min_keeps_string_dtype_uv_index():
     slot = out.loc[out["time"] == "2026-09-15T12:30"].iloc[0]
     # Linear would give 4.5; the bounded geometry correction stays near it.
     assert 3.0 < float(slot["uv_index"]) < 6.0
+
+
+def test_scheduled_workflow_is_complete_and_wired():
+    # Every Actions failure this week was a workflow edit that dropped a
+    # step or an env key (missing export step, missing CDSAPI_KEY) and only
+    # failed 15 minutes into a CI run. Pin the load-bearing surface here.
+    import yaml
+
+    wf = yaml.safe_load(open(".github/workflows/run.yml"))
+    steps = wf["jobs"]["run"]["steps"]
+    by_name = {s.get("uses", s.get("name")): s for s in steps}
+    assert "actions/checkout@v7.0.1" in by_name
+    assert "astral-sh/setup-uv@v10.1.0" in by_name
+    names = [s.get("name") for s in steps]
+    for required in ("Install dependencies", "Forecast run", "Export static site", "Publish results"):
+        assert required in names, f"missing workflow step: {required}"
+    forecast = by_name["Forecast run"]
+    assert "CDSAPI_URL" in forecast["env"] and "CDSAPI_KEY" in forecast["env"]
+    crons = [s["cron"] for s in wf["on"]["schedule"]]
+    assert any("1,4,13,16" in c for c in crons)
+    assert wf["permissions"]["contents"] == "write"

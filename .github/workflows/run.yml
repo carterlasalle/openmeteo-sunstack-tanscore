@@ -2,7 +2,7 @@ name: forecast-run
 
 # 9am / 12pm / 9pm / 12am America/Indiana expressed in UTC. Indiana is
 # UTC-4 in daylight time, so winter runs land one hour later local.
-on:
+"on":
   schedule:
     - cron: "0 1,4,13,16 * * *"
   workflow_dispatch:
