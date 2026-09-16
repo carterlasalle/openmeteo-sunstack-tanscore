@@ -645,4 +645,4 @@ def test_scheduled_workflow_is_complete_and_wired():
     schedules = wf["on"]["schedule"]
     assert any("0,9,12,21" in s["cron"] for s in schedules)
     assert all(s.get("timezone") == "America/Indiana/Indianapolis" for s in schedules)
-    assert wf["permissions"]["contents"] == "write"
+    assert "workflow_dispatch" in wf["on"]
