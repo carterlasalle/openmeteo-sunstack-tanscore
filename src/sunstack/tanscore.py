@@ -224,6 +224,35 @@ def _grade_local(score: float) -> str:
     return "poor locally"
 
 
+def _uv_ghi_disagree(frame: pd.DataFrame) -> pd.Series:
+    """True where broadband and UV inputs describe different skies.
+
+    Heuristic priors, not fitted: flag only strong disagreement with the sun
+    well up, so twilight angular physics (UV dies faster than GHI past ~65
+    degrees) and night never trip it. NaN inputs never flag.
+    """
+    ghi = num(frame, "ghi")
+    toa = num(frame, "terrestrial_radiation")
+    uvi = num(frame, "uv_index")
+    uvic = num(frame, "uv_index_clear_sky")
+    sza = num(frame, "sza")
+    sun_up = toa.fillna(0) > 100
+    high_sun = sza.fillna(90) < 65
+    kt_g = ghi / toa.where(toa.fillna(0) > 1)
+    kt_u = uvi / uvic.where(uvic.fillna(0) > 1)
+    bright_ghi_dark_uv = (kt_g > 0.5) & (kt_u < 0.3)
+    dark_ghi_bright_uv = (kt_g < 0.25) & (kt_u > 0.6)
+    return (sun_up & high_sun & (bright_ghi_dark_uv | dark_ghi_bright_uv)).fillna(False)
+
+
+def apply_disagreement_penalty(confidence: pd.Series, disagree: pd.Series) -> pd.Series:
+    """Halve confidence where inputs disagree. Values stay untouched; only
+    trust is discounted. Both series must come from the same frame."""
+    vals = pd.to_numeric(confidence, errors="coerce").to_numpy(dtype=float).copy()
+    vals[disagree.fillna(False).to_numpy(dtype=bool)] *= 0.5
+    return pd.Series(np.round(vals, 1), index=confidence.index)
+
+
 def score_forecast(
     best_enriched: pd.DataFrame,
     calibration_dir: Path,
@@ -263,6 +292,10 @@ def score_forecast(
         out["tan_forecast_confidence_0_100"] = num(out, "sun_window_confidence_0_100")
     else:
         out["tan_forecast_confidence_0_100"] = np.nan
+    out["uv_input_disagree"] = _uv_ghi_disagree(out).to_numpy(dtype=bool)
+    out["tan_forecast_confidence_0_100"] = apply_disagreement_penalty(
+        out["tan_forecast_confidence_0_100"], out["uv_input_disagree"]
+    )
 
     # Useful contextual diagnostics that deliberately do NOT get TanScore weight.
     out["humidity_context_pct"] = num(out, "relative_humidity_2m")

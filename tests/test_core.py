@@ -648,3 +648,57 @@ def test_scheduled_workflow_is_complete_and_wired():
     assert any("0,9,12,21" in s["cron"] for s in schedules)
     assert all(s.get("timezone") == "America/Indiana/Indianapolis" for s in schedules)
     assert "workflow_dispatch" in wf["on"]
+
+
+def test_uv_ghi_disagreement_flags_only_strong_daytime_mismatch():
+    from sunstack.tanscore import _uv_ghi_disagree, apply_disagreement_penalty
+
+    def flag(**kw):
+        base = {"ghi": np.nan, "terrestrial_radiation": np.nan, "uv_index": np.nan,
+                "uv_index_clear_sky": np.nan, "sza": np.nan}
+        base.update(kw)
+        return bool(_uv_ghi_disagree(pd.DataFrame([base])).iloc[0])
+
+    # Sep-16 case: bright broadband, dark UV, high sun.
+    assert flag(ghi=641.0, terrestrial_radiation=1044.0, uv_index=0.65,
+                uv_index_clear_sky=5.7, sza=35.0)
+    # Mirror image: dark broadband, bright UV.
+    assert flag(ghi=150.0, terrestrial_radiation=1000.0, uv_index=5.0,
+                uv_index_clear_sky=6.0, sza=40.0)
+    # Consistent skies never flag.
+    assert not flag(ghi=800.0, terrestrial_radiation=1000.0, uv_index=6.0,
+                     uv_index_clear_sky=7.0, sza=35.0)
+    assert not flag(ghi=100.0, terrestrial_radiation=900.0, uv_index=0.5,
+                     uv_index_clear_sky=6.0, sza=40.0)
+    # Twilight angular physics, not contradiction.
+    assert not flag(ghi=150.0, terrestrial_radiation=300.0, uv_index=0.8,
+                     uv_index_clear_sky=2.0, sza=80.0)
+    # Night and missing inputs never flag.
+    assert not flag(ghi=0.0, terrestrial_radiation=0.0, uv_index=0.0,
+                     uv_index_clear_sky=0.0, sza=100.0)
+    assert not flag()
+
+    conf = pd.Series([40.0, 30.0, float("nan")])
+    out = apply_disagreement_penalty(conf, pd.Series([True, False, True]))
+    assert out.tolist()[0] == 20.0
+    assert out.tolist()[1] == 30.0
+    assert pd.isna(out.tolist()[2])
+
+
+def test_disagreement_flag_forward_fills_to_half_hours():
+    from sunstack.opportunity import build_30min_forecast
+
+    hourly = pd.DataFrame({
+        "time": ["2026-09-15T12:00", "2026-09-15T13:00", "2026-09-15T14:00"],
+        "temperature_2m": [80.0, 82.0, 83.0],
+        "shortwave_radiation_instant": [400.0, 500.0, 600.0],
+        "uv_index": [4.0, 5.0, 5.2],
+        "predicted_uva_wm2": [30.0, 40.0, 42.0],
+        "overall_tan_opportunity_0_100": [30.0, 40.0, 42.0],
+        "tan_score_absolute_0_100": [28.0, 38.0, 40.0],
+        "uv_input_disagree": [False, True, False],
+    })
+    out = build_30min_forecast(hourly, None)
+    half = out.loc[out["time"] == "2026-09-15T13:30"]
+    assert len(half) == 1
+    assert bool(half["uv_input_disagree"].iloc[0]) is True

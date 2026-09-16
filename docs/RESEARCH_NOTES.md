@@ -114,3 +114,12 @@ instead of ghost light, bounded 0.7-1.3 propagation to UVA/UVB/UVI +
 absolute recompute, native-HRRR override keeps precedence. Pinned by
 pre-sunrise ghost test (6:30 slot exactly 0) and mocked-TOA kt-plumbing
 test (312.5, not linear 250.0).
+
+## 2026-09-16 — UV/broadband input-coherence flag
+best_match is per-variable: only GFS provides UVI while GHI comes from the
+hourly winner. On convective days the parts disagree (Sep-16 14:00: GHI 641
++ cloud 100% + UVI 0.65 in one row; GFS alone read 131/1.45/100%,
+self-consistent). Response, truth-first: no values touched. New
+uv_input_disagree flag (SZA<65, TOA>100, |clear-sky-index gap| with dead
+band; twilight/night/NaN never flag) halves confidence and prints a visible
+note in both tables. Thresholds are heuristic priors, not fitted.
