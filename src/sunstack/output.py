@@ -23,6 +23,7 @@ def export_static_site(
     loudly here instead of shipping a subtly broken page.
     """
     from .calibrate import scol
+    from .opportunity import fitzpatrick_context
     from .ui import HTML, _filtered_payload, _records, build_calendar_ics
 
     run, hourly, half, daily, summary = _filtered_payload(root, skin_type, min_temp_f)
@@ -39,25 +40,32 @@ def export_static_site(
     }
     html = HTML
     html = _swap_once(html, "fetch(`/api/data?skin_type=${s}&min_temp=${m}`)", "fetch('./data.json')")
+    html = _swap_once(html, "loadData();\n</script>", "loadData();initSkin();\n</script>")
     run_stamp = "".join(c for c in str(summary.get("run", "")) if c.isdigit()) or "0"
-    start = html.index('<div class="controls">')
-    end_marker = "Calendar</a></div></div>"
-    if html.count(end_marker) != 1:
-        raise RuntimeError("static export anchor drifted: controls block end")
-    end = html.index(end_marker) + len(end_marker)
-    skin_label = "None" if skin_type is None else str(skin_type)
-    html = (
-        html[:start]
-        + f'<div class="controls"><span class="note">Static export · skin {skin_label} · '
-        + f"min {min_temp_f:g}°F · reruns publish fresh data</span>"
-        + '<a id="cal" class="btn" href="./calendar.ics" '
-        + 'title="Subscribe to the best-window calendar">Calendar</a></div></div>'
-        + html[end:]
+    html = _swap_once(
+        html,
+        "<label>Min °F <input id=\"mintemp\" type=\"number\" min=\"32\" max=\"80\" step=\"1\" value=\"50\" style=\"width:64px\"></label>\n",
+        "",
+    )
+    html = _swap_once(
+        html,
+        '<button onclick="loadData()">Apply</button><button class="primary" onclick="refreshData()">Refresh forecast</button>',
+        f"<span class=\"note\">Static export · min {min_temp_f:g}°F · reruns publish fresh data</span>",
+    )
+    html = _swap_once(
+        html,
+        '<div class="daydetail" id="detail"></div>',
+        '<p class="legend" id="skinnote" style="display:none"></p><div class="daydetail" id="detail"></div>',
+    )
+    html = _swap_once(
+        html,
+        "async function loadData(){",
+        "let SKIN=null;async function initSkin(){try{const r=await fetch('./skin.json');SKIN=await r.json();}catch(e){SKIN=null;}const el=document.getElementById('skin');if(el){el.addEventListener('change',showSkin);showSkin();}}function showSkin(){const el=document.getElementById('skin');const box=document.getElementById('skinnote');if(!el||!box||!SKIN)return;const info=SKIN[el.value||''];if(!info){box.style.display='none';return;}box.textContent=info.fitzpatrick_label+': '+info.skin_response_note;box.style.display='';}async function loadData(){",
     )
     html = _swap_once(
         html,
         "const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch('./data.json');",
-        f"const s='',m='';const r=await fetch('./data.json?v={run_stamp}');",
+        f"const s=document.getElementById('skin').value,m='50';const r=await fetch('./data.json?v={run_stamp}');",
     )
     html = _swap_once(
         html,
@@ -69,6 +77,9 @@ def export_static_site(
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "index.html").write_text(html, encoding="utf-8")
     (out_dir / "data.json").write_text(json.dumps(payload), encoding="utf-8")
+    (out_dir / "skin.json").write_text(
+        json.dumps({str(i): fitzpatrick_context(i) for i in range(1, 7)}), encoding="utf-8"
+    )
     (out_dir / "calendar.ics").write_text(
         build_calendar_ics(daily, str(summary.get("run", "")), hourly), encoding="utf-8"
     )

@@ -481,11 +481,13 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path):
 
     info = export_static_site(tmp_path, tmp_path / "site")
     assert info["days"] == 1 and info["events"] == 1
-    payload = _json.loads((tmp_path / "site" / "data.json").read_text())
-    assert set(payload) == {"run", "daily", "hourly", "half_hour", "summary"}
-    assert len(payload["daily"]) == 1
     html = (tmp_path / "site" / "index.html").read_text()
     assert "./data.json" in html and "/api/data" not in html
+    assert 'id="skin"' in html and 'id="mintemp"' not in html
+
+    skin = _json.loads((tmp_path / "site" / "skin.json").read_text())
+    assert sorted(skin) == ["1", "2", "3", "4", "5", "6"]
+    assert "may burn" in skin["3"]["fitzpatrick_label"]
     ics = (tmp_path / "site" / "calendar.ics").read_text()
     assert ics.count("BEGIN:VEVENT") == 1
     assert "UID:sunstack-best-2026-09-15@sunstack" in ics

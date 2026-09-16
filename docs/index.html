@@ -47,12 +47,13 @@ details.debug pre{background:#f3ecdb;padding:12px;border-radius:8px;overflow:aut
 @media(max-width:640px){h1{font-size:26px}.hero{font-size:21px}.wrap{padding:18px 12px 50px}}
 </style></head><body><div class="wrap">
 <div class="top"><div><h1>Sunlight hours</h1><div class="sub" id="runline">Loading forecast…</div></div>
-<div class="controls"><span class="note">Static export · skin None · min 50°F · reruns publish fresh data</span><a id="cal" class="btn" href="./calendar.ics" title="Subscribe to the best-window calendar">Calendar</a></div></div>
+<div class="controls"><label>Skin <select id="skin"><option value="">None</option><option value="1">I</option><option value="2">II</option><option value="3">III</option><option value="4">IV</option><option value="5">V</option><option value="6">VI</option></select></label>
+<span class="note">Static export · min 50°F · reruns publish fresh data</span><a id="cal" class="btn" href="/api/calendar.ics" title="Subscribe to the best-window calendar">Calendar</a></div></div>
 <div id="msg" class="status"></div>
 <p class="hero" id="hero">Finding the best light…</p>
 <p class="legend">Overall blends four readings: absolute strength worldwide, how rare it is for South Bend, air clarity, and forecast confidence. UV is the raw index; clear is the cloud-free value.</p>
 <div class="strip" id="strip" role="tablist" aria-label="Days"></div>
-<div class="daydetail" id="detail"></div>
+<p class="legend" id="skinnote" style="display:none"></p><div class="daydetail" id="detail"></div>
 <details class="debug"><summary>Source data</summary><pre id="debugtext">Loading…</pre></details>
 </div><script>
 function peakOf(list,key){let m=null;for(const x of list||[]){const v=+x[key];if(!Number.isNaN(v)&&(m==null||v>m))m=v;}return m;}
@@ -68,7 +69,7 @@ function dayName(ds){const d=new Date(ds+'T12:00:00');return Number.isNaN(d)?ds:
 function shortDay(ds){const d=new Date(ds+'T12:00:00');return Number.isNaN(d)?ds:d.toLocaleDateString([],{weekday:'short'})+', '+d.toLocaleDateString([],{month:'numeric',day:'numeric'});}
 function winStr(a,b){return a?`${hhmm(a)} – ${b?hhmm(b):'…'}`:'—';}
 let DATA=null,SEL=null;
-async function loadData(){show('Loading…','info');try{const s='',m='';const r=await fetch('./data.json?v=20260916054905');const j=await r.json();if(!r.ok)throw new Error(j.detail||'Request failed');DATA=j;hide();render();}catch(e){show('Could not load forecast: '+e.message+'. Check the server log, then Refresh.','error');}}
+let SKIN=null;async function initSkin(){try{const r=await fetch('./skin.json');SKIN=await r.json();}catch(e){SKIN=null;}const el=document.getElementById('skin');if(el){el.addEventListener('change',showSkin);showSkin();}}function showSkin(){const el=document.getElementById('skin');const box=document.getElementById('skinnote');if(!el||!box||!SKIN)return;const info=SKIN[el.value||''];if(!info){box.style.display='none';return;}box.textContent=info.fitzpatrick_label+': '+info.skin_response_note;box.style.display='';}async function loadData(){show('Loading…','info');try{const s=document.getElementById('skin').value,m='50';const r=await fetch('./data.json?v=20260915142356');const j=await r.json();if(!r.ok)throw new Error(j.detail||'Request failed');DATA=j;hide();render();}catch(e){show('Could not load forecast: '+e.message+'. Check the server log, then Refresh.','error');}}
 async function refreshData(){show('Calling live Open-Meteo and CAMS, rebuilding scores (takes minutes)…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch(`/api/refresh?skin_type=${s}&min_temp=${m}`,{method:'POST'});const j=await r.json();if(!r.ok)throw new Error(j.detail||'Refresh failed');show('Refresh complete.','info');await loadData();}catch(e){show('Refresh failed: '+e.message,'error');}}
 function show(t,c){const m=document.getElementById('msg');m.textContent=t;m.className='status show '+c;}function hide(){document.getElementById('msg').className='status';}
 function bestDay(){const d=(DATA.daily||[]).filter(x=>+x.day_overall_peak_0_100>0);d.sort((a,b)=>b.day_overall_peak_0_100-a.day_overall_peak_0_100);return d[0]||DATA.daily[0];}
@@ -92,5 +93,5 @@ el.innerHTML=`<h2>${dayName(d.date)} <span style="color:${scoreColor(d.day_overa
 <p class="bestline">Best window <b>${winStr(d.best_window_start,d.best_window_end)}</b> · best hour ${hhmm(d.best_hour_start)} (${f0(d.best_hour_score_0_100)}) · peak UV ${f1(d.peak_uv_index??peakOf(hours,'uv_index'))} · ${f1(d.peak_temperature_f??peakOf(hours,'temperature_2m'))}°F · ${f0(d.blocked_half_hours)} blocked half-hours. Rows tinted below fall inside the best window.</p>
 <h3>Every hour — raw UV first</h3><div class="tablewrap"><table><thead><tr><th>Time</th><th>UV</th><th>Clear</th><th>UVA</th><th>UVB</th><th>Temp</th><th>Cloud</th><th>Rain</th><th>DNI</th><th>Overall</th><th>Abs</th><th>Local</th><th>Atm</th><th>Conf</th><th>Note</th></tr></thead><tbody>${hHtml||'<tr><td colspan="15">No hourly rows for this day.</td></tr>'}</tbody></table></div>
 <h3>Every 30 minutes</h3><div class="tablewrap"><table><thead><tr><th>Time</th><th>UV</th><th>UVA</th><th>Overall</th><th>Source</th><th>Note</th></tr></thead><tbody>${qHtml||'<tr><td colspan="6">No 30-minute rows for this day.</td></tr>'}</tbody></table></div>`;}
-loadData();
+loadData();initSkin();
 </script></body></html>
