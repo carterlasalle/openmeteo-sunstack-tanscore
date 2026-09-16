@@ -1,11 +1,12 @@
 name: forecast-run
 
-# 9am / 12pm / 9pm / 12am America/Indiana expressed in UTC. Indiana is
-# UTC-4 in daylight time, so winter runs land one hour later local.
+# 12:23am / 9:23am / 12:23pm / 9:23pm America/Indiana, DST handled by
+# GitHub. Minute 23 dodges the start-of-hour load spike that was delaying
+# our on-the-hour slots by hours and dropping some (documented behavior).
 "on":
   schedule:
-    - cron: "0 1,4,13,16 * * *"
-  workflow_dispatch:
+    - cron: "23 0,9,12,21 * * *"
+      timezone: "America/Indiana/Indianapolis"
 
 permissions:
   contents: write

@@ -642,6 +642,7 @@ def test_scheduled_workflow_is_complete_and_wired():
         assert required in names, f"missing workflow step: {required}"
     forecast = by_name["Forecast run"]
     assert "CDSAPI_URL" in forecast["env"] and "CDSAPI_KEY" in forecast["env"]
-    crons = [s["cron"] for s in wf["on"]["schedule"]]
-    assert any("1,4,13,16" in c for c in crons)
+    schedules = wf["on"]["schedule"]
+    assert any("0,9,12,21" in s["cron"] for s in schedules)
+    assert all(s.get("timezone") == "America/Indiana/Indianapolis" for s in schedules)
     assert wf["permissions"]["contents"] == "write"
