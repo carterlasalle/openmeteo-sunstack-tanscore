@@ -1,37 +1,57 @@
-# SunStack TanScore 3.0
+<div align="center">
 
-A strict, source-transparent solar/UV forecasting and calibration system that answers two different questions without mixing them up:
+# SunStack TanScore
+
+**A strict, source-transparent solar/UV forecast and calibration stack.**
+
+[![forecast-run](https://github.com/carterlasalle/openmeteo-sunstack-tanscore/actions/workflows/run.yml/badge.svg)](https://github.com/carterlasalle/openmeteo-sunstack-tanscore/actions/workflows/run.yml)
+![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
+![Live site](https://img.shields.io/website?url=https%3A%2F%2Fcarterlasalle.github.io%2Fopenmeteo-sunstack-tanscore%2F&label=site)
+
+[Live forecast](https://carterlasalle.github.io/openmeteo-sunstack-tanscore/) · [Getting started](#quick-start) · [Scores](#scores) · [Safety model](#safety-model) · [Contributing](CONTRIBUTING.md)
+
+</div>
+
+SunStack answers two different questions without mixing them up:
 
 1. **How strong is the actual melanogenic radiation on an absolute global scale?**
 2. **How good is this outdoor tanning opportunity here, given local climatology, forecast confidence, rain/snow, and temperature?**
 
-It fetches live Open-Meteo forecasts, full ensemble data, native HRRR sub-hourly radiation, CAMS air-quality data, **direct Copernicus CAMS spectral/ozone forecasts**, NASA POWER historical UVA/UVB, archived Open-Meteo forecasts, and Previous Runs for lead-time skill calibration.
+It fetches live Open-Meteo forecasts, full ensemble data, native HRRR sub-hourly radiation, CAMS air-quality data, **direct Copernicus CAMS spectral/ozone forecasts**, NASA POWER historical UVA/UVB, archived Open-Meteo forecasts, and previous runs for lead-time skill calibration.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Open-Meteo live + ensembles] --> D[Fetch + validate]
+    B[Direct CAMS spectral/ozone] --> D
+    C[NASA POWER + archives + skill] --> E[Calibrate]
+    D --> F[Deterministic consensus]
+    E --> G[UVA/UVB estimators]
+    F --> G
+    G --> H[Absolute vs local scoring]
+    H --> I[30-min windows + blocks]
+    I --> J[Static site + calendar]
+```
+
+Git history is the audit trail: every scheduled run commits its export, so any published number traces back to the exact inputs that produced it. Strict mode refuses to publish rather than score blind.
 
 ## Scores
 
 Every hour and 30-minute period exposes the components separately:
 
-- `tan_score_absolute_0_100` — globally anchored environmental melanogenic intensity. **Not** graded on a South Bend curve.
-- `local_tan_score_0_100` — percentile versus historical daylight around this location and season.
-- `atmospheric_quality_percentile_0_100` — local percentile after controlling for season and solar elevation.
-- `tan_forecast_confidence_0_100` — how trustworthy the predicted window is from deterministic/ensemble evidence.
-- `outdoor_feasibility_0_100` — practical outdoor usability only.
-- `overall_tan_opportunity_0_100` — the easy-to-read overall number.
+| Score | What it means |
+|---|---|
+| `tan_score_absolute_0_100` | Globally anchored melanogenic intensity. **Not** graded on a South Bend curve |
+| `local_tan_score_0_100` | Percentile versus historical daylight around this location and season |
+| `atmospheric_quality_percentile_0_100` | Local percentile after controlling for season and solar elevation |
+| `tan_forecast_confidence_0_100` | Trust in the window from deterministic/ensemble evidence |
+| `outdoor_feasibility_0_100` | Practical outdoor usability only |
+| `overall_tan_opportunity_0_100` | The easy-to-read overall number |
 
 ### Overall formula
 
-The unblocked composite is a weighted geometric mean:
-
-```text
-60% Absolute TanScore
-15% Local percentile
-10% Atmospheric quality
-15% Forecast confidence
-```
-
-It is capped at `Absolute + 20`, so local rarity can never turn weak physical UV into a fake elite score. Then it is multiplied by outdoor feasibility.
-
-This means a result like:
+The unblocked composite is a weighted geometric mean — 60% Absolute, 15% Local, 10% Atmosphere, 15% Confidence — capped at `Absolute + 20`, so local rarity can never turn weak physical UV into a fake elite score. Then it is multiplied by outdoor feasibility.
 
 ```text
 Absolute    44
@@ -41,244 +61,112 @@ Confidence  91
 Overall     ~60 before weather usability
 ```
 
-can mean **excellent for South Bend but only moderate on an absolute terrestrial scale**.
+That reads as **excellent for South Bend but only moderate on an absolute terrestrial scale** — both true at once.
 
 ## Outdoor hard blocks and flags
 
 Outdoor usability is deliberately separate from melanogenesis physics.
 
-Default hard blocks:
+Default hard blocks (Overall = 0, Absolute untouched): active rain/drizzle/showers, active snow, thunderstorm, temperature `< 50°F` (configurable) or `>= 110°F`. Soft penalties: 50–68°F cold comfort, 100–110°F heat, precipitation probability, high wind, hot + humid.
 
-- active rain/drizzle/showers -> Overall = 0
-- active snow -> Overall = 0
-- thunderstorm -> Overall = 0
-- temperature `< 50°F` -> Overall = 0 (configurable)
-- temperature `>= 110°F` -> Overall = 0
-
-Soft penalties/warnings:
-
-- 50–68°F cold/marginal comfort
-- 100–110°F heat
-- forecast precipitation probability
-- high wind
-- hot + very humid/sweaty conditions
-
-These rules **do not alter Absolute TanScore**. A rainy hour can therefore correctly show strong UV physics but `Overall = 0` because it is not a practical outdoor tanning window.
-
-Configure thresholds in `.env.example` / environment variables.
+A `uv_input_disagree` flag fires when broadband and UV inputs describe different skies (per-variable model stitching on convective days); it halves confidence and prints a visible note rather than hiding the disagreement. Thresholds in `.env.example` / environment variables.
 
 ## Fitzpatrick skin type
 
-The dashboard and CLI accept optional Fitzpatrick I–VI:
+Dashboard and CLI accept optional Fitzpatrick I–VI (`uv run sunstack run --skin-type 2`, or the UI selector). It is **qualitative personal-response/risk context only** — it never multiplies environmental TanScore, because measured MED/MMD overlaps substantially within Fitzpatrick groups.
+
+## Quick start
+
+### Prerequisites
+
+- Python `3.13`
+- [uv](https://docs.astral.sh/uv/)
+- Git
 
 ```bash
-uv run sunstack run --skin-type 2
-```
-
-or select it in the UI.
-
-Fitzpatrick type is used for **qualitative personal-response/risk context only**. It does not multiply environmental TanScore. Human studies show substantial overlap in experimentally measured minimal erythema dose (MED) and minimal melanogenesis dose (MMD) inside Fitzpatrick groups, so assigning a fake exact `Type II = 0.63x` coefficient would reduce accuracy. Objective skin color or an experimentally measured MED/MMD would be a better personalization variable if ever available.
-
-## Data sources
-
-### Live Open-Meteo
-
-Every normal `run` bypasses the live HTTP cache by default and makes real requests to:
-
-- Best Match
-- HRRR
-- NBM
-- NAM
-- GFS / AI-GFS
-- ECMWF IFS / AIFS
-- ICON
-- GEM + HRDPS
-- UKMO
-- ACCESS
-- CMA GRAPES
-- full-member GEFS/AIGEFS/ECMWF ensembles
-- ensemble mean/spread systems
-- native HRRR 15-minute data
-- Open-Meteo CAMS air quality / AOD550
-- deep pressure profiles
-
-Use `--cached-live` only if you intentionally want live-response caching.
-
-### Direct CAMS / Copernicus ADS
-
-Strict mode requires direct CAMS spectral atmospheric data, including the UV-region aerosol/ozone inputs used by the high-quality tier:
-
-- AOD 340 / 355 / 380 / 400 nm
-- absorption AOD at those wavelengths
-- single-scattering albedo
-- asymmetry factor
-- total-column ozone
-- total-column water vapour
-- cloud liquid/ice water columns
-- forecast albedo
-- CAMS UV diagnostics
-- solar-radiation context
-
-Group requests are attempted first. If ADS rejects a group, SunStack retries each variable independently and writes the exact failure to `raw/cams_forecast/manifest.json`.
-
-### Historical calibration
-
-`setup` / `bootstrap` obtains:
-
-- **NASA POWER hourly UVA + UVB** from 2001 onward
-- Open-Meteo Historical Forecast archive
-- Open-Meteo Previous Runs for forecast lead-time skill
-- CAMS EAC4 historical aerosol/ozone data when ADS credentials are present
-
-Historical data is cached because repeatedly redownloading immutable decades of calibration data is wasteful. Use `--force` when you deliberately want to refetch it.
-
-## First-time setup
-
-### 1. Install
-
-```bash
-unzip openmeteo-sunstack-tanscore-v3.zip
+git clone https://github.com/carterlasalle/openmeteo-sunstack-tanscore.git
 cd openmeteo-sunstack-tanscore
 uv sync
 ```
 
-### 2. Configure Copernicus ADS
+### 1. Configure Copernicus ADS
 
-Create a free Copernicus Atmosphere Data Store account, accept the terms for the CAMS datasets, and configure the standard `cdsapi` credentials (`~/.cdsapirc`).
-
-Then verify everything:
+Create a free Copernicus Atmosphere Data Store account, accept the CAMS dataset terms, and configure standard `cdsapi` credentials (`~/.cdsapirc`). Then verify everything (`--probe` makes **real live Open-Meteo requests**):
 
 ```bash
 uv run sunstack doctor --probe
 ```
 
-`--probe` makes **real live Open-Meteo requests** and prints each feed's latency and exact failure if one occurs.
-
-### 3. One-command full setup
+### 2. One-command full setup
 
 ```bash
 uv run sunstack setup
 ```
 
-This:
+Fetches NASA POWER UVA/UVB (2001+), Open-Meteo historical forecasts, previous runs, CAMS EAC4; trains UVA/UVB estimators; builds the local reference distribution and model/lead-time skill; then makes a fresh live run. Strict is the default: a missing critical source exits non-zero instead of inventing values. Troubleshooting only: `uv run sunstack run --allow-degraded`.
 
-1. fetches NASA POWER historical UVA/UVB
-2. fetches Open-Meteo historical forecasts
-3. fetches Previous Runs
-4. fetches CAMS EAC4
-5. trains UVA/UVB estimators
-6. creates the local historical reference distribution
-7. computes model/lead-time skill
-8. makes a fresh live Open-Meteo run
-9. makes a fresh direct CAMS forecast request
-10. produces hourly, 30-minute, and daily-best-time output
-
-Strict is the default. If a critical source is missing, SunStack exits non-zero with a clear error rather than silently inventing values.
-
-For deliberate troubleshooting only:
+### 3. Daily use
 
 ```bash
-uv run sunstack run --allow-degraded
+uv run sunstack ui    # dashboard at http://127.0.0.1:8765
+uv run sunstack run   # terminal run (live cache bypassed by default)
 ```
 
-## Daily use
-
-### Dashboard
-
-```bash
-uv run sunstack ui
-```
-
-It opens `http://127.0.0.1:8765` and shows:
-
-- best days
-- best multi-hour window each day
-- best hour each day
-- best 30-minute period
-- hourly values
-- 30-minute predictions
-- Overall / Absolute / Local / Atmospheric / Confidence components
-- rain/snow/temp blocks and warnings
-- Fitzpatrick selector
-- source/debug status
-- **Refresh APIs** button that executes fresh live requests
-
-### Terminal
-
-```bash
-uv run sunstack run
-```
-
-Optional:
-
-```bash
-uv run sunstack run --skin-type 3 --min-temp 55
-```
-
-## Outputs
-
-Latest snapshot:
+## Architecture
 
 ```text
-data/latest/
-├── summary.json
-├── raw/
-│   ├── manifest.json
-│   └── cams_forecast/manifest.json
-└── tables/
-    ├── tan_daily_summary.csv/.parquet
-    ├── tan_forecast_hourly.csv/.parquet
-    ├── tan_forecast_30min.csv/.parquet
-    ├── best_tan_windows.csv/.parquet
-    ├── deterministic_hourly...
-    ├── ensemble_members_long...
-    ├── ensemble_probabilities...
-    ├── hrrr_native_15min...
-    └── cams_direct_forecast...
+src/sunstack/
+  cli.py           run / setup / bootstrap / doctor / ui / export
+  fetch.py         live Open-Meteo fan-out (deterministic, ensemble, HRRR-15min, air quality)
+  history.py       NASA POWER, archives, previous runs, CAMS EAC4 + direct CAMS forecast
+  normalize.py     per-source normalization
+  derive.py        consensus, ensemble probabilities, solar diagnostics
+  tanscore.py      UVA/UVB estimators, absolute + local scoring
+  opportunity.py   30-min forecast, outdoor feasibility, daily summaries, Fitzpatrick context
+  validation.py    strict gates (sources, CAMS fields, score ranges)
+  output.py        static-site + calendar export
+  ui.py            dashboard, data + refresh + calendar APIs
+  calibrate.py     training + local reference + skill
+data/
+  latest/          current snapshot (summary, raw manifests, tables)
+  runs/            every run, timestamped
+  calibration/     models, reference distribution, skill
+docs/              published static site (each run republishes)
 ```
 
-Calibration:
+## Safety model
 
-```text
-data/calibration/
-├── uva_uvb_models.joblib
-├── model_metrics.json
-├── local_reference.parquet
-├── openmeteo_model_skill.parquet
-└── training_calibration_hourly.parquet
-```
+SunStack intentionally makes silent degradation inconvenient:
 
-Debug log:
+- Every normal `run` bypasses the live HTTP cache — forecasts represent real requests, not stale reads. (`--cached-live` only when deliberate.)
+- Strict mode validates Best Match, HRRR 15-min, air quality, minimum deterministic/ensemble counts, calibration artifacts, direct CAMS fields, and score ranges. Any critical failure exits 1 with the exact failure plus the path to `data/logs/sunstack.log`.
+- Historical data *is* cached (immutable decades shouldn't be redownloaded); `--force` refetches deliberately.
+- `uv run sunstack debug` prints the latest run summary and raw source manifest.
 
-```text
-data/logs/sunstack.log
-```
+## Data sources
+
+Live (uncached by default): Best Match, HRRR, NBM, NAM, GFS/AI-GFS, ECMWF IFS/AIFS, ICON, GEM + HRDPS, UKMO, ACCESS, CMA GRAPES, full-member GEFS/AIGEFS/ECMWF ensembles, ensemble means, native HRRR 15-minute, CAMS air quality/AOD550, deep pressure profiles.
+
+Direct CAMS/ADS (strict-required): AOD and absorption AOD at 340/355/380/400 nm, single-scattering albedo, asymmetry factor, total-column ozone and water vapour, cloud liquid/ice columns, forecast albedo, CAMS UV diagnostics. Group requests first, per-variable retry on rejection, exact failures in `raw/cams_forecast/manifest.json`.
 
 ## 30-minute semantics
 
-Near-term periods use native HRRR radiation/weather at true sub-hourly timestamps when available. UV itself is not native HRRR 15-minute data; SunStack interpolates hourly UV and applies a bounded HRRR broadband-radiation correction to the predicted UVA/UVB estimate.
-
-Farther out, 30-minute rows are clearly labeled `interpolated_hourly`. They are for calendar/UI usability, not fake independent 30-minute atmospheric forecasts.
-
-## Failing loudly
-
-Strict mode validates:
-
-- Best Match
-- native HRRR 15-minute feed
-- Open-Meteo CAMS air-quality feed
-- minimum deterministic-model count
-- minimum ensemble-system count
-- calibrated UVA/UVB model
-- local historical climatology
-- direct CAMS data
-- CAMS AOD340/AOD380 + ozone fields
-- score completeness/ranges
-
-Any critical failure exits with code 1 and prints both the exact failure and the path to `data/logs/sunstack.log`.
-
-`uv run sunstack debug` prints the latest run summary and raw source manifest.
+Near-term periods use native HRRR radiation/weather at true sub-hourly timestamps; hourly UV is interpolated with a bounded HRRR broadband correction. Farther out, rows are labeled `interpolated_hourly` — calendar/UI usability, not fake independent forecasts.
 
 ## Important interpretation
 
-TanScore is an environmental/pigmentation-potential model, **not a safe exposure-time recommendation**. UV-induced tanning and erythema are both consequences of UV exposure; Fitzpatrick class does not make a given UV dose harmless. The UI deliberately keeps radiation intensity, local context, weather feasibility, and personal skin-response context separate rather than turning them into exposure-time advice.
+TanScore is an environmental/pigmentation-potential model, **not a safe exposure-time recommendation**. Tanning and erythema are both consequences of UV exposure; no skin type makes a UV dose harmless. The UI keeps radiation intensity, local context, weather feasibility, and personal skin-response context separate rather than synthesizing exposure-time advice.
+
+## Documentation
+
+| Document | Purpose |
+|---|---|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and pull-request standards |
+| [SECURITY.md](SECURITY.md) | Supported versions and vulnerability reporting |
+| [AGENTS.md](AGENTS.md) | Repository-specific instructions for coding agents |
+| [RESEARCH_NOTES.md](docs/RESEARCH_NOTES.md) | Dated calibration and incident evidence log |
+| [.env.example](.env.example) | Every tunable threshold |
+
+## Contributing
+
+Solo-owner mode with required checks; read [CONTRIBUTING.md](CONTRIBUTING.md) before making changes. Run `uv run pytest tests/ -q` and `uv run ruff check src tests` before opening a pull request.

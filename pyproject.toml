@@ -3,7 +3,7 @@ name = "openmeteo-sunstack"
 version = "0.3.0"
 description = "Research-grade solar/UV forecast, historical calibration, and absolute/local TanScore stack"
 readme = "README.md"
-requires-python = ">=3.12"
+license = { text = "MIT" }
 dependencies = [
   "numpy>=2.0",
   "pandas>=2.2",
