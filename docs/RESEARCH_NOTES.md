@@ -123,3 +123,14 @@ self-consistent). Response, truth-first: no values touched. New
 uv_input_disagree flag (SZA<65, TOA>100, |clear-sky-index gap| with dead
 band; twilight/night/NaN never flag) halves confidence and prints a visible
 note in both tables. Thresholds are heuristic priors, not fitted.
+
+## 2026-09-18 — Six straight publish failures (uv.lock drift, not science)
+All Sep-17 runs (00:23 through 13:23 slots) computed fine — 36/36 feeds,
+CAMS cycles resolved — then died at `git pull --rebase` with exit 128
+("unstaged changes"). Root cause: the community-files commit dropped
+`requires-python` from pyproject.toml, so setup-uv fell back to latest and
+rewrote uv.lock mid-run; the dirty lock blocked the rebase. Fix: restored
+`requires-python`, pinned `[tool.uv] required-version ==0.12.15` + explicit
+setup-uv `version`, `uv sync --locked` (fail loudly instead of rewriting),
+publish discards uv.lock churn and falls back to `-X theirs` on mid-run
+local pushes. Workflow test now pins all of it.
