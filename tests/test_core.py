@@ -639,15 +639,31 @@ def test_scheduled_workflow_is_complete_and_wired():
     by_name = {s.get("uses", s.get("name")): s for s in steps}
     assert "actions/checkout@v7.0.1" in by_name
     assert "astral-sh/setup-uv@v10.1.0" in by_name
+    # uv drift rewrote uv.lock mid-run and broke `git pull --rebase` for six
+    # straight runs (Sep 17). The workflow pins the exact uv and the publish
+    # step discards lock churn; pin both so no edit can silently drop them.
+    setup_uv = by_name["astral-sh/setup-uv@v10.1.0"]
+    assert setup_uv.get("with", {}).get("version"), "setup-uv must pin an exact uv version"
     names = [s.get("name") for s in steps]
     for required in ("Install dependencies", "Forecast run", "Export static site", "Publish results"):
         assert required in names, f"missing workflow step: {required}"
+    install = by_name["Install dependencies"]
+    assert "--locked" in install.get("run", ""), "installs must fail loudly on lock drift, not rewrite uv.lock"
+    publish = by_name["Publish results"]["run"]
+    assert "checkout -- uv.lock" in publish, "publish must discard uv.lock churn before rebasing"
+    assert "-X theirs" in publish, "publish must recover from mid-run local pushes instead of exit 128"
     forecast = by_name["Forecast run"]
     assert "CDSAPI_URL" in forecast["env"] and "CDSAPI_KEY" in forecast["env"]
     schedules = wf["on"]["schedule"]
     assert any("0,9,12,21" in s["cron"] for s in schedules)
     assert all(s.get("timezone") == "America/Indiana/Indianapolis" for s in schedules)
     assert "workflow_dispatch" in wf["on"]
+    import tomllib
+
+    with open("pyproject.toml", "rb") as f:
+        proj = tomllib.load(f)
+    assert proj["project"].get("requires-python"), "requires-python must survive metadata edits"
+    assert proj["tool"]["uv"].get("required-version"), "uv required-version pins the resolver"
 
 
 def test_uv_ghi_disagreement_flags_only_strong_daytime_mismatch():

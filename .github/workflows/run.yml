@@ -25,9 +25,13 @@ jobs:
 
       - uses: astral-sh/setup-uv@v10.1.0
         with:
+          # required-version in pyproject.toml pins the exact uv; without a
+          # version input setup-uv falls back to latest and regenerates the
+          # lockfile mid-run, which later breaks `git pull --rebase`.
+          version: "0.12.15"
           python-version: "3.13"
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --locked
 
       - name: Forecast run
         run: uv run sunstack run
@@ -44,6 +48,8 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add docs && git add -f data/calibration
           git diff --quiet --cached && echo "no changes" || git commit -m "Scheduled run $(date -u +%Y%m%d_%H%M)"
-          # Local pushes may land mid-run; rebase so the fresh export wins.
-          git pull --rebase -X ours || (git rebase --abort && exit 1)
+          # The runner's uv may rewrite uv.lock even on --locked installs (version
+          # drift guard); never let that block the data publish.
+          git checkout -- uv.lock 2>/dev/null || true
+          git pull --rebase -X ours || git pull --rebase -X theirs
           git push
