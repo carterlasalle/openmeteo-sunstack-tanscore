@@ -1,0 +1,62 @@
+name: site-refresh
+
+# UI/backend only: re-export the static site from the latest committed data.
+# No fetch, no secrets, no forecast — runs fast (~1 min). Triggers on every
+# push that touches UI/export code, so figure and picker fixes publish
+# without waiting for the next 3-hour forecast slot. forecast-run does this
+# plus the actual forecast (it calls `sunstack run`, which runs + exports +
+# publishes per site).
+"on":
+  push:
+    branches: [main]
+    paths:
+      - "src/sunstack/ui.py"
+      - "src/sunstack/output.py"
+      - "src/sunstack/opportunity.py"
+      - "src/sunstack/tanscore.py"
+      - "src/sunstack/config.py"
+      - "src/sunstack/calibrate.py"
+      - "src/sunstack/derive.py"
+      - "src/sunstack/fetch.py"
+      - "src/sunstack/history.py"
+      - "src/sunstack/normalize.py"
+      - "src/sunstack/validation.py"
+      - "scripts/**"
+      - "locations.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: site-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          version: "0.12.15"
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Re-export static site from latest data
+        run: |
+          uv run sunstack export --site-dir /tmp/all-sites
+          cp /tmp/all-sites/index.html /tmp/all-sites/data.json /tmp/all-sites/locations.json /tmp/all-sites/skin.json /tmp/all-sites/calendar.ics docs/
+          mkdir -p docs/sites
+          cp -r /tmp/all-sites/sites/. docs/sites/
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs -f
+          git checkout -- uv.lock 2>/dev/null || true
+          git diff --quiet --cached && echo "no UI changes" || git commit -m "Refresh static UI $(date -u +%Y%m%d_%H%M)"
+          git pull --rebase -X ours || git pull --rebase -X theirs
+          git push

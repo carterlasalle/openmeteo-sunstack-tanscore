@@ -791,6 +791,22 @@ def test_run_one_site_skips_cold_calibration_without_failing(tmp_path, monkeypat
     assert sb.slug == "south-bend"
 
 
+def test_site_refresh_workflow_is_ui_only_and_secret_free():
+    import yaml
+
+    text = Path(".github/workflows/site-refresh.yml").read_text(encoding="utf-8")
+    wf = yaml.safe_load(text)
+    assert "schedule" not in (wf.get("on", True) or True), "refresh never forecasts on its own"
+    assert "workflow_dispatch" in (wf.get("on", True) or True), "refresh stays manually runnable"
+    push_paths = ((wf.get("on", {}) or {}).get("push", {}) or {}).get("paths", [])
+    assert "src/sunstack/ui.py" in push_paths, "UI fixes publish without a forecast run"
+    assert "locations.yaml" in push_paths, "registry changes re-export the picker"
+    assert "secrets." not in text and "CDSAPI" not in text, "refresh touches no credentials"
+    assert "schedule" not in text, "refresh never needs the cron slot"
+    runs = " ".join(str(s.get("run", "")) for s in wf["jobs"]["refresh"]["steps"])
+    assert "sunstack export" in runs, "refresh re-exports, never runs the forecast"
+    assert "sunstack run" not in runs, "forecast stays in forecast-run only"
+
 def test_run_alternates_publish_per_site(tmp_path):
     import inspect
 
