@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-09-22T05:35:02.793262+00:00",
+  "coordinates": [
+    34.04,
+    -118.53
+  ],
+  "timezone": "America/Los_Angeles",
+  "strict": true,
+  "nasa_rows": 222624,
+  "openmeteo_historical_rows": 41376,
+  "previous_runs_rows": 72072,
+  "cams_eac4_rows": 67208,
+  "training_rows": 222624,
+  "local_reference_rows": 111696,
+  "skill_rows": 71,
+  "direct_cams_credentials": true,
+  "model_metrics": {
+    "rows": 111761,
+    "validation_split_year": 2024,
+    "uva": {
+      "mae": 0.42540930440997204,
+      "rmse": 0.6704849781593735,
+      "r2": 0.9984897972027242,
+      "median_absolute_error": 0.2542877526601899
+    },
+    "uvb": {
+      "mae": 0.030920149270148294,
+      "rmse": 0.05370308516066549,
+      "r2": 0.9900210082487843,
+      "median_absolute_error": 0.014291591724237107
+    }
+  },
+  "absolute_score_definition": {
+    "uvi_reference": 20.0,
+    "uva_reference_wm2": 60.0,
+    "weights": {
+      "uvi": 0.55,
+      "uva": 0.3,
+      "interaction": 0.15
+    }
+  }
+}
