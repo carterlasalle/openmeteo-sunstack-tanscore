@@ -21,6 +21,23 @@ from .opportunity import (
 )
 from .tanscore import fnum
 
+BUILD_SHA: str | None = None
+
+
+def build_sha() -> str:
+    """Short git SHA of the code serving this page. Cached; 'unknown' off-git."""
+    global BUILD_SHA
+    if BUILD_SHA is None:
+        try:
+            import subprocess
+
+            out = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                                 capture_output=True, text=True, check=False, timeout=10)
+            BUILD_SHA = out.stdout.strip() or "unknown"
+        except (OSError, subprocess.SubprocessError):
+            BUILD_SHA = "unknown"
+    return BUILD_SHA
+
 
 def _site_nav(current_slug: str | None = None) -> list[dict[str, object]]:
     """Picker entries with per-page relative URLs for the static export.
@@ -313,7 +330,8 @@ async function refreshData(){show('Calling live Open-Meteo and CAMS, rebuilding 
 function show(t,c){const m=document.getElementById('msg');m.textContent=t;m.className='status show '+c;}function hide(){document.getElementById('msg').className='status';}
 function bestDay(){const d=(DATA.daily||[]).filter(x=>+x.day_overall_peak_0_100>0);d.sort((a,b)=>b.day_overall_peak_0_100-a.day_overall_peak_0_100);return d[0]||DATA.daily[0];}
 function render(){if(!DATA||!DATA.daily||!DATA.daily.length){show('No forecast data yet. Press Refresh forecast.','error');return;}
-document.getElementById('runline').textContent='Updated '+fmtTime((DATA.summary||{}).created_at)+' · '+(DATA.hourly||[]).length+' hourly rows · absolute is worldwide scale, local is this location\u0027s percentile';
+document.getElementById('runline').textContent='Updated '+fmtTime((DATA.summary||{}).created_at)+' · '+(DATA.hourly||[]).length+' hourly rows · build '+(DATA.build_sha||'?')+' · absolute is worldwide scale, local is this location\u0027s percentile';
+console.log('[sunstack] build=%s run=%s updated=%s',DATA.build_sha,DATA.run,(DATA.summary||{}).created_at);
 document.getElementById('cal').href='webcal://'+location.host+'/api/calendar.ics?skin_type='+document.getElementById('skin').value+'&min_temp='+document.getElementById('mintemp').value+'&location='+encodeURIComponent(LOC);
 if(!SEL||!DATA.daily.some(d=>d.date===SEL)){const b=bestDay();SEL=b?b.date:DATA.daily[0].date;}
 const b=bestDay();
@@ -391,6 +409,7 @@ def create_app(root: Path) -> FastAPI:
                 "run": str(run), "daily": _records(daily),
                 "hourly": _records(hourly_ui), "half_hour": _records(half_ui),
                 "summary": summary, "location": site.slug,
+                "build_sha": build_sha(),
             }
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc

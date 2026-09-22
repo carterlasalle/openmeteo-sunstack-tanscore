@@ -26,7 +26,14 @@ def export_static_site(
     from . import config
     from .calibrate import scol
     from .opportunity import fitzpatrick_context
-    from .ui import HTML, _filtered_payload, _records, _resolve_site, build_calendar_ics
+    from .ui import (
+        HTML,
+        _filtered_payload,
+        _records,
+        _resolve_site,
+        build_calendar_ics,
+        build_sha,
+    )
 
     site = _resolve_site(site_slug)
     entered = config.use_site(site)
@@ -39,12 +46,13 @@ def export_static_site(
     hourly_ui = hourly.loc[(ht.dt.hour >= 7) & (ht.dt.hour <= 20)].copy()
     qt = pd.to_datetime(scol(half, "time"))
     half_ui = half.loc[(qt.dt.hour >= 7) & (qt.dt.hour <= 20)].copy()
-    payload = {
+    payload: dict[str, object] = {
         "run": str(run),
         "daily": _records(daily),
         "hourly": _records(hourly_ui),
         "half_hour": _records(half_ui),
         "summary": summary,
+        "build_sha": build_sha(),
     }
     html = HTML
     html = _swap_once(html, "fetch(`/api/data?skin_type=${s}&min_temp=${m}&location=${encodeURIComponent(LOC)}`)", "fetch('./data.json')")

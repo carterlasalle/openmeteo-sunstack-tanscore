@@ -483,7 +483,14 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path):
     assert info["days"] == 1 and info["events"] == 1
     html = (tmp_path / "site" / "index.html").read_text()
     assert "./data.json" in html and "/api/data" not in html
-    assert 'id="skin"' in html and 'id="mintemp"' not in html
+    assert "build_sha" in html and "build=" in html, "runline shows SHA and console logs it"
+    payload = _json.loads((tmp_path / "site" / "data.json").read_text())
+    assert payload["build_sha"], "data.json must carry the code SHA"
+    import subprocess as _sp
+
+    want = _sp.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
+                   text=True, check=False).stdout.strip()
+    assert payload["build_sha"] == (want or "unknown"), "SHA matches the exporting commit"
     assert 'rel="icon"' in html, "static export must silence the favicon 404"
     assert "locations.json" in html, "static picker must read locations.json before /api/locations"
     locs = _json.loads((tmp_path / "site" / "locations.json").read_text())["locations"]
