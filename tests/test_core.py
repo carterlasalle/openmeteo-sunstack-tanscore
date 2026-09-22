@@ -682,6 +682,36 @@ def test_scheduled_workflow_is_complete_and_wired():
     assert proj["tool"]["uv"].get("required-version"), "uv required-version pins the resolver"
 
 
+def test_location_calibrate_workflow_is_post_merge_only():
+    import yaml
+
+    wf = yaml.safe_load(Path(".github/workflows/location-calibrate.yml").read_text(encoding="utf-8"))
+    on = wf.get("on", True) or True
+    assert "pull_request_target" not in on, "calibration must never run on unapproved proposals"
+    push_paths = (on.get("push", {}) or {}).get("paths", []) if isinstance(on, dict) else []
+    assert "locations.yaml" in push_paths, "calibration triggers on registry merge"
+    perms = wf.get("permissions", {})
+    assert "pull-requests" not in perms, "calibrate job needs no PR write scope"
+    steps = wf["jobs"]["calibrate"]["steps"]
+    runs = " ".join(str(s.get("run", "")) for s in steps)
+    assert "calibrate_missing_sites.py" in runs, "calibration bootstraps only missing sites"
+    assert "CDSAPI_URL" in runs or any("CDSAPI_URL" in str(s.get("env", "")) for s in steps), \
+        "secrets flow to the post-merge job, never to intake"
+
+
+def test_location_intake_workflow_holds_no_secrets():
+    import yaml
+
+    wf = yaml.safe_load(Path(".github/workflows/location-intake.yml").read_text(encoding="utf-8"))
+    text = Path(".github/workflows/location-intake.yml").read_text(encoding="utf-8")
+    scrubbed = text.replace("nobody gets secrets", "")
+    assert "secrets." not in scrubbed, "intake must never read any GitHub secret"
+    assert "CDSAPI_URL" not in text and "CDSAPI_KEY" not in text, "intake must never touch CAMS credentials"
+    assert "pull_request_target" in (wf.get("on", True) or True), "intake validates unapproved proposals"
+    perms = wf.get("permissions", {})
+    assert perms.get("contents") == "read", "intake stays read-only on code"
+
+
 def test_export_command_publishes_every_site(tmp_path):
     import yaml
 

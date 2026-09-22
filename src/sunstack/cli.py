@@ -104,6 +104,11 @@ def _calibration_paths(root: Path, site_slug: str | None = None) -> tuple[Path, 
     return site_root / "calibration_sources", site_root / "calibration", Path(".cache") / "sunstack"
 
 
+def calibration_paths(root: Path, site_slug: str | None = None) -> tuple[Path, Path, Path]:
+    """Public alias for automation (scripts, CI) that must not touch privates."""
+    return _calibration_paths(root, site_slug)
+
+
 def bootstrap(root: Path, force: bool = False, skip_cams_history: bool = False, strict: bool = True,
               site: config.Site | None = None) -> dict[str, object]:
     with config.use_site(site) if site is not None else nullcontext():

@@ -1,0 +1,49 @@
+name: location-calibrate
+
+# Post-merge auto-calibration: when a locations.yaml change lands on main
+# (owner merged = approved), bootstrap every site missing calibration
+# artifacts, then publish. Secrets only ever run here, on merged main —
+# never on unapproved proposals (see location-intake.yml).
+"on":
+  push:
+    branches: [main]
+    paths:
+      - "locations.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: location-calibrate
+  cancel-in-progress: false
+
+jobs:
+  calibrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 600
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          version: "0.12.15"
+          python-version: "3.13"
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Bootstrap missing site calibrations
+        run: uv run python scripts/calibrate_missing_sites.py
+        env:
+          CDSAPI_URL: ${{ secrets.CDSAPI_URL }}
+          CDSAPI_KEY: ${{ secrets.CDSAPI_KEY }}
+
+      - name: Publish calibrations
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f data/calibration data/sites
+          git diff --quiet --cached && echo "no changes" || git commit -m "Auto-calibrate new locations $(date -u +%Y%m%d_%H%M)"
+          git checkout -- uv.lock 2>/dev/null || true
+          git pull --rebase -X ours || git pull --rebase -X theirs
+          git push
