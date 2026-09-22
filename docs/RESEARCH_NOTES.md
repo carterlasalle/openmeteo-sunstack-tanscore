@@ -154,3 +154,13 @@ location_request template + location-intake workflow (pull_request_target
 on BASE commit, no secrets) validates append-only proposals and comments a
 plan; owner merge required before any calibration runs. Workflow exports
 per-site dirs and publishes data/sites calibration.
+
+## 2026-09-22 — Per-site alternating publish; cold sites skip (zero quality change)
+Forecast job alternates run→export→publish per site (run_one_site) instead
+of run-all→publish-all: South Bend publishes its own commit before Palisades
+starts, so a slow/failing second site can never take down fresh SB data.
+Cold sites raise _SiteSkipped (warning, not failure); location-calibrate owns
+bootstrap. Identical code path per site, strict on, no fallback tiers —
+quality cannot regress by construction. 502s in the Sep-22 log are ADS
+queue saturation (Bad Gateway from the retrieve proxy, retried after 120s),
+not request-shape errors; the 400s are the unpublished newest cycle.
