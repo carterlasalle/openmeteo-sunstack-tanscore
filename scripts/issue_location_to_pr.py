@@ -78,11 +78,19 @@ def main() -> int:
         )
         return 2
     body_path, base_path, out_path = (Path(a) for a in sys.argv[1:])
-    fields = parse_issue_body(body_path.read_text(encoding="utf-8"))
-    entry = build_entry(fields)
-    base = load_sites(base_path)  # validates timezone, ranges, exactly-one-default
-    if any(s.slug == entry["slug"] for s in base):
-        raise ValueError(f"slug already exists: {entry['slug']}")
+    try:
+        fields = parse_issue_body(body_path.read_text(encoding="utf-8"))
+        entry = build_entry(fields)
+        base = load_sites(base_path)  # validates timezone, ranges, exactly-one-default
+        existing = next((s for s in base if s.slug == entry["slug"]), None)
+        if existing is not None:
+            raise ValueError(
+                f"duplicate: slug '{entry['slug']}' already registered as "
+                f"'{existing.name}' ({existing.lat}, {existing.lon}, {existing.timezone})"
+            )
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return 1
     rows: list[dict[str, object]] = yaml.safe_load(
         base_path.read_text(encoding="utf-8")
     )

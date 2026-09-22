@@ -5,6 +5,11 @@ name: location-propose
 # scripts/issue_location_to_pr.py (same config.load_sites rules as intake),
 # and opens a PR. That PR is what location-intake validates and the owner
 # merges; location-calibrate only ever runs post-merge on main.
+#
+# Every outcome comments back on the issue and labels it:
+#   ready     -> PR opened (`Closes #N`), stale duplicate/invalid labels cleared
+#   duplicate -> slug already registered, `duplicate` label, no PR
+#   invalid   -> broken fields/coords/timezone, `invalid` label, no PR
 "on":
   issues:
     types: [opened, edited]
@@ -34,29 +39,51 @@ jobs:
         id: parse
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           printf '%s' "$ISSUE_BODY" > /tmp/issue-body.md
-          if ! uv run python scripts/issue_location_to_pr.py /tmp/issue-body.md locations.yaml /tmp/proposed-locations.yaml; then
+          set +e
+          uv run python scripts/issue_location_to_pr.py /tmp/issue-body.md locations.yaml /tmp/proposed-locations.yaml > /tmp/parse-out.txt 2>&1
+          code=$?
+          cat /tmp/parse-out.txt
+          if [ "$code" -ne 0 ]; then
+            if grep -q "^Error: duplicate:" /tmp/parse-out.txt; then echo "reason=duplicate" >> "$GITHUB_OUTPUT"; else echo "reason=invalid" >> "$GITHUB_OUTPUT"; fi
             echo "ok=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          uv run python scripts/validate_locations.py --base locations.yaml --proposed /tmp/proposed-locations.yaml > /tmp/intake.md
+          uv run python scripts/validate_locations.py --base locations.yaml --proposed /tmp/proposed-locations.yaml > /tmp/intake.md 2>&1
+          code=$?
+          cat /tmp/intake.md
+          if [ "$code" -ne 0 ]; then
+            cp /tmp/intake.md /tmp/parse-out.txt
+            echo "reason=invalid" >> "$GITHUB_OUTPUT"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           cat /tmp/intake.md >> "$GITHUB_STEP_SUMMARY"
+          echo "reason=ready" >> "$GITHUB_OUTPUT"
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
-      - name: Comment validation failure on the issue
+      - name: Comment outcome on the issue
         if: steps.parse.outputs.ok != 'true'
         uses: actions/github-script@v8.0.0
         with:
           script: |
             const fs = require('fs');
-            let plan = 'Could not parse this issue into a location proposal.';
-            try { plan = fs.readFileSync('/tmp/intake.md', 'utf8'); } catch (e) {}
+            const reason = '${{ steps.parse.outputs.reason }}';
+            let detail = 'Could not parse this issue into a location proposal.';
+            try { detail = fs.readFileSync('/tmp/parse-out.txt', 'utf8').trim() || detail; } catch (e) {}
+            const label = reason === 'duplicate' ? 'duplicate' : 'invalid';
+            const heading = reason === 'duplicate'
+              ? '### Location proposal: duplicate\n\nThis slug is already registered — no PR opened.'
+              : '### Location proposal: needs attention\n\nThe proposal is broken — no PR opened.';
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number, labels: [label],
+            });
             await github.rest.issues.createComment({
               owner: context.repo.owner, repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `### Location proposal: needs attention\n\n${plan}\n\nEdit the issue fields (name, slug, latitude, longitude, timezone) and a maintainer can re-run this workflow.`,
+              body: `${heading}\n\n\`\`\`\n${detail}\n\`\`\`\n\nEdit the issue fields (name, slug, latitude, longitude, timezone) and re-run by editing the issue — or ask a maintainer.`,
             });
 
       - name: Open registry PR
@@ -93,6 +120,11 @@ jobs:
               title: `Propose location from #${issueNo}`,
               body: `Closes #${issueNo}.\n\n${plan}\n\nReview: \`location-intake\` validates this PR; merge to calibrate.`,
             })).data;
+            for (const l of ['duplicate', 'invalid']) {
+              try {
+                await github.rest.issues.removeLabel({ ...context.repo, issue_number: issueNo, name: l });
+              } catch (e) {}
+            }
             await github.rest.issues.createComment({
               ...context.repo, issue_number: issueNo,
               body: `### Location proposal: PR open\n\n${plan}\n\nOpened #${pr.number} — review and merge to calibrate.`,

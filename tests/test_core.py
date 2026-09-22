@@ -725,15 +725,20 @@ def test_location_intake_workflow_holds_no_secrets():
 def test_location_propose_workflow_is_issue_triggered_and_secret_free():
     import yaml
 
-    wf = yaml.safe_load(Path(".github/workflows/location-propose.yml").read_text(encoding="utf-8"))
+    text = Path(".github/workflows/location-propose.yml").read_text(encoding="utf-8")
+    wf = yaml.safe_load(text)
     on = wf.get("on", True) or True
     assert "issues" in on, "propose triggers on [Location] issues"
-    text = Path(".github/workflows/location-propose.yml").read_text(encoding="utf-8")
     scrubbed = text.replace("nobody gets secrets", "")
     assert "secrets." not in scrubbed, "propose must never read any GitHub secret"
     assert "CDSAPI_URL" not in text and "CDSAPI_KEY" not in text
     runs = " ".join(str(s.get("run", "")) for s in wf["jobs"]["propose"]["steps"])
     assert "issue_location_to_pr.py" in runs, "propose parses the issue into a registry append"
+    assert "reason=duplicate" in text and "reason=invalid" in text, "parse must classify the failure"
+    assert "addLabels" in text, "failure comments must label the issue"
+    assert "removeLabel" in text, "ready must clear stale duplicate/invalid labels"
+    assert text.count("createComment") >= 2, "duplicate/invalid and ready both comment on the issue"
+    assert "Closes #" in text, "opened PR must mention the issue so it closes on merge"
 
 
 def test_issue_location_parser_round_trips_registry_append(tmp_path):
