@@ -134,3 +134,12 @@ rewrote uv.lock mid-run; the dirty lock blocked the rebase. Fix: restored
 setup-uv `version`, `uv sync --locked` (fail loudly instead of rewriting),
 publish discards uv.lock churn and falls back to `-X theirs` on mid-run
 local pushes. Workflow test now pins all of it.
+
+## 2026-09-22 — Sun-position lay guidance (context, not scoring)
+New columns sun_compass / torso_lift_deg / sun_posture_guidance from pvlib
+geometry already in the feature frame: 16-point compass from azimuth,
+torso lift = 90 - elevation (None below horizon), three-band guidance
+(flat >= 55°, flat-or-lift 30-55°, face-and-lift < 30°). Half-hours
+recompute from interpolated geometry rather than nearest-filling text.
+UI gains a sun-arc SVG + stick figure (legs flat, torso lifts toward the
+sun side) with click-any-row and a time dropdown. No score touched.
