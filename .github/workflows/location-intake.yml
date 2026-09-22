@@ -1,0 +1,53 @@
+name: location-intake
+
+# Public intake: anyone may propose coordinates, nobody gets secrets.
+# pull_request_target runs the BASE commit workflow (unprivileged), so fork
+# code never executes and CDSAPI_* secrets are never exposed to proposals.
+"on":
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "locations.yaml"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    if: github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          version: "0.12.15"
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Validate proposed registry
+        id: validate
+        run: |
+          git fetch origin pull/${{ github.event.pull_request.number }}/head:pr-head 2>/dev/null || \
+            git fetch origin ${{ github.event.pull_request.head.sha }}
+          git show pr-head:locations.yaml > /tmp/proposed.yaml 2>/dev/null || \
+            git show ${{ github.event.pull_request.head.sha }}:locations.yaml > /tmp/proposed.yaml
+          uv run python scripts/validate_locations.py --base locations.yaml --proposed /tmp/proposed.yaml > /tmp/intake.md
+          cat /tmp/intake.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment plan on the PR
+        uses: actions/github-script@v8.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('/tmp/intake.md', 'utf8');
+            github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number, body,
+            });

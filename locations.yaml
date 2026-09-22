@@ -1,0 +1,15 @@
+# SunStack locations registry. South Bend is the default; new proposals append entries here via the public intake PR flow.
+- slug: south-bend
+  name: South Bend, IN
+  lat: 41.703293
+  lon: -86.238292
+  timezone: America/Indiana/Indianapolis
+  enabled: true
+  default: true
+- slug: pacific-palisades
+  name: Pacific Palisades, CA
+  lat: 34.04
+  lon: -118.53
+  timezone: America/Los_Angeles
+  enabled: true
+  default: false

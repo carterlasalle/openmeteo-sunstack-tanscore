@@ -22,11 +22,23 @@ from .opportunity import (
 from .tanscore import fnum
 
 
-def _latest_dir(root: Path) -> Path:
-    latest = root / "latest"
+def _resolve_site(slug: str | None) -> config.Site:
+    """Empty slug keeps the South Bend default so old URLs never break."""
+    sites = config.active_sites()
+    if not slug:
+        return config.default_site()
+    for s in sites:
+        if s.slug == slug:
+            return s
+    raise FileNotFoundError(f"unknown location: {slug}")
+
+
+def _latest_dir(root: Path, site: config.Site | None = None) -> Path:
+    base = root if site is None or site.slug == config.default_site().slug else root / "sites" / site.slug
+    latest = base / "latest"
     if latest.exists() and latest.is_dir():
         return latest
-    marker = root / "LATEST"
+    marker = base / "LATEST"
     if marker.exists():
         p = Path(marker.read_text().strip())
         if p.exists():
@@ -54,8 +66,9 @@ def _records(df: pd.DataFrame, limit: int | None = None):
     return json.loads(text)
 
 
-def _filtered_payload(root: Path, skin_type: int | None, min_temp: float | None):
-    run = _latest_dir(root)
+def _filtered_payload(root: Path, skin_type: int | None, min_temp: float | None,
+                      site: config.Site | None = None):
+    run = _latest_dir(root, site)
     hourly = _read_table(run, "tan_forecast_hourly")
     half = _read_table(run, "tan_forecast_30min")
     if hourly.empty or half.empty:
@@ -86,14 +99,14 @@ def _ics_fold(line: str) -> str:
     return "\r\n".join(parts)
 
 
-def _ics_stamp(value: str) -> str:
+def _ics_stamp(value: str, tz_name: str | None = None) -> str:
     """Local naive wall time to a UTC basic-format ICS stamp."""
-    local = datetime.fromisoformat(str(value)).replace(tzinfo=ZoneInfo(config.TIMEZONE))
+    local = datetime.fromisoformat(str(value)).replace(tzinfo=ZoneInfo(tz_name or config.TIMEZONE))
     return local.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
-def _ics_hhmm(value: str) -> str:
-    local = datetime.fromisoformat(str(value)).replace(tzinfo=ZoneInfo(config.TIMEZONE))
+def _ics_hhmm(value: str, tz_name: str | None = None) -> str:
+    local = datetime.fromisoformat(str(value)).replace(tzinfo=ZoneInfo(tz_name or config.TIMEZONE))
     return local.strftime("%-I:%M %p")
 
 
@@ -126,7 +139,8 @@ def _daily_uv_peaks(hourly: pd.DataFrame) -> dict[str, dict[str, str]]:
 
 
 def build_calendar_ics(
-    daily: pd.DataFrame, run_tag: str, hourly: pd.DataFrame | None = None
+    daily: pd.DataFrame, run_tag: str, hourly: pd.DataFrame | None = None,
+    site_slug: str | None = None, tz_name: str | None = None,
 ) -> str:
     """Best-window VEVENTs, one per day with a window.
 
@@ -168,19 +182,19 @@ def build_calendar_ics(
         parts.append("Times refresh with each SunStack run.")
         desc = ". ".join(parts)
         if uv.get("uvi"):
-            summary = f"Best sun {_ics_hhmm(start)}-{_ics_hhmm(end)} (UV {uv['uvi']}, overall {peak_s})"
+            summary = f"Best sun {_ics_hhmm(start, tz_name)}-{_ics_hhmm(end, tz_name)} (UV {uv['uvi']}, overall {peak_s})"
         else:
-            summary = f"Best sun {_ics_hhmm(start)}-{_ics_hhmm(end)} (overall {peak_s})"
+            summary = f"Best sun {_ics_hhmm(start, tz_name)}-{_ics_hhmm(end, tz_name)} (overall {peak_s})"
+        uid_scope = site_slug or "sunstack"
         events.append("\r\n".join([
             _ics_fold("BEGIN:VEVENT"),
-            _ics_fold(f"UID:sunstack-best-{date}@sunstack"),
+            _ics_fold(f"UID:sunstack-best-{uid_scope}-{date}@{uid_scope}"),
             _ics_fold(f"DTSTAMP:{now}"),
             _ics_fold(f"SEQUENCE:{sequence}"),
-            _ics_fold(f"DTSTART:{_ics_stamp(start)}"),
-            _ics_fold(f"DTEND:{_ics_stamp(end)}"),
+            _ics_fold(f"DTSTART:{_ics_stamp(start, tz_name)}"),
+            _ics_fold(f"DTEND:{_ics_stamp(end, tz_name)}"),
             _ics_fold(f"SUMMARY:{_ics_text(summary)}"),
             _ics_fold(f"DESCRIPTION:{_ics_text(desc)}"),
-            _ics_fold("END:VEVENT"),
         ]))
     body = "\r\n".join(events)
     head = (
@@ -244,7 +258,7 @@ details.debug pre{background:#f3ecdb;padding:12px;border-radius:8px;overflow:aut
 @media(max-width:640px){h1{font-size:26px}.hero{font-size:21px}.wrap{padding:18px 12px 50px}}
 </style></head><body><div class="wrap">
 <div class="top"><div><h1>Sunlight hours</h1><div class="sub" id="runline">Loading forecast…</div></div>
-<div class="controls"><label>Skin <select id="skin"><option value="">None</option><option value="1">I</option><option value="2">II</option><option value="3">III</option><option value="4">IV</option><option value="5">V</option><option value="6">VI</option></select></label>
+<div class="controls"><label>Location <select id="locsel"><option value="">Loading…</option></select></label><label>Skin <select id="skin"><option value="">None</option><option value="1">I</option><option value="2">II</option><option value="3">III</option><option value="4">IV</option><option value="5">V</option><option value="6">VI</option></select></label>
 <label>Min °F <input id="mintemp" type="number" min="32" max="80" step="1" value="50" style="width:64px"></label>
 <button onclick="loadData()">Apply</button><button class="primary" onclick="refreshData()">Refresh forecast</button><a id="cal" class="btn" href="/api/calendar.ics" title="Subscribe to the best-window calendar">Calendar</a></div></div>
 <div id="msg" class="status"></div>
@@ -266,14 +280,16 @@ function hhmm(s){const m=/T(\d\d):(\d\d)/.exec(s||'');if(!m)return '—';let h=+
 function dayName(ds){const d=new Date(ds+'T12:00:00');return Number.isNaN(d)?ds:d.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'});}
 function shortDay(ds){const d=new Date(ds+'T12:00:00');return Number.isNaN(d)?ds:d.toLocaleDateString([],{weekday:'short'})+', '+d.toLocaleDateString([],{month:'numeric',day:'numeric'});}
 function winStr(a,b){return a?`${hhmm(a)} – ${b?hhmm(b):'…'}`:'—';}
-let DATA=null,SEL=null;
-async function loadData(){show('Loading…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch(`/api/data?skin_type=${s}&min_temp=${m}`);const j=await r.json();if(!r.ok)throw new Error(j.detail||'Request failed');DATA=j;hide();render();}catch(e){show('Could not load forecast: '+e.message+'. Check the server log, then Refresh.','error');}}
-async function refreshData(){show('Calling live Open-Meteo and CAMS, rebuilding scores (takes minutes)…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch(`/api/refresh?skin_type=${s}&min_temp=${m}`,{method:'POST'});const j=await r.json();if(!r.ok)throw new Error(j.detail||'Refresh failed');show('Refresh complete.','info');await loadData();}catch(e){show('Refresh failed: '+e.message,'error');}}
+let DATA=null,SEL=null,LOC="";
+async function loadLocs(){try{const r=await fetch(`/api/locations`);const j=await r.json();const dd=document.getElementById("locsel");if(!dd)return;dd.innerHTML=(j.locations||[]).map(l=>`<option value="${esc(l.slug)}"${l.default?" selected":""}>${esc(l.name)}</option>`).join("");LOC=dd.value;dd.addEventListener("change",()=>{LOC=dd.value;SEL=null;loadData();});}catch(e){}}
+async function init(){await loadLocs();await loadData();}
+async function loadData(){show('Loading…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch(`/api/data?skin_type=${s}&min_temp=${m}&location=${encodeURIComponent(LOC)}`);const j=await r.json();if(!r.ok)throw new Error(j.detail||'Request failed');DATA=j;hide();render();}catch(e){show('Could not load forecast: '+e.message+'. Check the server log, then Refresh.','error');}}
+async function refreshData(){show('Calling live Open-Meteo and CAMS, rebuilding scores (takes minutes)…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch(`/api/refresh?skin_type=${s}&min_temp=${m}&location=${encodeURIComponent(LOC)}`,{method:'POST'});const j=await r.json();if(!r.ok)throw new Error(j.detail||'Refresh failed');show('Refresh complete.','info');await loadData();}catch(e){show('Refresh failed: '+e.message,'error');}}
 function show(t,c){const m=document.getElementById('msg');m.textContent=t;m.className='status show '+c;}function hide(){document.getElementById('msg').className='status';}
 function bestDay(){const d=(DATA.daily||[]).filter(x=>+x.day_overall_peak_0_100>0);d.sort((a,b)=>b.day_overall_peak_0_100-a.day_overall_peak_0_100);return d[0]||DATA.daily[0];}
 function render(){if(!DATA||!DATA.daily||!DATA.daily.length){show('No forecast data yet. Press Refresh forecast.','error');return;}
 document.getElementById('runline').textContent='Updated '+fmtTime((DATA.summary||{}).created_at)+' · '+(DATA.hourly||[]).length+' hourly rows · absolute is worldwide scale, local is South Bend percentile';
-document.getElementById('cal').href='webcal://'+location.host+'/api/calendar.ics?skin_type='+document.getElementById('skin').value+'&min_temp='+document.getElementById('mintemp').value;
+document.getElementById('cal').href='webcal://'+location.host+'/api/calendar.ics?skin_type='+document.getElementById('skin').value+'&min_temp='+document.getElementById('mintemp').value+'&location='+encodeURIComponent(LOC);
 if(!SEL||!DATA.daily.some(d=>d.date===SEL)){const b=bestDay();SEL=b?b.date:DATA.daily[0].date;}
 const b=bestDay();
 document.getElementById('hero').innerHTML=b?`Best light <b>${dayName(b.date)} ${winStr(b.best_window_start,b.best_window_end)}</b> — overall ${f0(b.day_overall_peak_0_100)}, UV ${f1(b.peak_uv_index??peakOf(rowsFor(DATA.hourly,b.date),'uv_index'))}.`:'No usable light in this run.';
@@ -303,7 +319,7 @@ el.innerHTML=`<h2>${dayName(d.date)} <span style="color:${scoreColor(d.day_overa
  document.querySelectorAll('#detail tr[data-time]').forEach(tr=>tr.addEventListener('click',()=>{FIG.sel=tr.dataset.time;const hours=rowsFor(DATA.hourly,SEL),half=rowsFor(DATA.half_hour,SEL);renderSunFig(hours,half);}));
  const dd=document.getElementById('sunsel');if(dd&&!dd.dataset.wired){dd.dataset.wired='1';dd.addEventListener('change',()=>{FIG.sel=dd.value;const hours=rowsFor(DATA.hourly,SEL),half=rowsFor(DATA.half_hour,SEL);renderSunFig(hours,half);});}
 }
-loadData();
+init();
 </script></body></html>'''
 
 
@@ -315,10 +331,12 @@ def create_app(root: Path) -> FastAPI:
         return HTML
 
     @app.get("/api/data")
-    def data(skin_type: str = Query(default=""), min_temp: float | None = Query(default=None)):
+    def data(skin_type: str = Query(default=""), min_temp: float | None = Query(default=None),
+             location: str = Query(default="")):
         try:
             st = int(skin_type) if skin_type else None
-            run, hourly, half, daily, summary = _filtered_payload(root, st, min_temp)
+            site = _resolve_site(location or None)
+            run, hourly, half, daily, summary = _filtered_payload(root, st, min_temp, site)
             # Keep the UI useful: daylight-ish hours only, but source files retain everything.
             ht = pd.to_datetime(scol(hourly, "time"))
             hourly_ui = hourly.loc[(ht.dt.hour >= 7) & (ht.dt.hour <= 20)].copy()
@@ -327,27 +345,40 @@ def create_app(root: Path) -> FastAPI:
             return {
                 "run": str(run), "daily": _records(daily),
                 "hourly": _records(hourly_ui), "half_hour": _records(half_ui),
-                "summary": summary,
+                "summary": summary, "location": site.slug,
             }
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    @app.get("/api/locations")
+    def locations():
+        return {"locations": [
+            {"slug": s.slug, "name": s.name, "lat": s.lat, "lon": s.lon,
+             "timezone": s.timezone, "default": s.default}
+            for s in config.active_sites()
+        ]}
+
     @app.post("/api/refresh")
-    def refresh(skin_type: str = Query(default=""), min_temp: float | None = Query(default=None)):
+    def refresh(skin_type: str = Query(default=""), min_temp: float | None = Query(default=None),
+                location: str = Query(default="")):
         try:
             from .cli import run_live
             st = int(skin_type) if skin_type else None
-            result = run_live(root, auto_calibrate=True, force_cams=True, strict=True, skin_type=st, min_temp_f=min_temp, fresh=True)
+            site = _resolve_site(location or None)
+            result = run_live(root, auto_calibrate=True, force_cams=True, strict=True, skin_type=st, min_temp_f=min_temp, fresh=True, site=site)
             return {"ok": True, "run": str(result)}
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"LIVE REFRESH FAILED: {exc}") from exc
 
     @app.get("/api/calendar.ics")
-    def calendar(skin_type: str = Query(default=""), min_temp: float | None = Query(default=None)):
+    def calendar(skin_type: str = Query(default=""), min_temp: float | None = Query(default=None),
+                 location: str = Query(default="")):
         try:
             st = int(skin_type) if skin_type else None
-            _, hourly, _, daily, summary = _filtered_payload(root, st, min_temp)
-            ics = build_calendar_ics(daily, str(summary.get("run", "")), hourly)
+            site = _resolve_site(location or None)
+            _, hourly, _, daily, summary = _filtered_payload(root, st, min_temp, site)
+            ics = build_calendar_ics(daily, str(summary.get("run", "")), hourly,
+                                     site_slug=site.slug, tz_name=site.timezone)
             return Response(content=ics, media_type="text/calendar; charset=utf-8")
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc

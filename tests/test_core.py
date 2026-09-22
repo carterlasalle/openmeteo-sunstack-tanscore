@@ -406,13 +406,13 @@ def test_calendar_feed_lists_each_window_once_with_stable_uids():
     first = build_calendar_ics(daily, "20260915_004803")
     second = build_calendar_ics(daily, "20260915_010000")
     assert first.count("BEGIN:VEVENT") == 1
-    assert "UID:sunstack-best-2026-09-15@sunstack" in first
+    assert "UID:sunstack-best-sunstack-2026-09-15@sunstack" in first
     # 12:30 PM Indiana daylight time is 16:30 UTC.
     assert "DTSTART:20260915T163000Z" in first
     assert "DTEND:20260915T203000Z" in first
     assert "SEQUENCE:20260915004803" in first
     # Same date UID across reruns: subscribed calendars update in place.
-    assert "UID:sunstack-best-2026-09-15@sunstack" in second
+    assert "UID:sunstack-best-sunstack-2026-09-15@sunstack" in second
     assert "SEQUENCE:20260915010000" in second
     # Hourly-fed descriptions carry per-day UV peaks, not just the score.
     hourly = pd.DataFrame({
@@ -490,7 +490,21 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path):
     assert "may burn" in skin["3"]["fitzpatrick_label"]
     ics = (tmp_path / "site" / "calendar.ics").read_text()
     assert ics.count("BEGIN:VEVENT") == 1
-    assert "UID:sunstack-best-2026-09-15@sunstack" in ics
+    assert "UID:sunstack-best-sunstack-2026-09-15@sunstack" in ics
+
+
+def test_calendar_uids_are_namespaced_per_location():
+    from sunstack.ui import build_calendar_ics
+
+    daily = pd.DataFrame([{
+        "date": "2026-09-15", "best_window_start": "2026-09-15T12:30:00",
+        "best_window_end": "2026-09-15T16:30:00", "day_overall_peak_0_100": 51.0,
+        "day_status": "FAIR",
+    }])
+    sb = build_calendar_ics(daily, "20260915_004803")
+    pal = build_calendar_ics(daily, "20260915_004803", site_slug="pacific-palisades")
+    assert "UID:sunstack-best-sunstack-2026-09-15@sunstack" in sb
+    assert "UID:sunstack-best-pacific-palisades-2026-09-15@pacific-palisades" in pal
 
 
 def test_30min_kills_pre_sunrise_ghost_light():
@@ -645,14 +659,16 @@ def test_scheduled_workflow_is_complete_and_wired():
     setup_uv = by_name["astral-sh/setup-uv@v10.1.0"]
     assert setup_uv.get("with", {}).get("version"), "setup-uv must pin an exact uv version"
     names = [s.get("name") for s in steps]
-    for required in ("Install dependencies", "Forecast run", "Export static site", "Publish results"):
+    for required in ("Install dependencies", "Forecast run (all sites)", "Export static site (all sites)", "Publish results"):
         assert required in names, f"missing workflow step: {required}"
     install = by_name["Install dependencies"]
+    export = by_name["Export static site (all sites)"]["run"]
+    assert "--site-dir" in export and "--site " in export, "export must publish per-site dirs"
     assert "--locked" in install.get("run", ""), "installs must fail loudly on lock drift, not rewrite uv.lock"
     publish = by_name["Publish results"]["run"]
     assert "checkout -- uv.lock" in publish, "publish must discard uv.lock churn before rebasing"
     assert "-X theirs" in publish, "publish must recover from mid-run local pushes instead of exit 128"
-    forecast = by_name["Forecast run"]
+    forecast = by_name["Forecast run (all sites)"]
     assert "CDSAPI_URL" in forecast["env"] and "CDSAPI_KEY" in forecast["env"]
     schedules = wf["on"]["schedule"]
     assert any("0,9,12,21" in s["cron"] for s in schedules)
@@ -773,3 +789,62 @@ def test_posture_labels_recomputed_at_half_hours():
     assert half["sun_compass"].iloc[0] == "S"
     assert "S" in half["sun_posture_guidance"].iloc[0]
     assert 39.0 < float(half["torso_lift_deg"].iloc[0]) < 42.0
+
+
+def test_location_registry_loads_south_bend_default(tmp_path):
+    from sunstack.config import active_sites, default_site, load_sites
+
+    sites = load_sites()
+    assert {s.slug for s in sites} >= {"south-bend", "pacific-palisades"}
+    assert default_site().slug == "south-bend"
+    assert {s.slug for s in active_sites()} >= {"south-bend", "pacific-palisades"}
+    sb = next(s for s in sites if s.slug == "south-bend")
+    assert sb.timezone == "America/Indiana/Indianapolis"
+    assert load_sites(tmp_path / "nope.yaml")[0].default is True
+
+
+def test_location_registry_rejects_bad_entries(tmp_path):
+    import pytest
+    import yaml
+
+    from sunstack.config import load_sites
+
+    def write(rows):
+        p = tmp_path / "loc.yaml"
+        p.write_text(yaml.safe_dump(rows), encoding="utf-8")
+        return p
+
+    with pytest.raises((TypeError, ValueError)):
+        load_sites(write([
+            {"slug": "a", "lat": 0, "lon": 0, "timezone": "UTC", "default": True},
+            {"slug": "a", "lat": 1, "lon": 1, "timezone": "UTC"},
+        ]))
+    with pytest.raises((TypeError, ValueError)):
+        load_sites(write([{"slug": "x", "lat": 91, "lon": 0, "timezone": "UTC", "default": True}]))
+    with pytest.raises(ValueError):
+        load_sites(write([{"slug": "x", "lat": 0, "lon": 0, "timezone": "Mars/Olympus", "default": True}]))
+    with pytest.raises((TypeError, ValueError)):
+        load_sites(write([{"slug": "x", "lat": 0, "lon": 0, "timezone": "UTC"}]))
+
+
+def test_use_site_scopes_coordinates_without_leak():
+    from sunstack import config
+
+    site = next(s for s in config.load_sites() if s.slug == "pacific-palisades")
+    before = (config.LATITUDE, config.LONGITUDE, config.TIMEZONE)
+    with config.use_site(site):
+        assert (config.LATITUDE, config.LONGITUDE, config.TIMEZONE) == (34.04, -118.53, "America/Los_Angeles")
+        assert config.current_site() is site
+    assert (config.LATITUDE, config.LONGITUDE, config.TIMEZONE) == before
+    assert config.current_site() is None
+
+
+def test_site_paths_namespace_non_default_only(tmp_path):
+    from sunstack.cli import _calibration_paths
+
+    default_root, default_cal, _ = _calibration_paths(tmp_path)
+    assert default_root == tmp_path / "calibration_sources"
+    assert default_cal == tmp_path / "calibration"
+    pal_root, pal_cal, _ = _calibration_paths(tmp_path, "pacific-palisades")
+    assert pal_root == tmp_path / "sites" / "pacific-palisades" / "calibration_sources"
+    assert pal_cal == tmp_path / "sites" / "pacific-palisades" / "calibration"

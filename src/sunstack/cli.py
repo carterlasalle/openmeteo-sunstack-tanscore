@@ -5,6 +5,7 @@ import json
 import logging
 import shutil
 import sys
+from contextlib import nullcontext
 from datetime import datetime
 from pathlib import Path
 
@@ -77,7 +78,9 @@ def _setup_logging(root: Path, debug: bool = False) -> None:
 
 
 def _print_config() -> None:
-    print(f"Location: {config.LATITUDE}, {config.LONGITUDE} ({config.TIMEZONE})")
+    for site in config.active_sites():
+        mark = " (default)" if site.default else ""
+        print(f"Location {site.slug}{mark}: {site.lat}, {site.lon} ({site.timezone})")
     print(f"Strict default: {config.STRICT_DEFAULT}; direct CAMS required: {config.REQUIRE_DIRECT_CAMS}")
     print(f"Outdoor temperature floor: {config.MIN_TAN_TEMP_F:.0f}F; hard heat ceiling: {config.MAX_TAN_TEMP_F:.0f}F")
     print("Overall score weights:", config.OVERALL_SCORE_WEIGHTS, f"(absolute headroom +{config.OVERALL_ABSOLUTE_HEADROOM:.0f})")
@@ -93,13 +96,22 @@ def _print_config() -> None:
     print(f"ADS/CAMS credentials detected: {cds_credentials_present()}")
 
 
-def _calibration_paths(root: Path) -> tuple[Path, Path, Path]:
-    return root / "calibration_sources", root / "calibration", Path(".cache") / "sunstack"
+def _calibration_paths(root: Path, site_slug: str | None = None) -> tuple[Path, Path, Path]:
+    """Calibration dirs, namespaced per location. The default site keeps the legacy layout."""
+    current = config.current_site()
+    slug = site_slug or (current.slug if current is not None else None)
+    site_root = root if not slug or slug == config.default_site().slug else root / "sites" / slug
+    return site_root / "calibration_sources", site_root / "calibration", Path(".cache") / "sunstack"
 
 
-def bootstrap(root: Path, force: bool = False, skip_cams_history: bool = False, strict: bool = True) -> dict:
+def bootstrap(root: Path, force: bool = False, skip_cams_history: bool = False, strict: bool = True,
+              site: config.Site | None = None) -> dict[str, object]:
+    with config.use_site(site) if site is not None else nullcontext():
+        return _bootstrap_inner(root, force=force, skip_cams_history=skip_cams_history, strict=strict)
+
+
+def _bootstrap_inner(root: Path, force: bool = False, skip_cams_history: bool = False, strict: bool = True) -> dict[str, object]:
     source_dir, calibration_dir, cache_dir = _calibration_paths(root)
-    source_dir.mkdir(parents=True, exist_ok=True); calibration_dir.mkdir(parents=True, exist_ok=True)
     if strict and config.REQUIRE_DIRECT_CAMS and not skip_cams_history and not cds_credentials_present():
         raise DataValidationError(
             "STRICT BOOTSTRAP requires Copernicus ADS credentials for CAMS EAC4. "
@@ -146,7 +158,7 @@ def bootstrap(root: Path, force: bool = False, skip_cams_history: bool = False, 
     if strict and local_ref.empty:
         raise DataValidationError("Local TanScore reference climatology is empty")
 
-    summary = {
+    summary: dict[str, object] = {
         "created_at": datetime.now().astimezone().isoformat(), "coordinates": [config.LATITUDE, config.LONGITUDE],
         "timezone": config.TIMEZONE, "strict": strict, "nasa_rows": len(nasa),
         "openmeteo_historical_rows": len(om_hist), "previous_runs_rows": len(previous),
@@ -160,10 +172,11 @@ def bootstrap(root: Path, force: bool = False, skip_cams_history: bool = False, 
     return summary
 
 
-def ensure_calibration(root: Path, auto: bool = True, strict: bool = True) -> None:
+def ensure_calibration(root: Path, auto: bool = True, strict: bool = True,
+                       site: config.Site | None = None) -> None:
     if strict and config.REQUIRE_DIRECT_CAMS and not cds_credentials_present():
         raise DataValidationError("Strict mode requires Copernicus ADS credentials before calibration/live scoring. Configure ~/.cdsapirc first, or explicitly use --allow-degraded.")
-    _, calibration_dir, _ = _calibration_paths(root)
+    _, calibration_dir, _ = _calibration_paths(root, site.slug if site else None)
     required = [calibration_dir / "uva_uvb_models.joblib", calibration_dir / "local_reference.parquet"]
     if all(p.exists() for p in required): return
     if not auto:
@@ -171,19 +184,31 @@ def ensure_calibration(root: Path, auto: bool = True, strict: bool = True) -> No
         LOG.warning("Calibration missing; lower-accuracy fallback may be used")
         return
     LOG.info("No calibration found — bootstrapping automatically")
-    bootstrap(root, force=False, skip_cams_history=not cds_credentials_present(), strict=strict)
-
+    bootstrap(root, force=False, skip_cams_history=not cds_credentials_present(), strict=strict, site=site)
 
 def _issue_dicts(issues: list[ValidationIssue]):
     return [{"severity": i.severity, "source": i.source, "message": i.message} for i in issues]
 
 
 def run_live(root: Path, auto_calibrate: bool = True, force_cams: bool = False, strict: bool = True,
-             skin_type: int | None = None, min_temp_f: float | None = None, fresh: bool = True) -> Path:
-    ensure_calibration(root, auto=auto_calibrate, strict=strict)
-    _, calibration_dir, cache_dir = _calibration_paths(root)
+             skin_type: int | None = None, min_temp_f: float | None = None, fresh: bool = True,
+             site: config.Site | None = None) -> Path:
+    if site is not None:
+        with config.use_site(site):
+            return _run_live_inner(root, auto_calibrate=auto_calibrate, force_cams=force_cams, strict=strict,
+                                   skin_type=skin_type, min_temp_f=min_temp_f, fresh=fresh, site=site)
+    return _run_live_inner(root, auto_calibrate=auto_calibrate, force_cams=force_cams, strict=strict,
+                           skin_type=skin_type, min_temp_f=min_temp_f, fresh=fresh)
+
+
+def _run_live_inner(root: Path, auto_calibrate: bool = True, force_cams: bool = False, strict: bool = True,
+                    skin_type: int | None = None, min_temp_f: float | None = None, fresh: bool = True,
+                    site: config.Site | None = None) -> Path:
+    site_root = root if site is None or site.slug == config.default_site().slug else root / "sites" / site.slug
+    ensure_calibration(root, auto=auto_calibrate, strict=strict, site=site)
+    _, calibration_dir, cache_dir = _calibration_paths(root, site.slug if site else None)
     stamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
-    run_dir = root / "runs" / stamp; raw_dir = run_dir / "raw"; table_dir = run_dir / "tables"
+    run_dir = site_root / "runs" / stamp; raw_dir = run_dir / "raw"; table_dir = run_dir / "tables"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     LOG.info("Fetching live Open-Meteo sources%s", " (cache bypassed)" if fresh else "")
@@ -245,7 +270,9 @@ def run_live(root: Path, auto_calibrate: bool = True, force_cams: bool = False, 
     source_health.append({"name":"cams_direct_ads","ok":not cams_direct.empty,"error":None if not cams_direct.empty else "empty/not available","elapsed_ms":None,"status_code":None,"from_cache":False,"endpoint":"Copernicus ADS"})
     summary = {
         "run": stamp, "created_at": datetime.now().astimezone().isoformat(), "coordinates": [config.LATITUDE, config.LONGITUDE],
-        "timezone": config.TIMEZONE, "strict": strict, "skin_type": skin_type,
+        "timezone": config.TIMEZONE, "site_slug": site.slug if site else config.default_site().slug,
+        "site_name": site.name if site else config.default_site().name,
+        "strict": strict, "skin_type": skin_type,
         "min_tan_temperature_f": float(config.MIN_TAN_TEMP_F if min_temp_f is None else min_temp_f),
         "successful_openmeteo_feeds": len(successes), "total_openmeteo_feeds": len(results),
         "direct_cams_used": not cams_direct.empty, "calibration_available": (calibration_dir / "uva_uvb_models.joblib").exists(),
@@ -264,10 +291,10 @@ def run_live(root: Path, auto_calibrate: bool = True, force_cams: bool = False, 
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     # Single latest-run pointer: a directory copy. (A former LATEST marker file
     # is gone: on case-insensitive filesystems it collides with this directory.)
-    latest = root / "latest"
+    latest = site_root / "latest"
     if latest.is_symlink() or latest.is_file(): latest.unlink()
     elif latest.exists(): shutil.rmtree(latest)
-    shutil.copytree(run_dir, latest)
+    _latest_copy: Path = shutil.copytree(run_dir, latest)
 
     LOG.info("Run written to %s", run_dir)
     if not daily_tan.empty:
@@ -319,6 +346,8 @@ def debug_report(root: Path) -> None:
 
 
 def main() -> None:
+    from argparse import Namespace
+
     parser = argparse.ArgumentParser(description="SunStack: calibrated absolute/local TanScore + outdoor opportunity UI")
     parser.add_argument("command", nargs="?", default="run", choices=["run","setup","bootstrap","ui","export","doctor","debug","show-config"])
     parser.add_argument("--out", default="data", help="Repository-local output root")
@@ -333,19 +362,28 @@ def main() -> None:
     parser.add_argument("--probe", action="store_true", help="Doctor: make real live API probe requests")
     parser.add_argument("--host", default=None); parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--no-browser", action="store_true"); parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--site", default=None, help="Run for one location slug (default: all enabled sites)")
     parser.add_argument("--site-dir", default="docs", help="Static site output dir for the export command")
-    args = parser.parse_args()
-    root = Path(args.out); _setup_logging(root, debug=args.verbose)
+    args: Namespace = parser.parse_args()
+    root = Path(args.out)
+    _setup_logging(root, debug=args.verbose)
     strict = config.STRICT_DEFAULT and not args.allow_degraded
     try:
+        sites = config.active_sites()
+        if args.site:
+            sites = [s for s in sites if s.slug == args.site]
+            if not sites:
+                raise DataValidationError(f"unknown site slug: {args.site}")
         if args.command == "show-config": _print_config()
         elif args.command == "doctor":
             if not doctor(root, probe=args.probe): sys.exit(2)
         elif args.command == "debug": debug_report(root)
         elif args.command in {"setup","bootstrap"}:
-            bootstrap(root, force=args.force, skip_cams_history=args.skip_cams_history, strict=strict)
+            for site in sites:
+                bootstrap(root, force=args.force, skip_cams_history=args.skip_cams_history, strict=strict, site=site)
             if args.command == "setup":
-                run_live(root, auto_calibrate=False, force_cams=True, strict=strict, skin_type=args.skin_type, min_temp_f=args.min_temp, fresh=True)
+                for site in sites:
+                    run_live(root, auto_calibrate=False, force_cams=True, strict=strict, skin_type=args.skin_type, min_temp_f=args.min_temp, fresh=True, site=site)
                 print("\nSetup complete. Launch the dashboard with: uv run sunstack ui")
         elif args.command == "ui":
             from .ui import serve
@@ -355,7 +393,8 @@ def main() -> None:
             info = export_static_site(root, Path(args.site_dir), skin_type=args.skin_type, min_temp_f=args.min_temp or 50.0)
             print(f"Static site: {info['out_dir']} ({info['hourly_rows']} hourly, {info['half_rows']} half-hour, {info['days']} days, {info['events']} events)")
         else:
-            run_live(root, auto_calibrate=not args.no_auto_calibrate, force_cams=args.force_cams, strict=strict, skin_type=args.skin_type, min_temp_f=args.min_temp, fresh=not args.cached_live)
+            for site in sites:
+                run_live(root, auto_calibrate=not args.no_auto_calibrate, force_cams=args.force_cams, strict=strict, skin_type=args.skin_type, min_temp_f=args.min_temp, fresh=not args.cached_live, site=site)
     except Exception as exc:
         LOG.exception("FATAL")
         print(f"\nSUNSTACK FATAL: {exc}", file=sys.stderr)

@@ -33,20 +33,24 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
-      - name: Forecast run
+      - name: Forecast run (all sites)
         run: uv run sunstack run
         env:
           CDSAPI_URL: ${{ secrets.CDSAPI_URL }}
           CDSAPI_KEY: ${{ secrets.CDSAPI_KEY }}
 
-      - name: Export static site
-        run: uv run sunstack export --site-dir docs
+      - name: Export static site (all sites)
+        run: |
+          uv run sunstack export --site-dir docs
+          for slug in $(uv run python -c "from sunstack.config import active_sites, default_site; print(' '.join(s.slug for s in active_sites() if s.slug != default_site().slug))"); do
+            uv run sunstack export --site-dir "docs/sites/$slug" --site "$slug"
+          done
 
       - name: Publish results
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs && git add -f data/calibration
+          git add docs && git add -f data/calibration data/sites
           git diff --quiet --cached && echo "no changes" || git commit -m "Scheduled run $(date -u +%Y%m%d_%H%M)"
           # The runner's uv may rewrite uv.lock even on --locked installs (version
           # drift guard); never let that block the data publish.

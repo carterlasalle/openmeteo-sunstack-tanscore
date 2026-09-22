@@ -14,7 +14,8 @@ def _swap_once(text: str, old: str, new: str) -> str:
 
 
 def export_static_site(
-    root: Path, out_dir: Path, skin_type: int | None = None, min_temp_f: float = 50.0
+    root: Path, out_dir: Path, skin_type: int | None = None, min_temp_f: float = 50.0,
+    site_slug: str | None = None,
 ) -> dict[str, object]:
     """Publish the latest run as a static site: index + data + calendar.
 
@@ -22,11 +23,18 @@ def export_static_site(
     template replacement asserts a unique anchor, so live-UI drift fails
     loudly here instead of shipping a subtly broken page.
     """
+    from . import config
     from .calibrate import scol
     from .opportunity import fitzpatrick_context
-    from .ui import HTML, _filtered_payload, _records, build_calendar_ics
+    from .ui import HTML, _filtered_payload, _records, _resolve_site, build_calendar_ics
 
-    run, hourly, half, daily, summary = _filtered_payload(root, skin_type, min_temp_f)
+    site = _resolve_site(site_slug)
+    entered = config.use_site(site)
+    entered.__enter__()
+    try:
+        run, hourly, half, daily, summary = _filtered_payload(root, skin_type, min_temp_f, site)
+    finally:
+        entered.__exit__(None, None, None)
     ht = pd.to_datetime(scol(hourly, "time"))
     hourly_ui = hourly.loc[(ht.dt.hour >= 7) & (ht.dt.hour <= 20)].copy()
     qt = pd.to_datetime(scol(half, "time"))
@@ -39,8 +47,11 @@ def export_static_site(
         "summary": summary,
     }
     html = HTML
-    html = _swap_once(html, "fetch(`/api/data?skin_type=${s}&min_temp=${m}`)", "fetch('./data.json')")
-    html = _swap_once(html, "loadData();\n</script>", "loadData();initSkin();\n</script>")
+    html = _swap_once(html, "fetch(`/api/data?skin_type=${s}&min_temp=${m}&location=${encodeURIComponent(LOC)}`)", "fetch('./data.json')")
+    try:
+        html = _swap_once(html, "init();\n</script>", "init();initSkin();\n</script>")
+    except RuntimeError:
+        html = _swap_once(html, "loadData();\n</script>", "loadData();initSkin();\n</script>")
     run_stamp = "".join(c for c in str(summary.get("run", "")) if c.isdigit()) or "0"
     html = _swap_once(
         html,
@@ -70,7 +81,7 @@ def export_static_site(
     html = _swap_once(
         html,
         "document.getElementById('cal').href='webcal://'+location.host+'/api/calendar.ics"
-        "?skin_type='+document.getElementById('skin').value+'&min_temp='+document.getElementById('mintemp').value;",
+        "?skin_type='+document.getElementById('skin').value+'&min_temp='+document.getElementById('mintemp').value+'&location='+encodeURIComponent(LOC);",
         "var calEl=document.getElementById('cal');if(calEl){var p=location.pathname;"
         "p=p.slice(0,p.lastIndexOf('/')+1);calEl.href='webcal://'+location.host+p+'calendar.ics';}",
     )

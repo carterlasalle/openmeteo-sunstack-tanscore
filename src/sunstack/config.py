@@ -1,11 +1,158 @@
 from __future__ import annotations
 
 import os
-from datetime import date, timedelta
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
+from typing import cast
 
 from dotenv import load_dotenv
 
-load_dotenv()
+_DOTENV_LOADED: bool = load_dotenv()
+
+
+@dataclass(frozen=True)
+class Site:
+    """One forecast location. South Bend stays the default; new sites append."""
+
+    slug: str
+    name: str
+    lat: float
+    lon: float
+    timezone: str
+    enabled: bool = True
+    default: bool = False
+
+
+def _registry_path() -> Path:
+    here = Path(__file__).resolve()
+    for parent in (here.parent.parent.parent, Path.cwd()):
+        cand = parent / "locations.yaml"
+        if cand.exists():
+            return cand
+    return Path("locations.yaml")
+
+def load_sites(registry: Path | None = None) -> list[Site]:
+    """Parse locations.yaml. Missing file falls back to the env-default site."""
+    import yaml
+
+    path = registry or _registry_path()
+    if not path.exists():
+        return [Site(slug="south-bend", name="South Bend, IN", lat=LATITUDE,
+                     lon=LONGITUDE, timezone=TIMEZONE, default=True)]
+    text: str = path.read_text(encoding="utf-8")
+    raw = cast("object", yaml.safe_load(text))
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise TypeError("locations registry must be a list")
+    sites = [_parse_site(item) for item in cast("list[object]", raw)]
+    _validate_sites(sites)
+    return sites
+
+
+def _parse_site(item: object) -> Site:
+    from collections.abc import Mapping
+
+    if not isinstance(item, Mapping):
+        raise TypeError(f"location entry must be a mapping: {item!r}")
+    raw_mapping = cast("Mapping[object, object]", item)
+    mapping: dict[str, object] = {}
+    for key in raw_mapping:
+        if not isinstance(key, str):
+            raise TypeError(f"location entry keys must be strings: {item!r}")
+        mapping[key] = raw_mapping[key]
+    slug: object = mapping.get("slug")
+    lat: object = mapping.get("lat")
+    lon: object = mapping.get("lon")
+    tz_name: object = mapping.get("timezone")
+    if not isinstance(slug, str) or not slug:
+        raise TypeError(f"location entry missing slug: {item!r}")
+    if isinstance(lat, bool) or not isinstance(lat, (int, float)):
+        raise TypeError(f"{slug}: lat must be a number")
+    if isinstance(lon, bool) or not isinstance(lon, (int, float)):
+        raise TypeError(f"{slug}: lon must be a number")
+    if not isinstance(tz_name, str) or not tz_name:
+        raise TypeError(f"{slug}: timezone must be a string")
+    name: object = mapping.get("name", slug)
+    enabled: object = mapping.get("enabled", True)
+    default: object = mapping.get("default", False)
+    return Site(slug=slug, name=name if isinstance(name, str) else slug,
+                lat=float(lat), lon=float(lon), timezone=tz_name,
+                enabled=bool(enabled), default=bool(default))
+
+
+def _validate_sites(sites: list[Site]) -> None:
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    if not sites:
+        raise ValueError("locations registry is empty")
+    slugs = [s.slug for s in sites]
+    if len(set(slugs)) != len(slugs):
+        raise ValueError(f"duplicate location slug: {slugs}")
+    if sum(1 for s in sites if s.default) != 1:
+        raise ValueError("exactly one location must be default")
+    for s in sites:
+        if not (-90 <= s.lat <= 90 and -180 <= s.lon <= 180):
+            raise ValueError(f"{s.slug}: coordinates out of range")
+        try:
+            _ = ZoneInfo(s.timezone)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError(f"{s.slug}: unknown timezone {s.timezone}") from exc
+
+
+def active_sites(registry: Path | None = None) -> list[Site]:
+    """Enabled sites only. Single-site runs filter to the default."""
+    return [s for s in load_sites(registry) if s.enabled]
+
+
+def default_site(registry: Path | None = None) -> Site:
+    """South Bend unless the registry says otherwise. Keeps old URLs working."""
+    for s in load_sites(registry):
+        if s.default:
+            return s
+    raise ValueError("no default location")
+_SITE_STACK: list[Site] = []
+
+
+def current_site() -> Site | None:
+    """Innermost active site, or None when running legacy single-site mode."""
+    return _SITE_STACK[-1] if _SITE_STACK else None
+
+
+class use_site:
+    """Run a block as one location: config.* reads follow the site.
+
+    Read-only override, not mutation: globals are restored on exit, so
+    concurrent or sequential per-site runs cannot leak coordinates.
+    """
+
+    _site: Site
+    _saved: dict[str, float | str]
+
+    def __init__(self, site: Site):
+        self._site = site
+        self._saved = {}
+
+    def __enter__(self) -> Site:
+        self._saved = {"LATITUDE": LATITUDE, "LONGITUDE": LONGITUDE, "TIMEZONE": TIMEZONE}
+        active = globals()
+        active["LATITUDE"] = self._site.lat
+        active["LONGITUDE"] = self._site.lon
+        active["TIMEZONE"] = self._site.timezone
+        _SITE_STACK.append(self._site)
+        return self._site
+
+    def __exit__(self, *exc: object) -> bool:
+        active = globals()
+        active["LATITUDE"] = self._saved["LATITUDE"]
+        active["LONGITUDE"] = self._saved["LONGITUDE"]
+        active["TIMEZONE"] = self._saved["TIMEZONE"]
+        closed: Site = _SITE_STACK.pop()
+        assert closed is self._site, "site stack corrupted: nested use_site blocks crossed"
+        return False
+
+
 
 LATITUDE = float(os.getenv("SUNSTACK_LAT", "41.703293"))
 LONGITUDE = float(os.getenv("SUNSTACK_LON", "-86.238292"))
@@ -40,13 +187,12 @@ STRICT_DEFAULT = os.getenv("SUNSTACK_STRICT", "1").strip().lower() not in {"0", 
 REQUIRE_DIRECT_CAMS = os.getenv("SUNSTACK_REQUIRE_DIRECT_CAMS", "1").strip().lower() not in {"0", "false", "no"}
 UI_HOST = os.getenv("SUNSTACK_UI_HOST", "127.0.0.1")
 UI_PORT = int(os.getenv("SUNSTACK_UI_PORT", "8765"))
-
 # Historical bootstrap. NASA POWER UV begins in 2001. POWER can lag NRT by months,
 # so default to 120 days behind today; unavailable tail years are skipped cleanly.
 NASA_POWER_START = date(2001, 1, 1)
-NASA_POWER_END = date.today() - timedelta(days=120)
+NASA_POWER_END = datetime.now(UTC).date() - timedelta(days=120)
 OPENMETEO_HISTORY_START = date(2022, 1, 1)
-OPENMETEO_HISTORY_END = date.today() - timedelta(days=2)
+OPENMETEO_HISTORY_END = datetime.now(UTC).date() - timedelta(days=2)
 OPENMETEO_PREVIOUS_RUNS_DAYS = int(os.getenv("SUNSTACK_PREVIOUS_RUNS_DAYS", "1000"))
 CAMS_EAC4_START_YEAR = int(os.getenv("SUNSTACK_CAMS_EAC4_START_YEAR", "2003"))
 CAMS_EAC4_END_YEAR = int(os.getenv("SUNSTACK_CAMS_EAC4_END_YEAR", "2025"))
