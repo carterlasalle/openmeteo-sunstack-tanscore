@@ -796,13 +796,15 @@ def test_site_refresh_workflow_is_ui_only_and_secret_free():
 
     text = Path(".github/workflows/site-refresh.yml").read_text(encoding="utf-8")
     wf = yaml.safe_load(text)
-    assert "schedule" not in (wf.get("on", True) or True), "refresh never forecasts on its own"
-    assert "workflow_dispatch" in (wf.get("on", True) or True), "refresh stays manually runnable"
-    push_paths = ((wf.get("on", {}) or {}).get("push", {}) or {}).get("paths", [])
+    on = wf.get("on", True) or True
+    assert "workflow_dispatch" in on, "refresh stays manually runnable"
+    assert "workflow_run" in on, "refresh fires after each forecast run"
+    assert (on.get("workflow_run", {}) or {}).get("workflows") == ["forecast-run"]
+    assert "schedule" not in on and "schedule" not in text, "refresh never forecasts on its own"
+    push_paths = ((on.get("push", {}) or {}).get("paths", []) or [])
     assert "src/sunstack/ui.py" in push_paths, "UI fixes publish without a forecast run"
     assert "locations.yaml" in push_paths, "registry changes re-export the picker"
     assert "secrets." not in text and "CDSAPI" not in text, "refresh touches no credentials"
-    assert "schedule" not in text, "refresh never needs the cron slot"
     runs = " ".join(str(s.get("run", "")) for s in wf["jobs"]["refresh"]["steps"])
     assert "sunstack export" in runs, "refresh re-exports, never runs the forecast"
     assert "sunstack run" not in runs, "forecast stays in forecast-run only"

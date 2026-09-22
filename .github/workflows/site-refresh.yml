@@ -1,11 +1,9 @@
 name: site-refresh
 
-# UI/backend only: re-export the static site from the latest committed data.
-# No fetch, no secrets, no forecast — runs fast (~1 min). Triggers on every
-# push that touches UI/export code, so figure and picker fixes publish
-# without waiting for the next 3-hour forecast slot. forecast-run does this
-# plus the actual forecast (it calls `sunstack run`, which runs + exports +
-# publishes per site).
+# UI/backend only: re-export the static site from the latest forecast data.
+# No fetch, no secrets, no forecast — runs fast (~1 min). Fires after every
+# successful forecast-run via workflow_run (fresh data is in docs/ by then),
+# on push touching UI/export code, and on manual dispatch.
 "on":
   push:
     branches: [main]
@@ -23,6 +21,9 @@ name: site-refresh
       - "src/sunstack/validation.py"
       - "scripts/**"
       - "locations.yaml"
+  workflow_run:
+    workflows: ["forecast-run"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -34,7 +35,7 @@ concurrency:
 
 jobs:
   refresh:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7.0.1
