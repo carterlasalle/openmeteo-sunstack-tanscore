@@ -1,0 +1,34 @@
+name: Feature request
+description: A new score, source, or capability
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        What forecasting or usability problem does this solve, and what evidence justifies the constants?
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What forecasting or usability problem does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+    validations:
+      required: true
+  - type: textarea
+    id: scoring-impact
+    attributes:
+      label: Scoring impact
+      description: Which components would change (absolute / local / atmosphere / confidence / feasibility), and what evidence would justify the constants?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: What did you consider, and why is it worse?

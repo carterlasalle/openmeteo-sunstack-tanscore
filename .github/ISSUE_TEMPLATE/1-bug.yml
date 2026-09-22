@@ -1,0 +1,70 @@
+name: Bug report
+description: Something scores, renders, or runs wrong
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The run stamp and doctor output below are what let us reproduce without guessing.
+
+        > Do not paste API keys, tokens, `~/.cdsapirc` contents, or full provider payloads containing credentials.
+  - type: input
+    id: site
+    attributes:
+      label: Site
+      description: Forecast site slug from `locations.yaml` (`south-bend`, `pacific-palisades`, …).
+      placeholder: south-bend
+    validations:
+      required: true
+  - type: textarea
+    id: what-wrong
+    attributes:
+      label: What is wrong
+      description: A concise description of what you saw.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+      description: The numbers or behavior you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Run stamp (`data/latest/summary.json` → `run`, or `data/sites/<slug>/…` for a non-default site), affected timestamps, and the numbers you saw versus the numbers you expected.
+      placeholder: |
+        run: 20260915_142356
+        timestamps: …
+        saw … vs expected …
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Commands run, starting from `main`. For scoring bugs, include the failing case as a candidate test in `tests/test_core.py` if you can.
+      placeholder: |
+        1.
+        2.
+        3.
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: Short SHA the bug was seen on.
+      placeholder: git rev-parse --short HEAD
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Doctor output
+      description: "`uv run sunstack doctor --probe` output with credentials redacted."
+      render: shell
+  - type: upload
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: For render bugs, a screenshot of the figure plus the `suncap` line.

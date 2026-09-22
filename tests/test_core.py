@@ -926,3 +926,43 @@ def test_site_paths_namespace_non_default_only(tmp_path):
     pal_root, pal_cal, _ = _calibration_paths(tmp_path, "pacific-palisades")
     assert pal_root == tmp_path / "sites" / "pacific-palisades" / "calibration_sources"
     assert pal_cal == tmp_path / "sites" / "pacific-palisades" / "calibration"
+
+
+def test_issue_forms_are_valid_and_secret_free():
+    import yaml
+
+    tpl = Path(".github/ISSUE_TEMPLATE")
+    assert not list(tpl.glob("*.md")), "legacy markdown templates must stay retired"
+    forms = sorted(tpl.glob("[0-9]-*.yml"))
+    assert len(forms) == 3, "bug + feature + location forms, ordered by numeric prefix"
+    cfg = yaml.safe_load((tpl / "config.yml").read_text(encoding="utf-8"))
+    assert cfg.get("blank_issues_enabled") is False, "chooser forces structured forms"
+
+    forbidden = ("password",)
+    for form in forms:
+        wf = yaml.safe_load(form.read_text(encoding="utf-8"))
+        assert len(wf["name"]) > 3 and wf["description"], f"{form.name} needs name + description"
+        body = wf["body"]
+        assert body, f"{form.name} body cannot be empty"
+        assert any(b.get("type") != "markdown" for b in body), f"{form.name} needs an input field"
+        ids = [b["id"] for b in body if "id" in b]
+        assert len(ids) == len(set(ids)), f"{form.name} ids must be unique"
+        labels = [b["attributes"]["label"] for b in body if b.get("type") != "markdown"]
+        assert len(labels) == len(set(labels)), f"{form.name} labels must be unique"
+        for b in body:
+            assert b.get("type") in {"markdown", "textarea", "input", "dropdown", "checkboxes", "upload"}, \
+                f"{form.name}: bad input type"
+            for opt in (b.get("attributes", {}) or {}).get("options", []) or []:
+                opt = opt if isinstance(opt, str) else opt.get("label", "")
+                assert opt.lower() != "none", f"{form.name}: 'None' is auto-populated, must not be listed"
+        assert "labels" in wf, f"{form.name} needs auto-applied labels"
+        text = form.read_text(encoding="utf-8")
+        scrubbed = text.replace("nobody needs secrets", "").replace("needs no secrets", "")
+        assert all(w not in scrubbed.lower() for w in forbidden), f"{form.name} label holds a forbidden word"
+        assert "CDSAPI" not in scrubbed and "secrets." not in scrubbed, \
+            f"{form.name} must never touch credentials"
+
+    loc = yaml.safe_load((tpl / "3-location-request.yml").read_text(encoding="utf-8"))
+    loc_ids = {b.get("id") for b in loc["body"]}
+    assert {"latitude", "longitude", "timezone", "slug", "location-name"} <= loc_ids, \
+        "location form must capture registry fields explicitly"

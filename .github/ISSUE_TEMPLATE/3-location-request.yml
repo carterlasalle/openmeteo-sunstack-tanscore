@@ -1,0 +1,62 @@
+name: Propose a location
+description: Suggest coordinates for a new forecast site (owner approval required)
+title: "[Location]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Anyone may propose coordinates; nobody needs secrets. Approved proposals become a one-entry **append** to `locations.yaml` via PR — the validator rejects edits or removals of existing sites. Calibration and publishing run only after merge, on `main`.
+  - type: input
+    id: location-name
+    attributes:
+      label: Location name
+      placeholder: Casa de Campo, Dominican Republic
+    validations:
+      required: true
+  - type: input
+    id: slug
+    attributes:
+      label: Proposed slug
+      description: Lowercase with hyphens. Must be new — it cannot match an existing site.
+      placeholder: casa-de-campo
+    validations:
+      required: true
+  - type: input
+    id: latitude
+    attributes:
+      label: Latitude
+      description: Decimal degrees, -90 to 90.
+      placeholder: "18.42"
+    validations:
+      required: true
+  - type: input
+    id: longitude
+    attributes:
+      label: Longitude
+      description: Decimal degrees, -180 to 180.
+      placeholder: "-68.89"
+    validations:
+      required: true
+  - type: input
+    id: timezone
+    attributes:
+      label: Timezone
+      description: IANA name, used for scheduling and solar geometry.
+      placeholder: America/Santo_Domingo
+    validations:
+      required: true
+  - type: textarea
+    id: why-site
+    attributes:
+      label: Why this site
+      description: Optional — what makes this location worth forecasting?
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I am only appending a new entry — no edits to existing sites
+          required: true
+        - label: I understand calibration runs only after owner merge, and my proposal needs no secrets
+          required: true
