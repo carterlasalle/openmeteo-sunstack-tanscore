@@ -718,3 +718,58 @@ def test_disagreement_flag_forward_fills_to_half_hours():
     half = out.loc[out["time"] == "2026-09-15T13:30"]
     assert len(half) == 1
     assert bool(half["uv_input_disagree"].iloc[0]) is True
+
+
+def test_sun_posture_guidance_is_geometry_not_scoring():
+    from sunstack.tanscore import (
+        add_sun_posture,
+        sun_compass,
+        sun_posture_guidance,
+        torso_lift_deg,
+    )
+
+    assert sun_compass(164.3) == "SSE"
+    assert sun_compass(0.0) == "N"
+    assert sun_compass(359.0) == "N"
+    assert sun_compass(float("nan")) == "—"
+    # Lift closes the zenith gap: 90 - elevation.
+    assert torso_lift_deg(50.1) == 39.9
+    assert torso_lift_deg(80.0) == 10.0
+    assert torso_lift_deg(-5.0) is None
+    assert torso_lift_deg(float("nan")) is None
+    # Three bands: flat / flat-or-lift / face-and-lift; night never prescribes.
+    assert "lay flat on back" in sun_posture_guidance(65.0, 180.0)
+    assert "lift torso ~40" in sun_posture_guidance(50.1, 164.3)
+    assert "face WSW" in sun_posture_guidance(15.0, 250.0)
+    assert sun_posture_guidance(-5.0, 300.0).startswith("sun below horizon")
+    # Real Sep-15 1 PM row: elev 50.1, azim 164.3.
+    df = pd.DataFrame({"solar_elevation_deg": [50.1], "solar_azimuth_deg": [164.3],
+                       "tan_score_absolute_0_100": [39.5]})
+    out = add_sun_posture(df)
+    assert out["sun_compass"].iloc[0] == "SSE"
+    assert out["torso_lift_deg"].iloc[0] == 39.9
+    assert "SSE" in out["sun_posture_guidance"].iloc[0]
+    assert out["tan_score_absolute_0_100"].iloc[0] == 39.5
+
+
+def test_posture_labels_recomputed_at_half_hours():
+    from sunstack.opportunity import build_30min_forecast
+
+    hourly = pd.DataFrame({
+        "time": ["2026-09-15T12:00", "2026-09-15T13:00", "2026-09-15T14:00"],
+        "temperature_2m": [80.0, 82.0, 83.0],
+        "shortwave_radiation_instant": [400.0, 500.0, 600.0],
+        "uv_index": [4.0, 5.0, 5.2],
+        "predicted_uva_wm2": [30.0, 40.0, 42.0],
+        "overall_tan_opportunity_0_100": [30.0, 40.0, 42.0],
+        "tan_score_absolute_0_100": [28.0, 38.0, 40.0],
+        "solar_elevation_deg": [45.0, 50.1, 48.0],
+        "solar_azimuth_deg": [150.0, 164.3, 180.0],
+    })
+    out = build_30min_forecast(hourly, None)
+    half = out.loc[out["time"] == "2026-09-15T13:30"]
+    assert len(half) == 1
+    # 13:30 geometry is the midpoint: elev ~49.1, azim ~172.2 → S, not SSE.
+    assert half["sun_compass"].iloc[0] == "S"
+    assert "S" in half["sun_posture_guidance"].iloc[0]
+    assert 39.0 < float(half["torso_lift_deg"].iloc[0]) < 42.0

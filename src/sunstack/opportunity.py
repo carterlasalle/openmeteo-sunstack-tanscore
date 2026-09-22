@@ -264,9 +264,17 @@ def build_30min_forecast(hourly: pd.DataFrame, hrrr15: pd.DataFrame | None = Non
             nearest = h[discrete].reindex(h.index.union(idx)).sort_index().ffill().reindex(idx)
             out[discrete] = nearest.to_numpy()
 
-    # Preserve/string interpolate nearest labels from hourly.
-    nearest = h.reset_index()[["dt"]].copy()
-    nearest["time_key"] = nearest["dt"]
+    # Guidance labels are pure functions of solar geometry, which interpolates
+    # exactly like any numeric field above. Recompute at :30 stamps instead of
+    # nearest-filling text — the figure then shows the true mid-hour sun, and
+    # the same code path serves hourly, half-hourly, and future 15-min grids.
+    # ponytail: nearest-fill would also work; recompute is exact for free.
+    try:
+        from .tanscore import add_sun_posture as _add_posture
+        if {"solar_elevation_deg", "solar_azimuth_deg"}.issubset(out.columns):
+            out = _add_posture(out)
+    except ImportError:
+        pass
 
     if hrrr15 is not None and not hrrr15.empty:
         native = hrrr15.copy()

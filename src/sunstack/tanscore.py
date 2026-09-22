@@ -253,6 +253,66 @@ def apply_disagreement_penalty(confidence: pd.Series, disagree: pd.Series) -> pd
     return pd.Series(np.round(vals, 1), index=confidence.index)
 
 
+_COMPASS_16 = (
+    "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+    "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
+)
+
+
+def sun_compass(azimuth_deg: float) -> str:
+    """16-point compass label for a pvlib azimuth (degrees clockwise from N)."""
+    if not np.isfinite(azimuth_deg):
+        return "—"
+    return _COMPASS_16[int((float(azimuth_deg) + 11.25) // 22.5) % 16]
+
+
+def torso_lift_deg(elevation_deg: float) -> float | None:
+    """Upper-body lift above horizontal that faces the torso normal at the sun.
+
+    Pure geometry, not a fitted model: a horizontal torso's normal points at
+    the zenith, so closing the (90 - elevation) gap points the chest at the
+    sun. NaN or below-horizon elevation returns None — there is no sun to
+    face, and a 90° "lift" would be a false prescription.
+    """
+    if not np.isfinite(elevation_deg) or elevation_deg <= 0:
+        return None
+    return round(float(np.clip(90.0 - elevation_deg, 0.0, 90.0)), 1)
+
+
+def sun_posture_guidance(elevation_deg: float, azimuth_deg: float) -> str:
+    """One-line lay guidance from solar geometry. Context only, never scored."""
+    if not np.isfinite(elevation_deg) or elevation_deg <= 0:
+        return "sun below horizon — no direct-sun posture"
+    lift = torso_lift_deg(elevation_deg)
+    compass = sun_compass(azimuth_deg)
+    if elevation_deg >= 55:
+        return f"sun {elevation_deg:.0f}° up ({compass}) — lay flat on back, face up"
+    if elevation_deg >= 30:
+        return (
+            f"sun {elevation_deg:.0f}° up ({compass}) — lay flat, "
+            f"or lift torso ~{lift:.0f}° toward {compass} to face it"
+        )
+    return (
+        f"sun low {elevation_deg:.0f}° ({compass}) — face {compass}, "
+        f"lift torso ~{lift:.0f}° toward the sun if comfortable"
+    )
+
+
+def add_sun_posture(frame: pd.DataFrame) -> pd.DataFrame:
+    """Attach sun-position context columns. Values untouched by construction."""
+    out = frame.copy()
+    elev = pd.to_numeric(frame.get("solar_elevation_deg"), errors="coerce")
+    azim = pd.to_numeric(frame.get("solar_azimuth_deg"), errors="coerce")
+    out["sun_compass"] = [sun_compass(float(a)) if pd.notna(a) else "—" for a in azim]
+    out["torso_lift_deg"] = [torso_lift_deg(float(e)) if pd.notna(e) else None for e in elev]
+    out["sun_posture_guidance"] = [
+        sun_posture_guidance(float(e) if pd.notna(e) else float("nan"),
+                             float(a) if pd.notna(a) else float("nan"))
+        for e, a in zip(elev, azim)
+    ]
+    return out
+
+
 def score_forecast(
     best_enriched: pd.DataFrame,
     calibration_dir: Path,
@@ -303,6 +363,7 @@ def score_forecast(
     out["wind_context_mph"] = num(out, "wind_speed_10m")
     out["precipitation_context_probability_pct"] = num(out, "precipitation_probability")
     out["skin_plane_standard"] = "horizontal environmental reference"
+    out = add_sun_posture(out)
     return out
 
 
