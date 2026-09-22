@@ -143,3 +143,14 @@ torso lift = 90 - elevation (None below horizon), three-band guidance
 recompute from interpolated geometry rather than nearest-filling text.
 UI gains a sun-arc SVG + stick figure (legs flat, torso lifts toward the
 sun side) with click-any-row and a time dropdown. No score touched.
+
+## 2026-09-22 — Multi-location support (registry + per-site runs + intake)
+locations.yaml is the single registry (South Bend default; Palisades test
+site appended). config.use_site scopes LAT/LON/TZ per block with restore;
+_calibration_paths/run_live/bootstrap namespace to data/sites/<slug> while
+the default keeps the legacy layout. UI/API/export/calendar carry location
+(South Bend default; per-site UIDs; per-site ICS timezone). Public intake:
+location_request template + location-intake workflow (pull_request_target
+on BASE commit, no secrets) validates append-only proposals and comments a
+plan; owner merge required before any calibration runs. Workflow exports
+per-site dirs and publishes data/sites calibration.
