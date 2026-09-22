@@ -40,11 +40,7 @@ jobs:
           CDSAPI_KEY: ${{ secrets.CDSAPI_KEY }}
 
       - name: Export static site (all sites)
-        run: |
-          uv run sunstack export --site-dir docs
-          for slug in $(uv run python -c "from sunstack.config import active_sites, default_site; print(' '.join(s.slug for s in active_sites() if s.slug != default_site().slug))"); do
-            uv run sunstack export --site-dir "docs/sites/$slug" --site "$slug"
-          done
+        run: uv run sunstack export --site-dir docs
 
       - name: Publish results
         run: |

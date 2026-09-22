@@ -390,8 +390,10 @@ def main() -> None:
             serve(root, host=args.host, port=args.port, open_browser=not args.no_browser)
         elif args.command == "export":
             from .output import export_static_site
-            info = export_static_site(root, Path(args.site_dir), skin_type=args.skin_type, min_temp_f=args.min_temp or 50.0)
-            print(f"Static site: {info['out_dir']} ({info['hourly_rows']} hourly, {info['half_rows']} half-hour, {info['days']} days, {info['events']} events)")
+            for site in sites:
+                dest = Path(args.site_dir) if site.slug == config.default_site().slug else Path(args.site_dir) / "sites" / site.slug
+                info = export_static_site(root, dest, skin_type=args.skin_type, min_temp_f=args.min_temp or 50.0, site_slug=site.slug)
+                print(f"Static site {site.slug}: {info['out_dir']} ({info['hourly_rows']} hourly, {info['half_rows']} half-hour, {info['days']} days, {info['events']} events)")
         else:
             for site in sites:
                 run_live(root, auto_calibrate=not args.no_auto_calibrate, force_cams=args.force_cams, strict=strict, skin_type=args.skin_type, min_temp_f=args.min_temp, fresh=not args.cached_live, site=site)

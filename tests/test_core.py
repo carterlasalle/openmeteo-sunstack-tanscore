@@ -663,7 +663,7 @@ def test_scheduled_workflow_is_complete_and_wired():
         assert required in names, f"missing workflow step: {required}"
     install = by_name["Install dependencies"]
     export = by_name["Export static site (all sites)"]["run"]
-    assert "--site-dir" in export and "--site " in export, "export must publish per-site dirs"
+    assert "--site-dir docs" in export, "export must publish the static site"
     assert "--locked" in install.get("run", ""), "installs must fail loudly on lock drift, not rewrite uv.lock"
     publish = by_name["Publish results"]["run"]
     assert "checkout -- uv.lock" in publish, "publish must discard uv.lock churn before rebasing"
@@ -680,6 +680,21 @@ def test_scheduled_workflow_is_complete_and_wired():
         proj = tomllib.load(f)
     assert proj["project"].get("requires-python"), "requires-python must survive metadata edits"
     assert proj["tool"]["uv"].get("required-version"), "uv required-version pins the resolver"
+
+
+def test_export_command_publishes_every_site(tmp_path):
+    import yaml
+
+    wf = yaml.safe_load(Path(".github/workflows/run.yml").read_text(encoding="utf-8"))
+    export = next(s for s in wf["jobs"]["run"]["steps"] if s.get("name") == "Export static site (all sites)")
+    assert "uv run sunstack export --site-dir docs" in export["run"]
+    # The CLI fans out per site internally; the workflow stays one step.
+    import inspect
+
+    from sunstack import cli
+
+    src = inspect.getsource(cli.main)
+    assert "for site in sites" in src and "export_static_site" in src
 
 
 def test_uv_ghi_disagreement_flags_only_strong_daytime_mismatch():
