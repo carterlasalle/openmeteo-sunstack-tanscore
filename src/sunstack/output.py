@@ -86,11 +86,13 @@ def export_static_site(
         "p=p.slice(0,p.lastIndexOf('/')+1);calEl.href='webcal://'+location.host+p+'calendar.ics';}",
     )
     out_dir.mkdir(parents=True, exist_ok=True)
+    from .ui import _site_nav
     (out_dir / "index.html").write_text(html, encoding="utf-8")
     (out_dir / "data.json").write_text(json.dumps(payload), encoding="utf-8")
+    (out_dir / "locations.json").write_text(
+        json.dumps({"locations": _site_nav(site.slug)}), encoding="utf-8")
     (out_dir / "skin.json").write_text(
-        json.dumps({str(i): fitzpatrick_context(i) for i in range(1, 7)}), encoding="utf-8"
-    )
+        json.dumps({str(i): fitzpatrick_context(i) for i in range(1, 7)}), encoding="utf-8")
     (out_dir / "calendar.ics").write_text(
         build_calendar_ics(daily, str(summary.get("run", "")), hourly), encoding="utf-8"
     )

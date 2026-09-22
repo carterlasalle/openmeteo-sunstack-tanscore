@@ -484,6 +484,12 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path):
     html = (tmp_path / "site" / "index.html").read_text()
     assert "./data.json" in html and "/api/data" not in html
     assert 'id="skin"' in html and 'id="mintemp"' not in html
+    assert 'rel="icon"' in html, "static export must silence the favicon 404"
+    assert "locations.json" in html, "static picker must read locations.json before /api/locations"
+    locs = _json.loads((tmp_path / "site" / "locations.json").read_text())["locations"]
+    assert {e["slug"] for e in locs} >= {"south-bend", "pacific-palisades"}
+    assert any(e.get("url") for e in locs), "non-current sites need nav urls"
+    assert "data-url" in html, "picker options must carry per-page urls"
 
     skin = _json.loads((tmp_path / "site" / "skin.json").read_text())
     assert sorted(skin) == ["1", "2", "3", "4", "5", "6"]
@@ -716,6 +722,45 @@ def test_location_intake_workflow_holds_no_secrets():
     perms = wf.get("permissions", {})
     assert perms.get("contents") == "read", "intake stays read-only on code"
 
+def test_location_propose_workflow_is_issue_triggered_and_secret_free():
+    import yaml
+
+    wf = yaml.safe_load(Path(".github/workflows/location-propose.yml").read_text(encoding="utf-8"))
+    on = wf.get("on", True) or True
+    assert "issues" in on, "propose triggers on [Location] issues"
+    text = Path(".github/workflows/location-propose.yml").read_text(encoding="utf-8")
+    scrubbed = text.replace("nobody gets secrets", "")
+    assert "secrets." not in scrubbed, "propose must never read any GitHub secret"
+    assert "CDSAPI_URL" not in text and "CDSAPI_KEY" not in text
+    runs = " ".join(str(s.get("run", "")) for s in wf["jobs"]["propose"]["steps"])
+    assert "issue_location_to_pr.py" in runs, "propose parses the issue into a registry append"
+
+
+def test_issue_location_parser_round_trips_registry_append(tmp_path):
+    import subprocess
+    import sys
+
+    import yaml
+
+    body = (
+        "### Location name\n\nCasa de Campo, Dominican Republic\n\n"
+        "### Proposed slug\n\ncasa-de-campo\n\n"
+        "### Latitude\n\n18.42\n\n"
+        "### Longitude\n\n-68.89\n\n"
+        "### Timezone\n\nAmerica/Santo_Domingo\n"
+    )
+    (tmp_path / "body.md").write_text(body, encoding="utf-8")
+    out = tmp_path / "proposed.yaml"
+    proc = subprocess.run(
+        [sys.executable, "scripts/issue_location_to_pr.py",
+         str(tmp_path / "body.md"), "locations.yaml", str(out)],
+        capture_output=True, text=True, check=False)
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    proposed = yaml.safe_load(out.read_text(encoding="utf-8"))
+    base = yaml.safe_load(Path("locations.yaml").read_text(encoding="utf-8"))
+    assert len(proposed) == len(base) + 1, "propose appends exactly one entry"
+    assert proposed[-1]["slug"] == "casa-de-campo"
+    assert proposed[:-1] == base, "existing entries untouched"
 
 def test_run_one_site_skips_cold_calibration_without_failing(tmp_path, monkeypatch):
     import yaml

@@ -1,0 +1,99 @@
+name: location-propose
+
+# Issue -> PR: a `[Location]:` issue opens a one-entry registry PR automatically.
+# Secret-free by design: parses the issue-form body, validates via
+# scripts/issue_location_to_pr.py (same config.load_sites rules as intake),
+# and opens a PR. That PR is what location-intake validates and the owner
+# merges; location-calibrate only ever runs post-merge on main.
+"on":
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  propose:
+    if: startsWith(github.event.issue.title, '[Location]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          version: "0.12.15"
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Parse issue into a registry append
+        id: parse
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          printf '%s' "$ISSUE_BODY" > /tmp/issue-body.md
+          if ! uv run python scripts/issue_location_to_pr.py /tmp/issue-body.md locations.yaml /tmp/proposed-locations.yaml; then
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          uv run python scripts/validate_locations.py --base locations.yaml --proposed /tmp/proposed-locations.yaml > /tmp/intake.md
+          cat /tmp/intake.md >> "$GITHUB_STEP_SUMMARY"
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Comment validation failure on the issue
+        if: steps.parse.outputs.ok != 'true'
+        uses: actions/github-script@v8.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            let plan = 'Could not parse this issue into a location proposal.';
+            try { plan = fs.readFileSync('/tmp/intake.md', 'utf8'); } catch (e) {}
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `### Location proposal: needs attention\n\n${plan}\n\nEdit the issue fields (name, slug, latitude, longitude, timezone) and a maintainer can re-run this workflow.`,
+            });
+
+      - name: Open registry PR
+        if: steps.parse.outputs.ok == 'true'
+        uses: actions/github-script@v8.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('/tmp/intake.md', 'utf8');
+            const issueNo = context.payload.issue.number;
+            const branch = `location-issue-${issueNo}`;
+            const proposed = fs.readFileSync('/tmp/proposed-locations.yaml', 'utf8');
+            const { data: { default_branch } } = await github.rest.repos.get(context.repo);
+            let sha;
+            try {
+              const ref = await github.rest.git.getRef({ ...context.repo, ref: `heads/${branch}` });
+              sha = ref.data.object.sha;
+            } catch (e) { sha = null; }
+            const { data: base } = await github.rest.repos.getContent({ ...context.repo, path: 'locations.yaml', ref: default_branch });
+            const baseSha = base.sha;
+            const headSha = sha || (await github.rest.git.getRef({ ...context.repo, ref: `heads/${default_branch}` })).data.object.sha;
+            if (!sha) {
+              await github.rest.git.createRef({ ...context.repo, ref: `refs/heads/${branch}`, sha: headSha });
+            }
+            await github.rest.repos.createOrUpdateFileContents({
+              ...context.repo, path: 'locations.yaml', branch,
+              message: `Propose location from #${issueNo}`,
+              content: Buffer.from(proposed).toString('base64'),
+              sha: (await github.rest.repos.getContent({ ...context.repo, path: 'locations.yaml', ref: branch }).catch(() => ({ data: {} }))).data.sha || baseSha,
+            });
+            const prs = await github.rest.pulls.list({ ...context.repo, head: `${context.repo.owner}:${branch}`, base: default_branch, state: 'open' });
+            const pr = prs.data[0] || (await github.rest.pulls.create({
+              ...context.repo, head: branch, base: default_branch,
+              title: `Propose location from #${issueNo}`,
+              body: `Closes #${issueNo}.\n\n${plan}\n\nReview: \`location-intake\` validates this PR; merge to calibrate.`,
+            })).data;
+            await github.rest.issues.createComment({
+              ...context.repo, issue_number: issueNo,
+              body: `### Location proposal: PR open\n\n${plan}\n\nOpened #${pr.number} — review and merge to calibrate.`,
+            });
