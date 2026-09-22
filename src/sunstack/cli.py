@@ -6,7 +6,7 @@ import logging
 import shutil
 import sys
 from contextlib import nullcontext
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -350,6 +350,87 @@ def debug_report(root: Path) -> None:
             print(manifest.read_text())
 
 
+def _publish_site(site: config.Site) -> None:
+    """Commit + push one site's docs and data. Small atomic publishes."""
+    import subprocess
+
+    subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=False)
+    subprocess.run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], check=False)
+    slug = site.slug
+    stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M")
+    if slug == config.default_site().slug:
+        subprocess.run(["git", "add", "docs", "-f", "data/calibration"], check=False)
+    else:
+        subprocess.run(["git", "add", f"docs/sites/{slug}", "-f", f"data/sites/{slug}"], check=False)
+    subprocess.run(["git", "checkout", "--", "uv.lock"], check=False)
+    committed = subprocess.run(["git", "commit", "-m", f"Scheduled run {slug} {stamp}"], check=False)
+    _ = committed
+    pulled = subprocess.run(["git", "pull", "--rebase", "-X", "ours"], check=False)
+    if pulled.returncode != 0:
+        subprocess.run(["git", "rebase", "--abort"], check=False)
+        second = subprocess.run(["git", "pull", "--rebase", "-X", "theirs"], check=False)
+        if second.returncode != 0:
+            subprocess.run(["git", "rebase", "--abort"], check=False)
+            raise RuntimeError(f"publish rebase failed for {slug}")
+    pushed = subprocess.run(["git", "push"], check=False)
+    if pushed.returncode != 0:
+        raise RuntimeError(f"publish push failed for {slug}")
+
+
+def run_one_site(root: Path, site: config.Site, strict: bool = True,
+                 skin_type: int | None = None, min_temp_f: float | None = None,
+                 fresh: bool = True, force_cams: bool = False,
+                 auto_calibrate: bool = True) -> Path:
+    """Run, export, and publish a single site. One site = one commit.
+
+    Alternating run→publish per site (not run-all→publish-all) means a slow
+    or failing second site can never take down the first site's fresh data.
+    Cold (uncalibrated) sites are skipped with a warning — the
+    location-calibrate workflow owns bootstrap, not the forecast job — so a
+    new location can never wedge South Bend past the 60-minute timeout.
+    Zero quality reduction by construction: identical code path per site,
+    strict stays on, no fallback tiers, no skipped validations.
+    """
+    from .output import export_static_site
+
+    _, calibration_dir, _ = _calibration_paths(root, site.slug if site.slug != config.default_site().slug else None)
+    required = [calibration_dir / "uva_uvb_models.joblib", calibration_dir / "local_reference.parquet"]
+    if not all(p.exists() for p in required):
+        LOG.warning("Skipping %s: calibration missing (%s). Awaiting location-calibrate workflow; scores unchanged elsewhere.",
+                    site.slug, calibration_dir)
+        raise _SiteSkipped(f"calibration missing for {site.slug}")
+    run_dir = run_live(root, auto_calibrate=auto_calibrate, force_cams=force_cams, strict=strict,
+                       skin_type=skin_type, min_temp_f=min_temp_f, fresh=fresh, site=site)
+    dest = Path("docs") if site.slug == config.default_site().slug else Path("docs") / "sites" / site.slug
+    # Export reads the freshly written site run from the data root.
+    info = export_static_site(root, dest, skin_type=skin_type, min_temp_f=min_temp_f or 50.0, site_slug=site.slug)
+    LOG.info("Site %s exported: %s events", site.slug, info["events"])
+    _publish_site(site)
+    return run_dir
+
+
+def _run_all_sites(root: Path, strict: bool = True,
+                   skin_type: int | None = None, min_temp: float | None = None,
+                   fresh: bool = True, force_cams: bool = False,
+                   auto_calibrate: bool = True, only_slug: str | None = None) -> None:
+    sites = config.active_sites()
+    if only_slug:
+        sites = [s for s in sites if s.slug == only_slug]
+        if not sites:
+            raise DataValidationError(f"unknown site slug: {only_slug}")
+    for site in sites:
+        try:
+            run_one_site(root, site, strict=strict, skin_type=skin_type,
+                         min_temp_f=min_temp, fresh=fresh, force_cams=force_cams,
+                         auto_calibrate=auto_calibrate)
+        except _SiteSkipped as exc:
+            LOG.warning("Site skipped, continuing to next site: %s", exc)
+
+
+class _SiteSkipped(RuntimeError):
+    """A site was deliberately skipped (cold calibration); not a failure."""
+
+
 def main() -> None:
     from argparse import Namespace
 
@@ -400,8 +481,10 @@ def main() -> None:
                 info = export_static_site(root, dest, skin_type=args.skin_type, min_temp_f=args.min_temp or 50.0, site_slug=site.slug)
                 print(f"Static site {site.slug}: {info['out_dir']} ({info['hourly_rows']} hourly, {info['half_rows']} half-hour, {info['days']} days, {info['events']} events)")
         else:
-            for site in sites:
-                run_live(root, auto_calibrate=not args.no_auto_calibrate, force_cams=args.force_cams, strict=strict, skin_type=args.skin_type, min_temp_f=args.min_temp, fresh=not args.cached_live, site=site)
+            _run_all_sites(root, strict=strict, skin_type=args.skin_type, min_temp=args.min_temp,
+                           fresh=not args.cached_live, force_cams=args.force_cams,
+                           auto_calibrate=not args.no_auto_calibrate,
+                           only_slug=args.site)
     except Exception as exc:
         LOG.exception("FATAL")
         print(f"\nSUNSTACK FATAL: {exc}", file=sys.stderr)

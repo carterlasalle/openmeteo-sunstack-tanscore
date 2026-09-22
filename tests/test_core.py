@@ -659,16 +659,21 @@ def test_scheduled_workflow_is_complete_and_wired():
     setup_uv = by_name["astral-sh/setup-uv@v10.1.0"]
     assert setup_uv.get("with", {}).get("version"), "setup-uv must pin an exact uv version"
     names = [s.get("name") for s in steps]
-    for required in ("Install dependencies", "Forecast run (all sites)", "Export static site (all sites)", "Publish results"):
+    for required in ("Install dependencies", "Forecast + export + publish, one site at a time"):
         assert required in names, f"missing workflow step: {required}"
     install = by_name["Install dependencies"]
-    export = by_name["Export static site (all sites)"]["run"]
-    assert "--site-dir docs" in export, "export must publish the static site"
+    step = by_name["Forecast + export + publish, one site at a time"]
+    assert "uv run sunstack run" in step["run"], "single step runs, exports, and publishes per site"
     assert "--locked" in install.get("run", ""), "installs must fail loudly on lock drift, not rewrite uv.lock"
-    publish = by_name["Publish results"]["run"]
-    assert "checkout -- uv.lock" in publish, "publish must discard uv.lock churn before rebasing"
-    assert "-X theirs" in publish, "publish must recover from mid-run local pushes instead of exit 128"
-    forecast = by_name["Forecast run (all sites)"]
+    import inspect as _inspect
+
+    from sunstack import cli as _cli
+
+    pub_src = _inspect.getsource(_cli._publish_site)
+    assert "uv.lock" in pub_src, "publish must discard uv.lock churn before rebasing"
+    assert "theirs" in pub_src, \
+        "publish must recover from mid-run local pushes instead of exit 128"
+    forecast = by_name["Forecast + export + publish, one site at a time"]
     assert "CDSAPI_URL" in forecast["env"] and "CDSAPI_KEY" in forecast["env"]
     schedules = wf["on"]["schedule"]
     assert any("0,9,12,21" in s["cron"] for s in schedules)
@@ -712,19 +717,47 @@ def test_location_intake_workflow_holds_no_secrets():
     assert perms.get("contents") == "read", "intake stays read-only on code"
 
 
-def test_export_command_publishes_every_site(tmp_path):
+def test_run_one_site_skips_cold_calibration_without_failing(tmp_path, monkeypatch):
     import yaml
 
-    wf = yaml.safe_load(Path(".github/workflows/run.yml").read_text(encoding="utf-8"))
-    export = next(s for s in wf["jobs"]["run"]["steps"] if s.get("name") == "Export static site (all sites)")
-    assert "uv run sunstack export --site-dir docs" in export["run"]
-    # The CLI fans out per site internally; the workflow stays one step.
+    from sunstack import cli, config
+
+    (tmp_path / "locations.yaml").write_text(yaml.safe_dump([
+        {"slug": "south-bend", "name": "SB", "lat": 41.7, "lon": -86.2,
+         "timezone": "America/Indiana/Indianapolis", "default": True},
+        {"slug": "cold-site", "name": "Cold", "lat": 10.0, "lon": 10.0, "timezone": "UTC"},
+    ]), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir(exist_ok=True)
+    cold = next(s for s in config.load_sites(tmp_path / "locations.yaml") if s.slug == "cold-site")
+    import pytest
+
+    with pytest.raises(cli._SiteSkipped):
+        cli.run_one_site(tmp_path / "data", cold)
+    # South Bend path resolution never touches the cold site.
+    sb = next(s for s in config.load_sites(tmp_path / "locations.yaml") if s.slug == "south-bend")
+    _, cal_dir, _ = cli._calibration_paths(tmp_path / "data", None)
+    assert cal_dir == tmp_path / "data" / "calibration"
+    assert sb.slug == "south-bend"
+
+
+def test_run_alternates_publish_per_site(tmp_path):
     import inspect
 
     from sunstack import cli
 
-    src = inspect.getsource(cli.main)
-    assert "for site in sites" in src and "export_static_site" in src
+    # run→publish per site (not run-all→publish-all): one slow site can never
+    # take down the other's fresh data.
+    src = inspect.getsource(cli.run_one_site)
+    assert "run_live" in src and "export_static_site" in src and "_publish_site" in src
+    # Cold sites skip without failing: calibrate workflow owns bootstrap.
+    assert "_SiteSkipped" in inspect.getsource(cli._run_all_sites)
+    # Publish step must be gone from the workflow: publishing moved into the CLI.
+    import yaml
+
+    wf = yaml.safe_load(Path(".github/workflows/run.yml").read_text(encoding="utf-8"))
+    names = [st.get("name") for st in wf["jobs"]["run"]["steps"]]
+    assert "Publish results" not in names, "per-site publish lives in run_one_site now"
 
 
 def test_uv_ghi_disagreement_flags_only_strong_daytime_mismatch():

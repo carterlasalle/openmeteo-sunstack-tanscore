@@ -33,23 +33,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
-      - name: Forecast run (all sites)
+      - name: Forecast + export + publish, one site at a time
         run: uv run sunstack run
         env:
           CDSAPI_URL: ${{ secrets.CDSAPI_URL }}
           CDSAPI_KEY: ${{ secrets.CDSAPI_KEY }}
-
-      - name: Export static site (all sites)
-        run: uv run sunstack export --site-dir docs
-
-      - name: Publish results
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs && git add -f data/calibration data/sites
-          git diff --quiet --cached && echo "no changes" || git commit -m "Scheduled run $(date -u +%Y%m%d_%H%M)"
-          # The runner's uv may rewrite uv.lock even on --locked installs (version
-          # drift guard); never let that block the data publish.
-          git checkout -- uv.lock 2>/dev/null || true
-          git pull --rebase -X ours || git pull --rebase -X theirs
-          git push
