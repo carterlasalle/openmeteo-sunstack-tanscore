@@ -263,7 +263,7 @@ details.debug pre{background:#f3ecdb;padding:12px;border-radius:8px;overflow:aut
 <button onclick="loadData()">Apply</button><button class="primary" onclick="refreshData()">Refresh forecast</button><a id="cal" class="btn" href="/api/calendar.ics" title="Subscribe to the best-window calendar">Calendar</a></div></div>
 <div id="msg" class="status"></div>
 <p class="hero" id="hero">Finding the best light…</p>
-<p class="legend">Overall blends four readings: absolute strength worldwide, how rare it is for South Bend, air clarity, and forecast confidence. UV is the raw index; clear is the cloud-free value.</p>
+<p class="legend">Overall blends four readings: absolute strength worldwide, how rare it is for this location, air clarity, and forecast confidence. UV is the raw index; clear is the cloud-free value.</p>
 <div class="strip" id="strip" role="tablist" aria-label="Days"></div>
 <div class="sunfig" id="sunfigwrap"><svg id="sunfig" width="300" height="190" role="img" aria-label="Sun position and recline figure"></svg><div class="cap"><div id="suncap">Pick a time to see the sun position and posture.</div><label>Time <select id="sunsel"></select></label><div class="note">Legs stay flat, parallel to the ground — only the torso lifts. Click any table row to inspect that time. Guidance is geometry context, not a score.</div></div></div><div class="daydetail" id="detail"></div>
 <details class="debug"><summary>Source data</summary><pre id="debugtext">Loading…</pre></details>
@@ -288,7 +288,7 @@ async function refreshData(){show('Calling live Open-Meteo and CAMS, rebuilding 
 function show(t,c){const m=document.getElementById('msg');m.textContent=t;m.className='status show '+c;}function hide(){document.getElementById('msg').className='status';}
 function bestDay(){const d=(DATA.daily||[]).filter(x=>+x.day_overall_peak_0_100>0);d.sort((a,b)=>b.day_overall_peak_0_100-a.day_overall_peak_0_100);return d[0]||DATA.daily[0];}
 function render(){if(!DATA||!DATA.daily||!DATA.daily.length){show('No forecast data yet. Press Refresh forecast.','error');return;}
-document.getElementById('runline').textContent='Updated '+fmtTime((DATA.summary||{}).created_at)+' · '+(DATA.hourly||[]).length+' hourly rows · absolute is worldwide scale, local is South Bend percentile';
+document.getElementById('runline').textContent='Updated '+fmtTime((DATA.summary||{}).created_at)+' · '+(DATA.hourly||[]).length+' hourly rows · absolute is worldwide scale, local is this location\u0027s percentile';
 document.getElementById('cal').href='webcal://'+location.host+'/api/calendar.ics?skin_type='+document.getElementById('skin').value+'&min_temp='+document.getElementById('mintemp').value+'&location='+encodeURIComponent(LOC);
 if(!SEL||!DATA.daily.some(d=>d.date===SEL)){const b=bestDay();SEL=b?b.date:DATA.daily[0].date;}
 const b=bestDay();
