@@ -69,4 +69,5 @@ rescale photons inside TanDose.
   it never silently falls back to the legacy 55/30/15 formula.
 - `sunstack debug --photobiology` prints model version, spectrum checksums,
   backend/tier, global reference, current E_mel, both UVI sources,
-  disagreement, TanScore, interval TanDose, SED, UVA/UVB doses, and fallbacks.
+  disagreement, TanScore, interval TanDose, SED, UVA/UVB/pigment-darkening
+  doses, and fallbacks.

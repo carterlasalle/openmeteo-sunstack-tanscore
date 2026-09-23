@@ -795,8 +795,12 @@ def debug_photobiology(root: Path) -> None:
             cols = ["time", "melanogenic_effective_irradiance_wm2", "uv_index",
                     "uvi_openmeteo", "uvi_cams", "uvi_difference_percent",
                     "tan_score_absolute_0_100", "legacy_absolute_tan_score_55_30_15",
-                    "erythemal_irradiance_wm2", "tan_dose_1h_j_m2", "sed_1h",
-                    "uva_dose_1h_j_m2", "uvb_dose_1h_j_m2", "spectral_backend",
+                    "erythemal_irradiance_wm2",
+                    "pigment_darkening_effective_irradiance",
+                    "tan_dose_1h_j_m2", "sed_1h",
+                    "uva_dose_1h_j_m2", "uvb_dose_1h_j_m2",
+                    "pigment_darkening_dose_1h_j_m2",
+                    "spectral_backend",
                     "spectral_tier", "tan_score_model_version", "cams_cycle",
                     "tan_calibration_tier", "uv_input_disagree", "tan_forecast_confidence_0_100"]
             show = [c for c in cols if c in df.columns]

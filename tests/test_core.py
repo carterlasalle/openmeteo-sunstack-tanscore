@@ -1508,10 +1508,12 @@ def test_debug_photobiology_reports_full_stack(tmp_path, capsys):
         "tan_score_absolute_0_100": [30.0],
         "legacy_absolute_tan_score_55_30_15": [28.0],
         "erythemal_irradiance_wm2": [0.125],
+        "pigment_darkening_effective_irradiance": [0.08],
         "tan_dose_1h_j_m2": [1800.0],
         "sed_1h": [4.5],
         "uva_dose_1h_j_m2": [100000.0],
         "uvb_dose_1h_j_m2": [3000.0],
+        "pigment_darkening_dose_1h_j_m2": [290.0],
         "spectral_backend": ["tierC-broadband-v1"],
         "spectral_tier": ["C"],
         "tan_score_model_version": ["action-spectrum-v1"],
@@ -1525,6 +1527,8 @@ def test_debug_photobiology_reports_full_stack(tmp_path, capsys):
     for token in ("parrish_delayed_melanogenesis", "cie_erythema_reference",
                   "ipd_action_spectrum", "Tier-C band weights",
                   "global_reference: global-mel-ref-v1-provisional",
+                  "pigment_darkening_effective_irradiance",
+                  "pigment_darkening_dose_1h_j_m2",
                   "latest hourly photobiology columns present"):
         assert token in out, token
     assert "MISSING columns" not in out
