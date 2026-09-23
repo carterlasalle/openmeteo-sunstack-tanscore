@@ -1211,3 +1211,27 @@ def test_export_preserves_run_attached_fractions(tmp_path):
     assert {r["personal_mmd_fraction"] for r in payload["half_hour"]} == {0.25}
     with pytest.raises(ValueError, match="explicit basis"):
         export_static_site(root, tmp_path / "bad", personal_mmd_j_m2=2000.0)
+
+
+def test_reference_builder_drops_missing_bands():
+    import numpy as np
+    import pandas as pd
+
+    from sunstack.calibrate import build_local_reference
+
+    import tempfile
+    from pathlib import Path
+
+    stamps = pd.date_range("2020-06-01", periods=6, freq="h", tz="UTC")
+    training = pd.DataFrame({
+        "time_utc": stamps,
+        "uva": [30.0, 35.0, 40.0, 45.0, 50.0, 55.0],
+        "uvb": [0.5, float("nan"), 0.7, 0.8, 0.9, 1.0],
+        "uvi": [4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+        "sza": [50.0] * 6,
+        "ghi": [500.0] * 6,
+    })
+    with tempfile.TemporaryDirectory() as td:
+        ref = build_local_reference(training, Path(td))
+    assert len(ref) == 5  # NaN-UVB row excluded, not zero-scored
+    assert ref["melanogenic_effective_irradiance_wm2"].notna().all()

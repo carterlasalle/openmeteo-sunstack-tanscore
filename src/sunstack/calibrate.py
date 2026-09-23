@@ -256,14 +256,19 @@ def build_local_reference(training: pd.DataFrame, calibration_dir: Path) -> pd.D
         return pd.DataFrame()
     ref = training.loc[:, [c for c in ["time_utc", "uva", "uvb", "uvi", "sza", "ghi"] if c in training]].copy()
     ref = ref.dropna(subset="time_utc").dropna(subset="uva").dropna(subset="uvi")
+    if "uvb" in ref:
+        # Missing bands are dropped, never zeroed: a zeroed band would plant
+        # understated E_mel values in the climatology and inflate every local
+        # percentile computed against it.
+        ref = ref.dropna(subset="uvb")
     ref = ref.loc[(scol(ref, "ghi").fillna(0) > 10) & (scol(ref, "sza").fillna(180) < 90)]
     try:
         from .spectral import melanogenic_from_broadband
 
         e_mel = melanogenic_from_broadband(
-            pd.to_numeric(scol(ref, "uva"), errors="coerce").fillna(0).to_numpy(),
-            pd.to_numeric(scol(ref, "uvb" if "uvb" in ref else "uvi"), errors="coerce").fillna(0).to_numpy()
-            if "uvb" in ref else pd.to_numeric(scol(ref, "uvi"), errors="coerce").fillna(0).to_numpy() * 0.15,
+            pd.to_numeric(scol(ref, "uva"), errors="coerce").to_numpy(dtype=float),
+            pd.to_numeric(scol(ref, "uvb" if "uvb" in ref else "uvi"), errors="coerce").to_numpy(dtype=float)
+            if "uvb" in ref else pd.to_numeric(scol(ref, "uvi"), errors="coerce").to_numpy(dtype=float) * 0.15,
         )
     except (FileNotFoundError, ValueError) as exc:
         raise RuntimeError(f"ERROR photobiology: {exc}") from exc
