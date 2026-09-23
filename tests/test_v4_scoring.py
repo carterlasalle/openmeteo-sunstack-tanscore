@@ -1826,3 +1826,32 @@ def test_best_tan_windows_fallback_blend_without_overall():
     # 90/10 absolute/confidence blend ranks the stronger physics first.
     assert out["tan_window_rank_value"].tolist() == [41.0, 23.0]
     assert out["tan_score_absolute_0_100"].tolist() == [40.0, 20.0]
+
+
+def test_cams_features_convert_ozone_and_split_bands():
+    # Direct-CAMS propagation details that silently corrupt physics if wrong:
+    # kg/m^2 ozone must convert to DU, absorption AOD must not match total
+    # AOD columns, and clear-sky UVBED must not leak into the all-sky channel.
+    from sunstack.tanscore import _cams_features
+
+    times = pd.date_range("2026-09-22 12:00", periods=3, freq="h", tz="UTC")
+    cams = pd.DataFrame({
+        "time_utc": times,
+        "total_column_ozone": [0.008, 0.0081, 0.0082],  # kg/m2, not DU
+        "aerosol_optical_depth_340": [0.2] * 3,
+        "aerosol_optical_depth_380": [0.18] * 3,
+        "absorption_aerosol_optical_depth_340": [0.02] * 3,
+        "cams_uv_biologically_effective_dose": [0.1] * 3,
+        "cams_uv_biologically_effective_dose_clear_sky": [0.12] * 3,
+    })
+    out = _cams_features(cams)
+    assert abs(out["ozone_du"].iloc[0] - 0.008 / 2.1415e-5) < 0.5
+    assert (out["cams_aod_340"] == 0.2).all()
+    assert (out["cams_abs_aod_340"] == 0.02).all()
+    assert (out["cams_erythemal_irradiance_wm2"] == 0.1).all()
+    assert (out["cams_clear_sky_erythemal_irradiance_wm2"] == 0.12).all()
+    assert (out["cams_uv_index"] == 4.0).all()
+    du = pd.DataFrame({"time_utc": times, "total_column_ozone": [300.0] * 3})
+    assert _cams_features(du)["ozone_du"].tolist() == [300.0] * 3
+    assert list(_cams_features(None).columns)[:5] == [
+        "time_utc", "ozone_du", "aod340", "aod380", "cams_forecast_albedo"]
