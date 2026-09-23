@@ -24,7 +24,7 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
     html = HTML
     html = _swap_once(
         html,
-        "fetch(`/api/data?skin_type=${s}&min_temp=${m}&location=${encodeURIComponent(LOC)}`)",
+        "fetch(`/api/data?skin_type=${s}&min_temp=${m}&personal_mmd=${p}&personal_mmd_basis=${b}&location=${encodeURIComponent(LOC)}`)",
         "fetch('./data.json')",
     )
     try:
@@ -56,8 +56,8 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
     )
     html = _swap_once(
         html,
-        "const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch('./data.json');",
-        f"const s=document.getElementById('skin').value,m='50';const r=await fetch('./data.json?v={run_stamp}');",
+        "const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value,p=document.getElementById('mmd').value,b=document.getElementById('mmdbasis').value;const r=await fetch('./data.json');",
+        f"const s=document.getElementById('skin').value,m='50',p='',b='';const r=await fetch('./data.json?v={run_stamp}');",
     )
     html = _swap_once(
         html,
@@ -109,11 +109,16 @@ def export_static_site(
     skin_type: int | None = None,
     min_temp_f: float = 50.0,
     site_slug: str | None = None,
+    personal_mmd_j_m2: float | None = None,
+    personal_mmd_basis: str | None = None,
 ) -> dict[str, object]:
     """Publish the latest run as a static site: index + data + calendar.
 
     template replacement asserts a unique anchor, so live-UI drift fails
     loudly here instead of shipping a subtly broken page.
+
+    Personal MMD is baked only when explicitly supplied (like skin_type);
+    the default export carries no personal data.
     """
     from . import config
     from .calibrate import scol
@@ -133,7 +138,8 @@ def export_static_site(
     entered.__enter__()
     try:
         run, hourly, half, daily, summary = _filtered_payload(
-            root, skin_type, min_temp_f, site
+            root, skin_type, min_temp_f, site,
+            personal_mmd_j_m2, personal_mmd_basis,
         )
     finally:
         entered.__exit__(None, None, None)

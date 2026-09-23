@@ -498,3 +498,16 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   hourly table (99.7% finite fractions at 12 kJ, physics byte-identical) and
   pinned with parser-threading tests; README documents scope (CLI today,
   dashboard/API inputs follow-up).
+
+## 2026-09-23 (follow-up 23) — dashboard/API personal-MMD inputs
+
+- `/api/data` + `/api/refresh` accept `personal_mmd`/`personal_mmd_basis`
+  (400 on unlabeled/invalid values; parsing factored into testable
+  `_parse_personal_mmd`), threaded through `_filtered_payload` and refresh
+  runs; the dashboard gains My-MMD + basis inputs and a day-max fraction
+  segment in the dose row; static export accepts and bakes the same options
+  (default: no personal data). Shared calendar stays environmental-only.
+- Headless execution caught a null-coercion bug first: JSON null fractions
+  read as 0.00 instead of absent. Max-filters now exclude null/undefined/""
+  before numeric coercion (also applied to the IPD peak), verified on
+  MMD-bearing, MMD-absent, and pre-v4 payloads.

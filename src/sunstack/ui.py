@@ -17,6 +17,7 @@ from .calibrate import scol
 from .opportunity import (
     apply_outdoor_feasibility,
     attach_fitzpatrick,
+    attach_personalization,
     build_daily_summary,
 )
 from .tanscore import fnum
@@ -133,6 +134,8 @@ def _filtered_payload(
     skin_type: int | None,
     min_temp: float | None,
     site: config.Site | None = None,
+    personal_mmd_j_m2: float | None = None,
+    personal_mmd_basis: str | None = None,
 ):
     run = _latest_dir(root, site)
     hourly = _read_table(run, "tan_forecast_hourly")
@@ -146,10 +149,46 @@ def _filtered_payload(
         half = apply_outdoor_feasibility(half, min_temp)
     hourly = attach_fitzpatrick(hourly, skin_type)
     half = attach_fitzpatrick(half, skin_type)
+    hourly = attach_personalization(
+        hourly, personal_mmd_j_m2=personal_mmd_j_m2, basis=personal_mmd_basis)
+    half = attach_personalization(
+        half, personal_mmd_j_m2=personal_mmd_j_m2, basis=personal_mmd_basis,
+        dose_col="tan_dose_30m_j_m2")
     daily = build_daily_summary(half)
     summary_path = run / "summary.json"
     summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
     return run, hourly, half, daily, summary
+
+
+_PERSONAL_MMD_BASES = ("MEASURED", "OBJECTIVE_ESTIMATE", "COARSE_ESTIMATE")
+
+
+def _parse_personal_mmd(personal_mmd: object,
+                        basis: object) -> tuple[float | None, str | None]:
+    """Validate dashboard/API personal-MMD inputs. Loud on misuse.
+
+    Returns (mmd_j_m2_or_None, basis_or_None). An MMD without an explicit
+    basis is rejected: an unlabeled personal fraction would imply more
+    provenance than the user supplied.
+    """
+    mmd_text = str(personal_mmd or "").strip()
+    basis_text = str(basis or "").strip()
+    if not mmd_text:
+        return None, None
+    try:
+        value = float(mmd_text)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"personal_mmd must be a number in melanogenic-effective J/m^2, "
+            f"got {mmd_text!r}") from None
+    if not np.isfinite(value) or value <= 0:
+        raise ValueError(
+            f"personal_mmd must be a positive finite dose, got {mmd_text!r}")
+    if basis_text not in _PERSONAL_MMD_BASES:
+        raise ValueError(
+            f"personal_mmd_basis must be one of {list(_PERSONAL_MMD_BASES)} "
+            f"when personal_mmd is given, got {basis_text!r}")
+    return value, basis_text
 
 
 def _ics_text(value: object) -> str:
@@ -433,7 +472,7 @@ details.debug pre{background:#f3ecdb;padding:12px;border-radius:8px;overflow:aut
 @media(max-width:640px){h1{font-size:26px}.hero{font-size:21px}.wrap{padding:18px 12px 50px}}
 </style></head><body><div class="wrap">
 <div class="top"><div><h1>Sunlight hours</h1><div class="sub" id="runline">Loading forecast…</div></div>
-<div class="controls"><label>Location <select id="locsel"><option value="">Loading…</option></select></label><label>Skin <select id="skin"><option value="">None</option><option value="1">I</option><option value="2">II</option><option value="3">III</option><option value="4">IV</option><option value="5">V</option><option value="6">VI</option></select></label>
+<div class="controls"><label>Location <select id="locsel"><option value="">Loading…</option></select></label><label>Skin <select id="skin"><option value="">None</option><option value="1">I</option><option value="2">II</option><option value="3">III</option><option value="4">IV</option><option value="5">V</option><option value="6">VI</option></select></label><label>My MMD <input id="mmd" type="number" min="1" step="1" placeholder="J/m²" title="Measured/estimated personal MMD in melanogenic-effective J/m²" style="width:80px"></label><label>basis <select id="mmdbasis" title="Provenance of the MMD value"><option value="">—</option><option value="MEASURED">MEASURED</option><option value="OBJECTIVE_ESTIMATE">OBJECTIVE_ESTIMATE</option><option value="COARSE_ESTIMATE">COARSE_ESTIMATE</option></select></label>
 <label>Min °F <input id="mintemp" type="number" min="32" max="80" step="1" value="50" style="width:64px"></label>
 <button onclick="loadData()">Apply</button><button class="primary" onclick="refreshData()">Refresh forecast</button><a id="cal" class="btn" href="/api/calendar.ics" title="Subscribe to the best-window calendar">Calendar</a><button onclick="exportVisibleCsv()">Export CSV</button></div></div>
 <div id="msg" class="status"></div>
@@ -460,11 +499,11 @@ function winStr(a,b){return a?`${hhmm(a)} – ${b?hhmm(b):'…'}`:'—';}
 let DATA=null,SEL=null,LOC="";
 async function loadLocs(){try{let j=null;for(const u of ['./locations.json','/api/locations']){try{const r=await fetch(u);if(r.ok){j=await r.json();break;}}catch(e){}}const dd=document.getElementById("locsel");if(!dd||!j)return;dd.innerHTML=(j.locations||[]).map(l=>`<option value="${esc(l.slug)}"${(l.current||(!l.url&&l.default))?" selected":""}${l.url?` data-url="${esc(l.url)}"`:''}>${esc(l.name)}</option>`).join("");LOC=dd.value;dd.addEventListener("change",()=>{const o=dd.selectedOptions[0];if(o&&o.dataset.url){location.href=o.dataset.url;return;}LOC=dd.value;SEL=null;loadData();});}catch(e){}}
 async function init(){await loadLocs();await loadData();}
-async function loadData(){show('Loading…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch(`/api/data?skin_type=${s}&min_temp=${m}&location=${encodeURIComponent(LOC)}`);const j=await r.json();if(!r.ok)throw new Error(j.detail||'Request failed');DATA=j;hide();render();}catch(e){show('Could not load forecast: '+e.message+'. Check the server log, then Refresh.','error');}}
-async function refreshData(){show('Calling live Open-Meteo and CAMS, rebuilding scores (takes minutes)…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch(`/api/refresh?skin_type=${s}&min_temp=${m}&location=${encodeURIComponent(LOC)}`,{method:'POST'});const j=await r.json();if(!r.ok)throw new Error(j.detail||'Refresh failed');show('Refresh complete.','info');await loadData();}catch(e){show('Refresh failed: '+e.message,'error');}}
+async function loadData(){show('Loading…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value,p=document.getElementById('mmd').value,b=document.getElementById('mmdbasis').value;const r=await fetch(`/api/data?skin_type=${s}&min_temp=${m}&personal_mmd=${p}&personal_mmd_basis=${b}&location=${encodeURIComponent(LOC)}`);const j=await r.json();if(!r.ok)throw new Error(j.detail||'Request failed');DATA=j;hide();render();}catch(e){show('Could not load forecast: '+e.message+'. Check the server log, then Refresh.','error');}}
+async function refreshData(){show('Calling live Open-Meteo and CAMS, rebuilding scores (takes minutes)…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value,p=document.getElementById('mmd').value,b=document.getElementById('mmdbasis').value;const r=await fetch(`/api/refresh?skin_type=${s}&min_temp=${m}&personal_mmd=${p}&personal_mmd_basis=${b}&location=${encodeURIComponent(LOC)}`,{method:'POST'});const j=await r.json();if(!r.ok)throw new Error(j.detail||'Refresh failed');show('Refresh complete.','info');await loadData();}catch(e){show('Refresh failed: '+e.message,'error');}}
 function exportVisibleCsv(){if(!DATA||!DATA.daily||!DATA.daily.length){show('No forecast data yet.','error');return;}const q=v=>(/[,"\n]/.test(String(v??''))?'"'+String(v??'').replace(/"/g,'""')+'"':String(v??''));const dl=(name,rows)=>{const csv=rows.map(r=>r.map(q).join(',')).join('\n');const b=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);};const hours=DATA.hourly||[],half=DATA.half_hour||[];const hHead=['time','uv_index','uv_index_clear_sky','predicted_uva_wm2','predicted_uvb_wm2','melanogenic_effective_irradiance_wm2','erythemal_irradiance_wm2','pigment_darkening_effective_irradiance','temperature_2m','apparent_temperature','wind_speed_10m','wind_gusts_10m','cloud_cover','precipitation_probability','direct_normal_irradiance_instant','overall_tan_opportunity_0_100','tan_score_absolute_0_100','legacy_absolute_tan_score_55_30_15','local_tan_score_0_100','atmospheric_quality_percentile_0_100','tan_forecast_confidence_0_100','tan_dose_1h_j_m2','sed_1h','uva_dose_1h_j_m2','uvb_dose_1h_j_m2','pigment_darkening_dose_1h_j_m2','uvi_openmeteo','uvi_cams','uvi_difference_percent','spectral_tier','tan_score_model_version','solar_elevation_deg','sun_compass','outdoor_block_reason'];dl(`sunstack-all-hourly.csv`,[hHead].concat(hours.map(x=>hHead.map(k=>x[k]))));const qHead=['time','uv_index','predicted_uva_wm2','melanogenic_effective_irradiance_wm2','tan_dose_30m_j_m2','sed_30m','pigment_darkening_dose_30m_j_m2','overall_tan_opportunity_0_100','subhour_source','spectral_tier'];dl(`sunstack-all-30min.csv`,[qHead].concat(half.map(x=>qHead.map(k=>x[k]))));const dall=DATA.daily;if(dall.length){const dHead=['date','day_status','day_overall_peak_0_100','peak_uv_index','peak_temperature_f','day_low_temperature_f','day_high_temperature_f','day_low_feels_like_f','day_high_feels_like_f','day_peak_wind_mph','day_peak_gust_mph','day_absolute_peak_0_100','day_local_peak_0_100','best_window_start','best_window_end','best_hour_start','best_hour_score_0_100','tan_dose_best_window_j_m2','sed_best_window','tan_dose_day_j_m2','sed_day_total','uva_dose_day_j_m2','uvb_dose_day_j_m2','blocked_half_hours'];dl(`sunstack-all-days.csv`,[dHead].concat(dall.map(d=>dHead.map(k=>d[k]))));}show(`Exported all ${dall.length} days (${hours.length} hourly + ${half.length} 30-min rows).`,'info');}
 function show(t,c){const m=document.getElementById('msg');m.textContent=t;m.className='status show '+c;}function hide(){document.getElementById('msg').className='status';}
-function renderDoses(){const d=DATA.daily.find(x=>x.date===SEL);const el=document.getElementById('doserow');if(!el||!d){return;}const half=rowsFor(DATA.half_hour,SEL);const pkIp=Math.max.apply(null,half.map(x=>+x.pigment_darkening_dose_30m_j_m2).filter(Number.isFinite).concat([-Infinity]));el.innerHTML=`TanDose peak 30 min <b>${f1(d.best_30m_tan_dose_j_m2)} J/m² mel</b> (${d.best_30m_start?hhmm(d.best_30m_start):'—'}) · best hour <b>${f1(d.best_hour_tan_dose_j_m2)} J/m²</b> (${d.best_hour_start?hhmm(d.best_hour_start):'—'}) · best window <b>${f1(d.tan_dose_best_window_j_m2)} J/m²</b> · today <b>${f1(d.tan_dose_day_j_m2)} J/m²</b> (${f1(d.tan_dose_day_reference_minutes)} ref-min) &nbsp;|&nbsp; SED peak 30m ${f2(d.best_30m_sed)} · window ${f2(d.sed_best_window)} · today ${f2(d.sed_day_total)} &nbsp;|&nbsp; UVA day ${f1(d.uva_dose_day_j_m2)} J/m² · UVB day ${f2(d.uvb_dose_day_j_m2)} J/m² &nbsp;|&nbsp; Visible-Darkening Potential (peak 30m) ${f1(pkIp===-Infinity?null:pkIp)} J/m² existing-pigment (not new melanin)`;const pv=document.getElementById('provenance');if(pv){const s=DATA.summary||{};pv.textContent=`Model ${s.tan_score_model_version||'legacy-55-30-15 (pre-v4 data)'} · spectrum tier ${s.photobiology_action_spectrum_tier||(DATA.hourly[0]||{}).photobiology_action_spectrum_tier||'pre-v4 legacy'} · spectral ${(DATA.hourly[0]||{}).spectral_backend||s.spectral_backend||'pre-v4 broadband'} (${(DATA.hourly[0]||{}).spectral_tier||'pre-v4'}) · global ref ${s.global_reference_version||'pre-v4'} (${s.global_reference_e_mel_wm2!=null?s.global_reference_e_mel_wm2+' W/m²':'n/a'}) · CAMS ${s.cams_cycle||'?'} · UVI agree ${f1((DATA.hourly[0]||{}).uvi_difference_percent)} · calib ${(DATA.hourly[0]||{}).tan_calibration_tier||s.calibration_tier||'?'}`;}}
+function renderDoses(){const d=DATA.daily.find(x=>x.date===SEL);const el=document.getElementById('doserow');if(!el||!d){return;}const half=rowsFor(DATA.half_hour,SEL);const pkIpVals=half.map(x=>x.pigment_darkening_dose_30m_j_m2).filter(v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(+v)).map(Number);const pkIp=pkIpVals.length?Math.max.apply(null,pkIpVals):null;const myFVals=half.map(x=>x.personal_mmd_fraction).filter(v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(+v)).map(Number);const myBest=myFVals.length?Math.max.apply(null,myFVals):null;const myBasis=(half.map(x=>x.personalization_basis).find(v=>v&&v!=='not personalized'))||'';el.innerHTML=`TanDose peak 30 min <b>${f1(d.best_30m_tan_dose_j_m2)} J/m² mel</b> (${d.best_30m_start?hhmm(d.best_30m_start):'—'}) · best hour <b>${f1(d.best_hour_tan_dose_j_m2)} J/m²</b> (${d.best_hour_start?hhmm(d.best_hour_start):'—'}) · best window <b>${f1(d.tan_dose_best_window_j_m2)} J/m²</b> · today <b>${f1(d.tan_dose_day_j_m2)} J/m²</b> (${f1(d.tan_dose_day_reference_minutes)} ref-min) &nbsp;|&nbsp; SED peak 30m ${f2(d.best_30m_sed)} · window ${f2(d.sed_best_window)} · today ${f2(d.sed_day_total)} &nbsp;|&nbsp; UVA day ${f1(d.uva_dose_day_j_m2)} J/m² · UVB day ${f2(d.uvb_dose_day_j_m2)} J/m² &nbsp;|&nbsp; Visible-Darkening Potential (peak 30m) ${f1(pkIp)} J/m² existing-pigment (not new melanin)${myBest==null?'':' &nbsp;|&nbsp; My MMD fraction (day max) <b>'+myBest.toFixed(2)+'</b>'+(myBasis?' ('+esc(myBasis)+')':'')}`;const pv=document.getElementById('provenance');if(pv){const s=DATA.summary||{};pv.textContent=`Model ${s.tan_score_model_version||'legacy-55-30-15 (pre-v4 data)'} · spectrum tier ${s.photobiology_action_spectrum_tier||(DATA.hourly[0]||{}).photobiology_action_spectrum_tier||'pre-v4 legacy'} · spectral ${(DATA.hourly[0]||{}).spectral_backend||s.spectral_backend||'pre-v4 broadband'} (${(DATA.hourly[0]||{}).spectral_tier||'pre-v4'}) · global ref ${s.global_reference_version||'pre-v4'} (${s.global_reference_e_mel_wm2!=null?s.global_reference_e_mel_wm2+' W/m²':'n/a'}) · CAMS ${s.cams_cycle||'?'} · UVI agree ${f1((DATA.hourly[0]||{}).uvi_difference_percent)} · calib ${(DATA.hourly[0]||{}).tan_calibration_tier||s.calibration_tier||'?'}`;}}
 function drawCharts(){const hours=rowsFor(DATA.hourly,SEL);if(!hours.length)return;const line=(id,vals,color,fill)=>{const c=document.getElementById(id);if(!c)return;const x=c.getContext('2d');const W=c.width,H=c.height;x.clearRect(0,0,W,H);const v=vals.map(z=>+z);const m=Math.max(...v.filter(Number.isFinite),1e-9);x.strokeStyle='#e2d7bf';x.beginPath();x.moveTo(0,H-1);x.lineTo(W,H-1);x.stroke();x.strokeStyle=color;x.lineWidth=2;x.beginPath();v.forEach((z,i)=>{const px=i/(Math.max(v.length-1,1))*W,py=H-4-(Number.isFinite(z)?z/m:0)*(H-10);i?x.lineTo(px,py):x.moveTo(px,py);});x.stroke();if(fill){x.lineTo(W,H);x.lineTo(0,H);x.closePath();x.globalAlpha=0.15;x.fillStyle=color;x.fill();x.globalAlpha=1;}};line('chartScore',hours.map(z=>z.tan_score_absolute_0_100),'#b25e00',true);let acc=0;const cumDose=hours.map(z=>{const t=+z.tan_dose_1h_j_m2;acc+=Number.isFinite(t)?t:0;return acc;});line('chartDose',cumDose,'#2e7d46',true);let accS=0;const cumSed=hours.map(z=>{const t=+z.sed_1h;accS+=Number.isFinite(t)?t:0;return accS;});line('chartSed',cumSed,'#7b4bd6',true);}
 function bestDay(){const d=(DATA.daily||[]).filter(x=>+x.day_overall_peak_0_100>0);d.sort((a,b)=>b.day_overall_peak_0_100-a.day_overall_peak_0_100);return d[0]||DATA.daily[0];}
 function render(){if(!DATA||!DATA.daily||!DATA.daily.length){show('No forecast data yet. Press Refresh forecast.','error');return;}
@@ -536,12 +575,18 @@ def create_app(root: Path) -> FastAPI:
         skin_type: str = Query(default=""),
         min_temp: float | None = Query(default=None),
         location: str = Query(default=""),
+        personal_mmd: str = Query(default=""),
+        personal_mmd_basis: str = Query(default=""),
     ):
+        try:
+            mmd, basis = _parse_personal_mmd(personal_mmd, personal_mmd_basis)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         try:
             st = int(skin_type) if skin_type else None
             site = _resolve_site(location or None)
             run, hourly, half, daily, summary = _filtered_payload(
-                root, st, min_temp, site
+                root, st, min_temp, site, mmd, basis
             )
             # Keep the UI useful: daylight-ish hours only, but source files retain everything.
             ht = pd.to_datetime(scol(hourly, "time"))
@@ -574,7 +619,13 @@ def create_app(root: Path) -> FastAPI:
         skin_type: str = Query(default=""),
         min_temp: float | None = Query(default=None),
         location: str = Query(default=""),
+        personal_mmd: str = Query(default=""),
+        personal_mmd_basis: str = Query(default=""),
     ):
+        try:
+            mmd, basis = _parse_personal_mmd(personal_mmd, personal_mmd_basis)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         try:
             from .cli import run_live
 
@@ -587,6 +638,8 @@ def create_app(root: Path) -> FastAPI:
                 strict=True,
                 skin_type=st,
                 min_temp_f=min_temp,
+                personal_mmd_j_m2=mmd,
+                personal_mmd_basis=basis,
                 fresh=True,
                 site=site,
             )

@@ -83,7 +83,7 @@ A `uv_input_disagree` flag fires when broadband and UV inputs describe different
 
 Dashboard and CLI accept optional Fitzpatrick I–VI (`uv run sunstack run --skin-type 2`, or the UI selector). It is **qualitative personal-response/risk context only** — it never multiplies environmental TanScore, because measured MED/MMD overlaps substantially within Fitzpatrick groups.
 
-For a measured or defensibly estimated personal MMD in melanogenic-effective J/m², `uv run sunstack run --personal-mmd 12000 --personal-mmd-basis MEASURED` adds `personal_mmd_fraction` (TanDose ÷ personal MMD) with its provenance label — still without touching environmental physics. Dashboard/API personalization inputs are a follow-up; CLI covers runs and summaries today.
+For a measured or defensibly estimated personal MMD in melanogenic-effective J/m², `uv run sunstack run --personal-mmd 12000 --personal-mmd-basis MEASURED` adds `personal_mmd_fraction` (TanDose ÷ personal MMD) with its provenance label — still without touching environmental physics. The dashboard (My MMD + basis inputs) and `/api/data` + `/api/refresh` (`personal_mmd`/`personal_mmd_basis` query params, 400 on unlabeled or invalid values) expose the same fractions; the shared calendar stays environmental-only.
 
 ## Quick start
 

@@ -901,3 +901,76 @@ def test_personal_mmd_fraction_on_live_shaped_frame():
         a = out[col].to_numpy()
         b = h[col].to_numpy()
         assert bool(((a == b) | (pd.isna(a) & pd.isna(b))).all()), col
+
+
+def test_parse_personal_mmd_is_loud():
+    import pytest
+
+    from sunstack.ui import _parse_personal_mmd
+
+    assert _parse_personal_mmd("", "") == (None, None)
+    assert _parse_personal_mmd(None, None) == (None, None)
+    assert _parse_personal_mmd("12000", "MEASURED") == (12000.0, "MEASURED")
+    with pytest.raises(ValueError, match="provenance|basis"):
+        _parse_personal_mmd("12000", "")
+    with pytest.raises(ValueError, match="one of"):
+        _parse_personal_mmd("12000", "FOLKLORE")
+    with pytest.raises(ValueError, match="number"):
+        _parse_personal_mmd("a lot", "MEASURED")
+    for bad in ("0", "-5", "nan", "inf"):
+        with pytest.raises(ValueError, match="positive finite"):
+            _parse_personal_mmd(bad, "MEASURED")
+
+
+def _payload_fixture(tmp_path):
+    latest = tmp_path / "latest"
+    (latest / "tables").mkdir(parents=True)
+    dts = pd.date_range("2026-09-15 11:00", periods=6, freq="30min")
+    hourly = pd.DataFrame({
+        "time": ["2026-09-15T11:00", "2026-09-15T12:00", "2026-09-15T13:00"],
+        "temperature_2m": [80.0, 82.0, 81.0],
+        "overall_tan_opportunity_0_100": [40.0, 60.0, 50.0],
+        "tan_score_absolute_0_100": [35.0, 45.0, 40.0],
+        "local_tan_score_0_100": [80.0, 85.0, 82.0],
+        "atmospheric_quality_percentile_0_100": [60.0, 65.0, 62.0],
+        "tan_forecast_confidence_0_100": [50.0, 55.0, 52.0],
+        "tan_dose_1h_j_m2": [1000.0, 2000.0, 1500.0],
+        "melanogenic_effective_irradiance_wm2": [0.4, 0.5, 0.45],
+    })
+    half = pd.DataFrame({
+        "dt": dts,
+        "time": dts.strftime("%Y-%m-%dT%H:%M"),
+        "temperature_2m": [80.0] * 6,
+        "overall_tan_opportunity_0_100": [40.0, 45.0, 60.0, 58.0, 50.0, 48.0],
+        "tan_score_absolute_0_100": [35.0, 38.0, 45.0, 44.0, 40.0, 39.0],
+        "local_tan_score_0_100": [80.0] * 6,
+        "atmospheric_quality_percentile_0_100": [60.0] * 6,
+        "tan_forecast_confidence_0_100": [50.0] * 6,
+        "tan_dose_30m_j_m2": [500.0, 800.0, 1000.0, 900.0, 700.0, 600.0],
+        "melanogenic_effective_irradiance_wm2": [0.4] * 6,
+        "apparent_temperature": [80.0] * 6,
+        "wind_speed_10m": [5.0] * 6,
+        "wind_gusts_10m": [6.0] * 6,
+        "outdoor_blocked": [False] * 6,
+    })
+    hourly.to_parquet(latest / "tables" / "tan_forecast_hourly.parquet", index=False)
+    half.to_parquet(latest / "tables" / "tan_forecast_30min.parquet", index=False)
+    (latest / "summary.json").write_text(
+        '{"run": "mmdtest", "created_at": "2026-09-15T00:00:00-04:00"}')
+    return tmp_path
+
+
+def test_filtered_payload_personal_mmd(tmp_path):
+    from sunstack.ui import _filtered_payload
+
+    root = _payload_fixture(tmp_path)
+    _, hourly, half, _, _ = _filtered_payload(root, None, None, None, 2000.0, "MEASURED")
+    assert (hourly["personal_mmd_fraction"].to_numpy() ==
+            np.array([0.5, 1.0, 0.75])).all()
+    assert (hourly["personalization_basis"] == "MEASURED").all()
+    assert (half["personal_mmd_fraction"].to_numpy()[:3] ==
+            np.array([0.25, 0.4, 0.5])).all()
+    _, plain_hourly, _, _, _ = _filtered_payload(root, None, None, None)
+    assert plain_hourly["personal_mmd_fraction"].isna().all()
+    assert (plain_hourly["tan_dose_1h_j_m2"].to_numpy() ==
+            hourly["tan_dose_1h_j_m2"].to_numpy()).all()
