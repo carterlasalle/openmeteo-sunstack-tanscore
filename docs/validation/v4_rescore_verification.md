@@ -23,3 +23,13 @@ Artifacts (scratch, not committed): /tmp/v4_rescore/pacific-palisades
 ## Coverage (pre-existing data-availability behavior, unchanged by v4)
 
 Local scores non-null: 1.000 (rebuilt v4 reference); atmosphere: 0.583; confidence: 0.500; CAMS UVI present: 0.366 (5-day CAMS horizon vs 14-day forecast).
+
+## Degraded-mode rescore, 2026-09-23 (no direct-CAMS artifact)
+
+South Bend live tables (336 hourly / 671 half-hour / 14 days) rescore end
+to end with zero validation errors after the CAMS-tolerant rescore fix; the
+report line carries "direct CAMS artifact absent (degraded run): rescoring
+without direct CAMS". v4 Absolute mean/max 9.0/47.8 vs legacy 9.3/43.2,
+Spearman 0.989; daily TanDose 2045–15761 J/m² mel, daily SED 3.90–30.75, all
+complete with coverage 1.000; 13 daily + 671 interval calendar events; local
+scores 1.000, CAMS UVI present 0.000.
