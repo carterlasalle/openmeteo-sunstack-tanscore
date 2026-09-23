@@ -16,6 +16,12 @@ Canonical column: `tan_dose_melanogenic_j_m2`. Also exposed:
 `tan_dose_15m_j_m2`, `tan_dose_30m_j_m2`, `tan_dose_1h_j_m2`,
 `tan_dose_best_window_j_m2`, `tan_dose_day_j_m2`.
 
+Column mapping: the `integrate_tandose` primitive returns the canonical
+`tan_dose_melanogenic_j_m2` key; forecast frames carry the suffixed interval
+(`tan_dose_15m/30m/1h_j_m2`), window (`tan_dose_best_window_j_m2`), and daily
+(`tan_dose_day_j_m2`) variants of the same melanogenic-effective J/m^2
+quantity.
+
 ## Integration rules
 
 - Trapezoidal time integration over **actual timestamps**, never

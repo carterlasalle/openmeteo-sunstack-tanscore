@@ -248,3 +248,20 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   15.6-22.5 kJ mel with complete coverage; 14 daily + 671 interval ICS
   events. Local scores 100% non-null against the rebuilt v4 reference.
   Report: `docs/validation/v4_rescore_verification.md` (artifacts in scratch).
+
+## 2026-09-23 (follow-up 3) — audit-driven scoring tests
+
+- New `tests/test_v4_scoring.py` (7 tests) pins previously untested
+  production behavior offline: v4 Absolute equals 100*E_mel/E_ref with the
+  legacy value present-but-unused; all 16 direct CAMS fields propagate with
+  real sanitized column names (UVBED->erythemal, CAMS UVI = 40x,
+  transmission, downward-UV differentiation to ~0.25 W/m^2); strong
+  CAMS/Open-Meteo disagreement discounts confidence 80->52 while E_mel and
+  Absolute stay bit-identical; window selection is dose-invariant (photon
+  scaling x10 selects identical windows, doses x10); canonical dose columns
+  exist at primitive/interval/window/day levels; SED gaps split with
+  complete=false; TanResponse baseline returns cumulative dose only.
+- Window-ranking semantics confirmed and documented: eligible groups (within
+  12 of peak opportunity) prefer sustained length; TanDose never enters
+  ranking. Fixed two of my own test expectations (hourly UVI-6 SED is 5.4,
+  not 2.7; eligibility threshold is inclusive).
