@@ -53,15 +53,18 @@ outdoor-feasibility rule; snow albedo still raises the radiation quantities.
 Tier C distributes predicted broadband UVA/UVB uniformly within 315–400 /
 280–315 nm. Real solar spectra do not look like that — ozone removes almost
 all sub-300 nm photons, concentrating UVB energy toward 305–315 nm where
-melanogenesis effectiveness differs steeply from the band mean. On the live
-South Bend run, 68% of Tier-C E_mel comes from the UVB term at midday
-(measured UVA/UVB energy ratio ≈ 52:1), so the uniform-band shape is the
-dominant Tier-C uncertainty: it plausibly overstates E_mel where UVB is
-strong and matters less as the sun drops. A live-data symptom consistent
-with this (E_mel/E_ery falling 5.7 → 1.9 from SZA 30–95°) is recorded as an
-OPEN question in the research notes with its confounders — it is not used to
-retune the weights, which would be hand-tuning against a confounded signal.
-Tier B (libRadtran-trained spectral shape, held-out validation) resolves it.
+melanogenesis effectiveness differs steeply from the band mean. This shape
+error is real but, on current evidence, SECONDARY: Tier C run on measured
+POWER broadband (no ML, no forecast) yields an E_mel/E_ery ratio flat at
+~7.4 across SZA 0–80° (n≈30k), and the ML mapping itself holds ≤8% bias to
+SZA 80 on POWER inputs. The live-run ratio fall (5.7 → 1.9) is instead
+dominated by the denominator: archived Open-Meteo UVI runs +51% above NASA
+POWER truth at SZA 50–65° and +175% at 65–80° (n≈5k/2.7k), inflating E_ery
+exactly where the ratio falls — corroborated by the independent BSRN finding
+of +29% NWP broadband brightness. POWER truth is itself modeled, so this
+attribution is corroborating rather than definitive; Tier B (libRadtran-
+trained spectral shape, held-out validation) must reproduce the SZA-ratio
+curve against spectra, not just broadband.
 
 ## Sub-hour broadband corrections (not scoring weights)
 

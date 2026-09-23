@@ -589,3 +589,17 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   UVI low-sun floors, twilight noise (weak-sun E_mel spans 0.006-0.18).
   Deliberately NOT used to retune weights. Resolution: Tier-B spectral shape
   with held-out validation, which must reproduce the SZA-ratio curve.
+
+## 2026-09-23 (follow-up 43) — SZA-ratio fall attributed, Tier-C exonerated
+
+- Three-way disentangling of the E_mel/E_ery SZA fall, all on committed data:
+  (1) Tier C on measured POWER broadband gives a FLAT ratio ~7.4 across SZA
+  0-80° (Spearman +0.94 with SZA) — the uniform-band shape does not produce
+  the fall; (2) ML mapping skill on POWER inputs holds UVA +1% and UVB
+  +3-8% flat to SZA 80 (only flipping -5% past 80) — the estimator does not
+  produce it either; (3) archived Open-Meteo UVI vs POWER truth runs +5.9%
+  at 30-50°, +51% at 50-65°, +175% at 65-80° — the E_ery denominator is
+  inflated exactly where the live ratio falls. Primary driver: forecast-UVI
+  high-sun bias (corroborated by the +29% BSRN NWP-brightness finding);
+  POWER truth is itself modeled, so corroborating, not definitive. No
+  weights were touched at any point in this investigation.
