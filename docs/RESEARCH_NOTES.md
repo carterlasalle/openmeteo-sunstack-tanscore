@@ -480,3 +480,11 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   reports byte-identical (window-dose correction already captured in the
   regenerated rescore doc); suite 113 passing; no caller breakage from the
   `window_dose` signature extension or broadened dose-failure handlers.
+
+## 2026-09-23 (follow-up 20) — merged CSV export executed, no new reviews
+
+- Upstream's all-days CSV export merged with the v4-extended column sets and
+  executed headlessly against both live-v4 and simulated pre-v4 payloads: 3
+  CSVs (196 hourly + 392 half-hour + 14 day rows), v4 headers present, and
+  missing keys render as blanks (never "undefined"). No new bot comments
+  since the review round; branch mergeable clean.
