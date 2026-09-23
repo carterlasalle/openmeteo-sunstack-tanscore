@@ -1561,5 +1561,6 @@ def test_dose_row_marks_partial_window_and_day_doses():
 
     assert "constpc=v=>v===false?'(partial)':''" in HTML.replace(" ", "")
     for flag in ("tan_dose_best_window_complete", "tan_dose_complete",
+                 "best_hour_tan_dose_complete",
                  "sed_best_window_complete", "sed_complete"):
         assert "pc(d." + flag + ")" in HTML.replace(" ", ""), flag
