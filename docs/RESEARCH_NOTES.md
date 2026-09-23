@@ -520,3 +520,13 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   the repo: the melanogenesis spectrum loads with the released checksum
   (0eccdc6ff267) and evaluates E_mel. The P1 install failure is closed, not
   just addressed.
+
+## 2026-09-23 (follow-up 30) — full dashboard render proven headlessly
+
+- Beyond single-function harnesses: the entire `render()` path (hero, day
+  strip, hourly + 30-min tables, sun figure, dose row, provenance, debug
+  dump) now executes under node with a stub DOM against both the live v4
+  payload and the simulated pre-v4 payload. All seven render targets
+  populate; no throws; both payloads select the same best day (shared score
+  columns, as expected). Method: full page script minus auto-`init()`,
+  chainable element stubs (`appendChild`/`createElementNS` return elements).
