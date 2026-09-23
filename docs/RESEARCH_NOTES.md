@@ -688,3 +688,13 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   byte-identical to the rebuild output; manifest value/version untouched,
   only `code_git_sha` provenance advanced (refreshed to HEAD, sole consumer
   is the rebuild script itself).
+
+- Addendum (doctor gate semantics re-probed, pipefail lesson): `doctor`
+  returns False -> CLI exit 2 on any failed check, and the default
+  `REQUIRE_DIRECT_CAMS=1` keeps no-credential environments failing loudly
+  (explicit `--allow-degraded` opts out; the empty-string edge keeps the
+  secure/loud side, unlike the canonical-spectrum var where it broke runs).
+  Canonical-strict names the defect precisely
+  (`...but parrish_delayed_melanogenesis tier is 'provisional'`). Caution:
+  `sunstack doctor ... | tail` always reports EXIT 0 — `$?` reads `tail`,
+  not sunstack. Measure exits without pipes.
