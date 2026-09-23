@@ -2,73 +2,74 @@
 
 ## NASA POWER held-out (year-split) UVA/UVB estimator skill
 
-Rows: 111761; split year: 2024.
+Rows: 108956; split year: 2024.
 
 ```json
 {
-  "rows": 111761,
+  "rows": 108956,
   "validation_split_year": 2024,
   "uva": {
-    "mae": 0.42540930440997204,
-    "rmse": 0.6704849781593735,
-    "r2": 0.9984897972027242,
-    "median_absolute_error": 0.2542877526601899
+    "mae": 0.32672572126342153,
+    "rmse": 0.483055263348548,
+    "r2": 0.9988747231151854,
+    "median_absolute_error": 0.21654770289529424
   },
   "uvb": {
-    "mae": 0.030920149270148294,
-    "rmse": 0.05370308516066549,
-    "r2": 0.9900210082487843,
-    "median_absolute_error": 0.014291591724237107
+    "mae": 0.02374961585268027,
+    "rmse": 0.04105674446319054,
+    "r2": 0.9894220785132187,
+    "median_absolute_error": 0.010954301020847185
   }
 }
 ```
 
 ### Holdout UVA error by SZA / cloud / season / AOD / ozone
 
-(post-2024 holdout, n=12240; AOD340 median 0.208; ozone median 303 DU)
+(post-2024 holdout, n=12024; AOD340 median 0.182; ozone median 321 DU)
 
 | stratum | n | MAE | RMSE | bias |
 |---|---|---|---|---|
-| SZA=0-30 | 714 | 0.9446 | 1.2867 | 0.7712 |
-| SZA=30-50 | 1432 | 0.5823 | 0.7796 | 0.3299 |
-| SZA=50-65 | 1683 | 0.4166 | 0.5685 | 0.2191 |
-| SZA=65-80 | 1391 | 0.2312 | 0.3108 | 0.0927 |
-| SZA=80-95 | 7020 | 0.531 | 0.5634 | 0.5217 |
-| cloud=clear 0-20 | 7007 | 0.5246 | 0.6654 | 0.4549 |
-| cloud=partly 20-60 | 2612 | 0.4859 | 0.5944 | 0.385 |
-| cloud=cloudy 60-100 | 2621 | 0.5011 | 0.5971 | 0.3777 |
-| season=DJF | 3576 | 0.4461 | 0.5079 | 0.3421 |
-| season=MAM | 4272 | 0.5616 | 0.7486 | 0.4803 |
-| season=JJA | 2208 | 0.553 | 0.6704 | 0.4838 |
-| season=SON | 2184 | 0.4776 | 0.5458 | 0.3843 |
-| AOD340=low | 4380 | 0.4655 | 0.541 | 0.3863 |
-| AOD340=high | 4379 | 0.5077 | 0.6075 | 0.4093 |
-| ozone=low | 4382 | 0.4875 | 0.5673 | 0.4147 |
-| ozone=high | 4377 | 0.4857 | 0.583 | 0.3809 |
+| SZA=0-30 | 440 | 0.6809 | 0.9027 | 0.3626 |
+| SZA=30-50 | 1290 | 0.4733 | 0.6256 | 0.2526 |
+| SZA=50-65 | 1576 | 0.3417 | 0.4562 | 0.1465 |
+| SZA=65-80 | 1706 | 0.2288 | 0.3082 | 0.0638 |
+| SZA=80-95 | 7012 | 0.512 | 0.5427 | 0.5038 |
+| cloud=clear 0-20 | 2909 | 0.4553 | 0.53 | 0.3839 |
+| cloud=partly 20-60 | 2242 | 0.4368 | 0.5154 | 0.3295 |
+| cloud=cloudy 60-100 | 6873 | 0.4547 | 0.5402 | 0.3641 |
+| season=DJF | 3576 | 0.4469 | 0.502 | 0.3652 |
+| season=MAM | 4056 | 0.4556 | 0.5558 | 0.3699 |
+| season=JJA | 2208 | 0.4587 | 0.5626 | 0.3421 |
+| season=SON | 2184 | 0.4443 | 0.5089 | 0.3644 |
+| AOD340=low | 4382 | 0.4374 | 0.4968 | 0.3587 |
+| AOD340=high | 4377 | 0.4425 | 0.5319 | 0.3405 |
+| ozone=low | 4380 | 0.4543 | 0.532 | 0.3609 |
+| ozone=high | 4379 | 0.4256 | 0.4965 | 0.3382 |
 
 ### Holdout UVB error by SZA / cloud / season / AOD / ozone
 
-(post-2024 holdout, n=12240; AOD340 median 0.208; ozone median 303 DU)
+(post-2024 holdout, n=12024; AOD340 median 0.182; ozone median 321 DU)
 
 | stratum | n | MAE | RMSE | bias |
 |---|---|---|---|---|
-| SZA=0-30 | 714 | 0.0728 | 0.1019 | 0.0461 |
-| SZA=30-50 | 1432 | 0.0495 | 0.069 | 0.0269 |
-| SZA=50-65 | 1683 | 0.0295 | 0.0426 | 0.0139 |
-| SZA=65-80 | 1391 | 0.0098 | 0.0142 | 0.0026 |
-| SZA=80-95 | 7020 | 0.0017 | 0.0024 | 0.0014 |
-| cloud=clear 0-20 | 7007 | 0.0172 | 0.0418 | 0.01 |
-| cloud=partly 20-60 | 2612 | 0.0156 | 0.0341 | 0.0078 |
-| cloud=cloudy 60-100 | 2621 | 0.014 | 0.0297 | 0.0068 |
-| season=DJF | 3576 | 0.0096 | 0.0212 | 0.0025 |
-| season=MAM | 4272 | 0.0259 | 0.0559 | 0.0179 |
-| season=JJA | 2208 | 0.0151 | 0.0305 | 0.0077 |
-| season=SON | 2184 | 0.0089 | 0.0162 | 0.0027 |
-| AOD340=low | 4380 | 0.0104 | 0.0216 | 0.0041 |
-| AOD340=high | 4379 | 0.012 | 0.0245 | 0.0032 |
-| ozone=low | 4382 | 0.0094 | 0.0187 | 0.0046 |
-| ozone=high | 4377 | 0.013 | 0.0267 | 0.0027 |
+| SZA=0-30 | 440 | 0.0511 | 0.0695 | 0.0213 |
+| SZA=30-50 | 1290 | 0.042 | 0.0618 | 0.0119 |
+| SZA=50-65 | 1576 | 0.0272 | 0.0392 | 0.0125 |
+| SZA=65-80 | 1706 | 0.0099 | 0.0148 | 0.0031 |
+| SZA=80-95 | 7012 | 0.0015 | 0.0022 | 0.0012 |
+| cloud=clear 0-20 | 2909 | 0.0143 | 0.0347 | 0.0062 |
+| cloud=partly 20-60 | 2242 | 0.0135 | 0.0321 | 0.0038 |
+| cloud=cloudy 60-100 | 6873 | 0.0109 | 0.0243 | 0.0046 |
+| season=DJF | 3576 | 0.0077 | 0.0179 | 0.0039 |
+| season=MAM | 4056 | 0.0186 | 0.0415 | 0.0088 |
+| season=JJA | 2208 | 0.0119 | 0.0234 | 0.0022 |
+| season=SON | 2184 | 0.008 | 0.0158 | 0.0015 |
+| AOD340=low | 4382 | 0.0087 | 0.0186 | 0.0022 |
+| AOD340=high | 4377 | 0.0103 | 0.0217 | 0.0023 |
+| ozone=low | 4380 | 0.0091 | 0.0178 | 0.003 |
+| ozone=high | 4379 | 0.0099 | 0.0225 | 0.0015 |
 
+<!-- refreshed 2026-09-23: POWER holdout section regenerated against the retrained bundle (rows 108956); CAMS-closure and POWER-bias sections below are retained evidence from a CAMS-bearing run, not reproducible without ADS credentials -->
 ## CAMS UVBED vs Open-Meteo UVI (erythemal closure)
 
 CAMS UVBED field: `cams_uv_biologically_effective_dose` (dose rate, W/m^2 erythemal); CAMS UVI = 40 * UVBED; Open-Meteo `uv_index`; n_overlap_daylight=51.
