@@ -635,3 +635,29 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   MMD-bearing payloads: all seven render targets populate, no unrendered
   values leak, three CSVs emit per payload. Covers UI edits since the last
   battery (MMD controls/segment, merged export, provenance fallbacks).
+
+## 2026-09-23 (follow-ups 48-50) — audit-found gaps fixed, pinned, live-proven
+
+- Full 30-comment bot-review audit against the tree: 29 verified fixed;
+  one live gap (follow-up 48): both sub-hour broadband-correction sites
+  recomputed v4 channels but dropped `pigment_darkening_effective_irradiance`
+  from the copy-back list, leaving corrected rows with pre-correction
+  pigment doses. Fixed + pinned (fails pre-fix, passes post-fix).
+- Follow-up 49: `window_dose` on a sample-free window returned 0.0 on every
+  channel; now NaN per the unknown-vs-zero contract + pinned.
+- Follow-up 50: `window_dose` computed complete/coverage in its primitives
+  but dropped them, so daily rows published best-window/best-hour doses with
+  no partial-vs-whole signal. Flags now flow primitive -> window dict ->
+  daily row -> all-days CSV (`dHead` carries the four window flags);
+  TANDOSE documents the per-level contract; pinned (clean grid complete 1.0,
+  missing-endpoint window incomplete with diluted coverage, SED independent).
+- Live re-verification (`run --site south-bend --allow-degraded`,
+  data/runs/20260923_100038, 336 hourly / 671 half-hour / 14 daily):
+  window flags present on all 14 daily rows (complete, coverage 1.0);
+  pigment exact (0.0 diff) on all 36 native-HRRR corrected rows —
+  the follow-up-48 fix confirmed on real data. Interpolated rows show
+  sub-1e-3 diffs vs channel-from-bands for BOTH pigment (3.2e-4 max) and
+  E_mel (3e-5 max): pure interpolation nonlinearity, identical treatment
+  per channel, worst at low sun — architecture-consistent, not a defect.
+  Headline unchanged: peak Absolute 47.8 / Local 91.8; stale flags false;
+  spectral tier C throughout (no CAMS credentials in this environment).
