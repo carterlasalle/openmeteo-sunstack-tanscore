@@ -1613,6 +1613,8 @@ def test_scored_hourly_validator_error_branches():
     assert errors(_valid_scored_frame(
         melanogenic_effective_irradiance_wm2=[0.5, -0.1, 0.51]))
     assert errors(_valid_scored_frame(
+        erythemal_irradiance_wm2=[0.15, -0.01, 0.155]))
+    assert errors(_valid_scored_frame(
         melanogenic_effective_irradiance_wm2=[0.5, 5.5, 0.51]))
     assert errors(_valid_scored_frame(
         tan_score_model_version=["legacy-55-30-15"] * 3))

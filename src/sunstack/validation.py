@@ -76,6 +76,10 @@ def validate_scored_hourly(df: pd.DataFrame) -> list[ValidationIssue]:
             issues.append(ValidationIssue("ERROR", "photobiology", "E_mel has physically impossible negative values"))
         if bool((e > 5).any()):
             issues.append(ValidationIssue("ERROR", "photobiology", "E_mel exceeds 5 W/m^2 (unphysical for natural sun)"))
+    if "erythemal_irradiance_wm2" in df:
+        r = num(df, "erythemal_irradiance_wm2")
+        if bool((r < -1e-9).any()):
+            issues.append(ValidationIssue("ERROR", "photobiology", "erythemal irradiance has physically impossible negative values"))
     if "tan_score_model_version" in df:
         versions = set(pd.Series(df["tan_score_model_version"]).dropna().astype(str).unique().tolist())
         if versions and versions != {TAN_SCORE_MODEL_VERSION}:
