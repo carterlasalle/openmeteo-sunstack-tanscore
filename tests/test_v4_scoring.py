@@ -1360,3 +1360,26 @@ def test_degraded_bundle_serves_predictions(tmp_path):
     assert tier == "nasa_power_ml"
     assert bool(np.isfinite(uva).all()) and bool(np.isfinite(uvb).all())
     assert (uva > 0).all() and (uvb > 0).all()
+
+
+def test_records_never_emit_browser_hostile_tokens():
+    import json as _json
+    import re as _re
+
+    import pandas as pd
+
+    from sunstack.ui import _records
+
+    df = pd.DataFrame({
+        "time": ["2026-09-15T12:00", "2026-09-15T13:00"],
+        "tan_score_absolute_0_100": [45.0, float("inf")],
+        "tan_dose_1h_j_m2": [float("-inf"), float("nan")],
+        "note": ["Infinity and NaN as words are fine", "so is -Infinity text"],
+    })
+    rows = _records(df)
+    text = _json.dumps(rows)
+    stripped = _re.sub(r'"(?:[^"\\]|\\.)*"', '""', text)
+    assert _re.findall(r"\b(Infinity|-Infinity|NaN)\b", stripped) == []
+    # Values survive structurally: inf/nan readings become JSON null.
+    assert rows[0]["tan_dose_1h_j_m2"] is None
+    assert rows[1]["tan_score_absolute_0_100"] is None
