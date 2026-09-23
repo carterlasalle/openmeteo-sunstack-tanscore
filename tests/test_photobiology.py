@@ -519,10 +519,9 @@ def test_committed_spectra_rebuild_byte_identical(tmp_path, monkeypatch):
     # deterministic output (no hand edits), and each committed metadata
     # checksum must match its committed CSV (provenance chain integrity).
     import hashlib
+    import importlib.util
     import json
     import sys
-
-    import importlib.util
 
     spec = importlib.util.spec_from_file_location(
         "build_action_spectra", "scripts/build_action_spectra.py")
