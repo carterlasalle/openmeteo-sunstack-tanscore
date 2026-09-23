@@ -547,6 +547,12 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                 "day_low_feels_like_f": round(
                     float(_num(s, "apparent_temperature").min()), 1
                 ),
+                "day_peak_wind_mph": round(float(_num(s, "wind_speed_10m").max()), 1),
+                "day_peak_gust_mph": round(float(_num(s, "wind_gusts_10m").max()), 1),
+                "blocked_half_hours": int(
+                    scol(daylight, "outdoor_blocked").fillna(False).sum()
+                ),
+                "day_status": _day_status(float(best["overall_tan_opportunity_0_100"])),
             }
         )
     return pd.DataFrame(rows)

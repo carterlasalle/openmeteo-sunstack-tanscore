@@ -635,6 +635,32 @@ def test_reskin_static_dir_needs_no_run_data(tmp_path):
     )
 
 
+def test_daily_summary_keeps_status_and_wind_peaks():
+    from sunstack.opportunity import build_daily_summary
+
+    df = pd.DataFrame(
+        {
+            "dt": pd.to_datetime(["2026-09-24 12:00", "2026-09-24 12:30"]),
+            "overall_tan_opportunity_0_100": [10.0, 40.0],
+            "temperature_2m": [70.0, 72.0],
+            "apparent_temperature": [71.0, 74.0],
+            "wind_speed_10m": [9.0, 26.0],
+            "wind_gusts_10m": [12.0, 34.0],
+            "outdoor_blocked": [False, False],
+        }
+    )
+    out = build_daily_summary(df)
+    row = out.iloc[0]
+    assert row["day_status"] == "FAIR", "status column must survive field additions"
+    assert row["blocked_half_hours"] == 0
+    assert row["day_peak_wind_mph"] == 26.0
+    assert row["day_peak_gust_mph"] == 34.0
+    assert row["day_high_feels_like_f"] == 74.0
+    ui = Path("src/sunstack/ui.py").read_text(encoding="utf-8")
+    assert "<th>Temp</th><th>Wind</th>" in ui, "hourly table needs a Wind column"
+    assert "wind_gusts_10m" in ui and "windy" in ui, "gusty days/cells call out wind"
+
+
 def test_calendar_uids_are_namespaced_per_location():
     from sunstack.ui import build_calendar_ics
 
