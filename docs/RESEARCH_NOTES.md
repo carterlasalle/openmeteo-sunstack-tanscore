@@ -681,3 +681,10 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   `cams_direct_forecast.parquet` because this environment has no ADS
   credentials (degraded mode by design), and the script says so instead of
   passing silently.
+
+- Addendum (reference reproducibility re-proven on current tree): ran
+  `rebuild_v4_references.py` (no adopt) — pooled p99.9 = 1.522 reconfirmed,
+  all 6 committed local_reference.* files (both sites, csv+parquet+version)
+  byte-identical to the rebuild output; manifest value/version untouched,
+  only `code_git_sha` provenance advanced (refreshed to HEAD, sole consumer
+  is the rebuild script itself).
