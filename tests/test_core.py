@@ -1535,3 +1535,19 @@ def test_debug_photobiology_without_latest_is_graceful(tmp_path, capsys):
 
     debug_photobiology(tmp_path)
     assert "no latest hourly table" in capsys.readouterr().out
+
+
+def test_env_example_documents_every_src_env_var():
+    # Operator-facing contract: every env var read in src (hand section or
+    # BUGHUNT block) must be documented in .env.example; an undocumented
+    # knob is an unusable knob.
+    import re
+    from pathlib import Path
+
+    env = (Path(".env.example")).read_text(encoding="utf-8")
+    seen = set()
+    for src in Path("src/sunstack").glob("*.py"):
+        seen |= set(re.findall(r'os\.getenv\("([A-Z0-9_]+)"', src.read_text()))
+    assert seen, "no env vars found — scanner broken"
+    missing = sorted(v for v in seen if v not in env)
+    assert not missing, missing
