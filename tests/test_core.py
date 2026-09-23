@@ -356,6 +356,40 @@ def test_cams_retrieve_abandons_stalled_request(tmp_path, monkeypatch):
         raise AssertionError("stalled request must raise TimeoutError")
 
 
+def test_request_diagnoses_empty_and_garbled_bodies():
+    from sunstack import fetch
+
+    class Resp:
+        status_code = 200
+        content = b""
+        text = ""
+
+        def raise_for_status(self):
+            pass
+
+    class Sess:
+        def get(self, *a, **k):
+            return Resp()
+
+    r = fetch._request(Sess(), "x", "https://example.com", {})
+    assert r.payload is None and "empty body" in (r.error or "")
+
+    class Garbled(Resp):
+        content = b"<html>maintenance</html>"
+        text = "<html>maintenance</html>"
+
+        def json(self):
+            raise ValueError("Expecting value: line 1 column 1 (char 0)")
+
+    class Sess2:
+        def get(self, *a, **k):
+            return Garbled()
+
+    r2 = fetch._request(Sess2(), "y", "https://example.com", {})
+    assert r2.payload is None
+    assert "200" in (r2.error or "") and "maintenance" in (r2.error or "")
+
+
 def test_cams_retrieve_polls_to_completion(tmp_path, monkeypatch):
     from sunstack import history
 
