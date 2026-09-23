@@ -852,8 +852,14 @@ def test_scheduled_workflow_is_complete_and_wired():
     for required in (
         "Install dependencies",
         "Forecast + export + publish, one site at a time",
+        "Bundle run data for download",
+        "Upload run data",
     ):
         assert required in names, f"missing workflow step: {required}"
+    upload = by_name["actions/upload-artifact@v4"]
+    assert "sunstack-data-" in str(upload.get("with", {}).get("name", "")), (
+        "artifact name must be per-run downloadable"
+    )
     install = by_name["Install dependencies"]
     step = by_name["Forecast + export + publish, one site at a time"]
     assert "uv run sunstack run" in step["run"], (

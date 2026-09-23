@@ -38,3 +38,22 @@ jobs:
         env:
           CDSAPI_URL: ${{ secrets.CDSAPI_URL }}
           CDSAPI_KEY: ${{ secrets.CDSAPI_KEY }}
+
+      - name: Bundle run data for download
+        if: always()
+        run: |
+          mkdir -p /tmp/sunstack-bundle
+          cp -r data/latest /tmp/sunstack-bundle/latest 2>/dev/null || true
+          for d in data/sites/*/latest; do
+            slug=$(echo "$d" | cut -d/ -f3)
+            mkdir -p "/tmp/sunstack-bundle/sites/$slug"
+            cp -r "$d" "/tmp/sunstack-bundle/sites/$slug/latest" 2>/dev/null || true
+          done
+
+      - name: Upload run data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sunstack-data-${{ github.run_id }}
+          path: /tmp/sunstack-bundle/
+          retention-days: 90
