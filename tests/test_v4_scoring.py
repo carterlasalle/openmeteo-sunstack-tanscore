@@ -1327,7 +1327,6 @@ def test_training_drops_constant_features_loudly(tmp_path, caplog):
 
 
 def test_degraded_bundle_serves_predictions(tmp_path):
-    import joblib
     import numpy as np
     import pandas as pd
 
