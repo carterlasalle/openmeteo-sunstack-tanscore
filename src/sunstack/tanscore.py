@@ -157,7 +157,10 @@ def build_live_feature_frame(best: pd.DataFrame, cams_direct: pd.DataFrame | Non
 
     camsf = _cams_features(cams_direct)
     if cams_direct is not None and not cams_direct.empty and "cams_cycle" in cams_direct:
-        out["cams_cycle"] = str(cams_direct["cams_cycle"].iloc[0])
+        # Mode, not row zero: fallback cycles can concatenate, and the label
+        # must describe the bulk of the data, not whichever row came first.
+        modes = pd.Series(cams_direct["cams_cycle"]).dropna().mode()
+        out["cams_cycle"] = str(modes.iloc[0]) if len(modes) else np.nan
     else:
         out["cams_cycle"] = np.nan
     if not camsf.empty:

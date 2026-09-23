@@ -1281,3 +1281,12 @@ def test_all_missing_bands_score_nan_loudly(tmp_path):
     assert out["tan_score_absolute_0_100"].isna().all()
     assert out["erythemal_irradiance_wm2"].isna().all()
     assert any(i.severity == "ERROR" for i in validate_scored_hourly(out))
+
+
+def test_cams_cycle_labels_majority_cycle():
+    from sunstack.tanscore import build_live_feature_frame
+
+    cams = _cams([0.1, 0.12, 0.11], [0.15, 0.16, 0.15])
+    cams["cams_cycle"] = ["2026-09-22T12:00Z"] * 2 + ["2026-09-22T00:00Z"]
+    frame = build_live_feature_frame(_best_air(), cams)
+    assert (frame["cams_cycle"] == "2026-09-22T12:00Z").all()
