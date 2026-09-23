@@ -551,3 +551,12 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   cloud proxy) are unchanged.
 - Auto-published docs churn reverted again (publishing belongs to the
   scheduled workflow); run tables retained locally.
+
+## 2026-09-23 (follow-up 36) — loud paths proven at the real CLI
+
+- Strict `run` without ADS credentials fails immediately with the exact
+  remediation (`DataValidationError` + FATAL banner + log path), before any
+  network or scoring — no silent degraded run possible by accident.
+- `doctor` exits 2 with CAMS setup guidance when credentials are absent.
+- `--personal-mmd` without `--personal-mmd-basis` exits 2 with usage at
+  parse time, before any pipeline work.
