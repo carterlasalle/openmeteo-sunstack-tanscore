@@ -265,3 +265,16 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   12 of peak opportunity) prefer sustained length; TanDose never enters
   ranking. Fixed two of my own test expectations (hourly UVI-6 SED is 5.4,
   not 2.7; eligibility threshold is inclusive).
+
+## 2026-09-23 (follow-up 4) — audit: honest unknown doses + row-level gap flags
+
+- Found by audit: `_rolling_dose` returned 0.0 when NO timestamps fell in a
+  trailing window (e.g. trailing-30m dose on an hourly grid) — 0 implies no
+  exposure, but the truth is unknown. Now returns NaN with
+  `tan_dose_{15m,30m,1h}_complete=false` and coverage 0; night rows with real
+  coverage still integrate as true zero. Row-level
+  `tan_dose_*/sed_*_complete` + `coverage_fraction` flags added per §1.3
+  (timestamp-only, shared across dose families; SED carries its own pair).
+- Pinned: sub-grid windows are NaN-not-zero, night-zero stays complete,
+  Absolute is location-independent while Local percentiles move with the
+  reference climatology (§21 invariant).

@@ -29,6 +29,44 @@ def _utc_seconds(frame: pd.DataFrame) -> np.ndarray:
     return t.map(lambda x: x.timestamp()).to_numpy(dtype=float)
 
 
+def _rolling_integral(
+    vals: np.ndarray, secs: np.ndarray, window_s: float
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Trailing-window trapezoidal integrals with gap splitting.
+
+    Returns per row (dose_joules, complete, coverage_fraction):
+    only the contiguous tail is integrated (gaps split, never crossed).
+    Zero integrated intervals means the window's dose is UNKNOWN (NaN),
+    never zero: e.g. a trailing-15m dose on an hourly grid cannot be
+    computed, and reporting 0 would imply no exposure. ``complete`` is True
+    only when the full window is covered without a gap split.
+    """
+    n = len(secs)
+    dose = np.full(n, np.nan)
+    complete = np.zeros(n, dtype=bool)
+    coverage = np.zeros(n, dtype=float)
+    max_gap = float(config.TANDOSE_MAX_INTERP_GAP_S)
+    for i in range(n):
+        lo = secs[i] - window_s
+        acc, covered, split, count, j = 0.0, 0.0, False, 0, i
+        while j > 0 and secs[j - 1] >= lo - 1e-9:
+            dt = float(secs[j] - secs[j - 1])
+            if dt < 0:
+                break
+            if dt > max_gap:
+                split = True
+                break
+            acc += 0.5 * (vals[j] + vals[j - 1]) * dt
+            covered += dt
+            count += 1
+            j -= 1
+        if count > 0:
+            dose[i] = acc
+        coverage[i] = float(np.clip(covered / window_s, 0, 1)) if window_s > 0 else 1.0
+        complete[i] = bool(count > 0 and not split and covered >= window_s - 1e-6)
+    return dose, complete, coverage
+
+
 def _rolling_dose(
     frame: pd.DataFrame, value_col: str, window_s: float, out_name: str,
     kind: str,
@@ -36,35 +74,25 @@ def _rolling_dose(
     """Trailing-window trapezoidal dose ending at each row's timestamp."""
     vals = pd.to_numeric(frame[value_col], errors="coerce").fillna(0).to_numpy(dtype=float)
     secs = _utc_seconds(frame)
-    out = np.zeros(len(frame), dtype=float)
-    for i in range(len(frame)):
-        lo = secs[i] - window_s
-        # Include all stamps in (lo, t_i]; integrate trapezoidally.
-        j = i
-        acc = 0.0
-        while j > 0 and secs[j - 1] >= lo - 1e-9:
-            dt = secs[j] - secs[j - 1]
-            if dt < 0:
-                break
-            if dt > config.TANDOSE_MAX_INTERP_GAP_S:
-                # Gap splits: only integrate the contiguous tail.
-                # Walk back only to the gap.
-                tail = 0.0
-                k = i
-                while k > j and secs[k] - secs[k - 1] <= config.TANDOSE_MAX_INTERP_GAP_S:
-                    tail += 0.5 * (vals[k] + vals[k - 1]) * (secs[k] - secs[k - 1])
-                    k -= 1
-                acc = tail
-                break
-            acc += 0.5 * (vals[j] + vals[j - 1]) * dt
-            j -= 1
-        out[i] = acc
+    dose, _, _ = _rolling_integral(vals, secs, window_s)
     if kind == "sed":
-        out = out / 100.0
+        dose = dose / 100.0
     if kind == "uv_cm2":
-        out = out / 1e4
-    s = pd.Series(out, index=frame.index, name=out_name)
-    return s
+        dose = dose / 1e4
+    return pd.Series(dose, index=frame.index, name=out_name)
+
+
+def _window_flags(frame: pd.DataFrame, window_s: float) -> tuple[pd.Series, pd.Series]:
+    """Per-row (complete, coverage_fraction) for a trailing window.
+
+    Timestamp-only: identical for every dose family on the same grid, so it
+    is computed once per window and shared.
+    """
+    secs = _utc_seconds(frame)
+    zeros = np.zeros(len(frame))
+    _, complete, coverage = _rolling_integral(zeros, secs, window_s)
+    return (pd.Series(complete, index=frame.index),
+            pd.Series(np.round(coverage, 4), index=frame.index))
 
 
 def add_interval_doses(frame: pd.DataFrame) -> pd.DataFrame:
@@ -103,6 +131,14 @@ def add_interval_doses(frame: pd.DataFrame) -> pd.DataFrame:
         out[f"uva_dose_{label}_j_cm2"] = (out[f"uva_dose_{label}_j_m2"] / 1e4).round(5)
         out[f"pigment_darkening_dose_{label}_j_m2"] = _rolling_dose(
             work, "_pig", sec, "", "tandose").to_numpy()
+        # Row-level gap marking (§1.3): timestamp-only, shared by every dose
+        # family on the same grid. UVA/UVB/pigment doses share the TanDose
+        # flags; SED carries its own pair.
+        done, cov = _window_flags(work, sec)
+        out[f"tan_dose_{label}_complete"] = done.to_numpy(dtype=bool)
+        out[f"tan_dose_{label}_coverage_fraction"] = cov.to_numpy(dtype=float)
+        out[f"sed_{label}_complete"] = done.to_numpy(dtype=bool)
+        out[f"sed_{label}_coverage_fraction"] = cov.to_numpy(dtype=float)
     ref = float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2)
     for label in ("15m", "30m", "1h"):
         out[f"tan_dose_{label}_reference_minutes"] = (

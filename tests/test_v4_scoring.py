@@ -185,9 +185,18 @@ def test_canonical_dose_columns_exist():
                 "tan_dose_15m_reference_minutes",
                 "sed_15m", "sed_30m", "sed_1h",
                 "uva_dose_30m_j_m2", "uva_dose_30m_j_cm2",
-                "uvb_dose_30m_j_m2", "pigment_darkening_dose_30m_j_m2"):
+                "uvb_dose_30m_j_m2", "pigment_darkening_dose_30m_j_m2",
+                "tan_dose_30m_complete", "tan_dose_30m_coverage_fraction",
+                "sed_30m_complete", "sed_30m_coverage_fraction"):
         assert col in dosed, col
-    assert (dosed["tan_dose_30m_j_m2"].to_numpy() >= 0).all()
+    # Row 0 has no history: doses UNKNOWN (NaN), never zero; flags loud.
+    assert pd.isna(dosed.loc[0, "tan_dose_30m_j_m2"])
+    assert not dosed.loc[0, "tan_dose_30m_complete"]
+    assert dosed.loc[0, "tan_dose_30m_coverage_fraction"] == 0.0
+    # Row 1 has one 30-min leg: finite dose, full coverage.
+    assert dosed.loc[1, "tan_dose_30m_j_m2"] > 0
+    assert bool(dosed.loc[1, "tan_dose_30m_complete"])
+    assert dosed.loc[1, "tan_dose_30m_coverage_fraction"] == 1.0
     win = window_dose(
         frame.assign(dt=pd.to_datetime(frame["time"])),
         "2026-06-21T12:00", "2026-06-21T13:30")
@@ -224,3 +233,54 @@ def test_tan_response_baseline_is_cumulative_dose_only():
     assert result["predicted_response"] is None
     with pytest.raises(ValueError):
         history.add_episode(-5.0)
+
+
+def test_sub_grid_windows_are_nan_not_zero():
+    # Hourly grid: trailing-30m/15m doses are unknowable -> NaN (not 0, which
+    # would imply no exposure); trailing-1h dose is computable.
+    from sunstack.doses import add_interval_doses
+
+    frame = pd.DataFrame({
+        "time": ["2026-06-21T12:00", "2026-06-21T13:00", "2026-06-21T14:00"],
+        "melanogenic_effective_irradiance_wm2": [0.5, 0.6, 0.55],
+        "erythemal_irradiance_wm2": [0.15, 0.16, 0.155],
+        "predicted_uva_wm2": [35.0, 40.0, 38.0],
+        "predicted_uvb_wm2": [1.0, 1.1, 1.05],
+    })
+    dosed = add_interval_doses(frame)
+    assert dosed["tan_dose_30m_j_m2"].isna().all()
+    assert dosed["tan_dose_15m_j_m2"].isna().all()
+    assert not dosed.loc[0, "tan_dose_30m_complete"]
+    assert dosed.loc[1, "tan_dose_1h_j_m2"] > 0
+    assert bool(dosed.loc[1, "tan_dose_1h_complete"])
+    # Night rows with real coverage integrate as true zero, not NaN.
+    night = frame.copy()
+    night["melanogenic_effective_irradiance_wm2"] = 0.0
+    night_dosed = add_interval_doses(night)
+    assert night_dosed.loc[1, "tan_dose_1h_j_m2"] == 0.0
+    assert bool(night_dosed.loc[1, "tan_dose_1h_complete"])
+
+
+def test_absolute_ignores_location_while_local_uses_it():
+    # §21: LocalTanScore changes with local climatology, Absolute does not.
+    from sunstack.photobiology import absolute_tan_score_from_melanogenic_irradiance
+    from sunstack.tanscore import add_local_scores
+
+    e_mel = 0.75
+    assert (absolute_tan_score_from_melanogenic_irradiance(e_mel, 1.6) ==
+            absolute_tan_score_from_melanogenic_irradiance(e_mel, 1.6))
+    ref_low = pd.DataFrame({
+        "time_utc": pd.to_datetime(["2026-06-21T12:00Z"] * 500, utc=True),
+        "day_of_year": [172] * 500,
+        "solar_elevation_deg": [60.0] * 500,
+        "absolute_tan_score_0_100": [10.0] * 500,
+    })
+    ref_high = ref_low.copy()
+    ref_high["absolute_tan_score_0_100"] = [90.0] * 500
+    fc = pd.DataFrame({
+        "time_utc": pd.to_datetime(["2026-06-21T12:00Z"], utc=True),
+        "solar_elevation_deg": [60.0],
+        "tan_score_absolute_0_100": [50.0],
+    })
+    assert (add_local_scores(fc, ref_low).loc[0, "local_tan_score_0_100"] >
+            add_local_scores(fc, ref_high).loc[0, "local_tan_score_0_100"])
