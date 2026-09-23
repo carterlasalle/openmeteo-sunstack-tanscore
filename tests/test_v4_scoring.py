@@ -1065,7 +1065,7 @@ def test_export_bakes_personal_mmd_when_asked(tmp_path):
     from sunstack.output import export_static_site
 
     root = _api_fixture(tmp_path)
-    plain = export_static_site(root, tmp_path / "plain")
+    export_static_site(root, tmp_path / "plain")
     import json as _json
 
     payload = _json.loads((tmp_path / "plain" / "data.json").read_text())
