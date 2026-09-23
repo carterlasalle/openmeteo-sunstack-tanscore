@@ -1488,3 +1488,50 @@ def test_issue_forms_are_valid_and_secret_free():
     assert {"latitude", "longitude", "timezone", "slug", "location-name"} <= loc_ids, (
         "location form must capture registry fields explicitly"
     )
+
+
+def test_debug_photobiology_reports_full_stack(tmp_path, capsys):
+    # --photobiology debug must expose spectra, weights, reference, and the
+    # latest hourly v4 columns; a silent or partial dump would hide the
+    # internals the loud-failure contract relies on operators seeing.
+    from sunstack.cli import debug_photobiology
+
+    tables = tmp_path / "latest" / "tables"
+    tables.mkdir(parents=True)
+    pd.DataFrame({
+        "time": ["2026-09-15T12:00"],
+        "melanogenic_effective_irradiance_wm2": [0.5],
+        "uv_index": [5.0],
+        "uvi_openmeteo": [5.0],
+        "uvi_cams": [float("nan")],
+        "uvi_difference_percent": [float("nan")],
+        "tan_score_absolute_0_100": [30.0],
+        "legacy_absolute_tan_score_55_30_15": [28.0],
+        "erythemal_irradiance_wm2": [0.125],
+        "tan_dose_1h_j_m2": [1800.0],
+        "sed_1h": [4.5],
+        "uva_dose_1h_j_m2": [100000.0],
+        "uvb_dose_1h_j_m2": [3000.0],
+        "spectral_backend": ["tierC-broadband-v1"],
+        "spectral_tier": ["C"],
+        "tan_score_model_version": ["action-spectrum-v1"],
+        "cams_cycle": ["none"],
+        "tan_calibration_tier": ["nasa_power_ml"],
+        "uv_input_disagree": [False],
+        "tan_forecast_confidence_0_100": [60.0],
+    }).to_parquet(tables / "tan_forecast_hourly.parquet", index=False)
+    debug_photobiology(tmp_path)
+    out = capsys.readouterr().out
+    for token in ("parrish_delayed_melanogenesis", "cie_erythema_reference",
+                  "ipd_action_spectrum", "Tier-C band weights",
+                  "global_reference: global-mel-ref-v1-provisional",
+                  "latest hourly photobiology columns present"):
+        assert token in out, token
+    assert "MISSING columns" not in out
+
+
+def test_debug_photobiology_without_latest_is_graceful(tmp_path, capsys):
+    from sunstack.cli import debug_photobiology
+
+    debug_photobiology(tmp_path)
+    assert "no latest hourly table" in capsys.readouterr().out
