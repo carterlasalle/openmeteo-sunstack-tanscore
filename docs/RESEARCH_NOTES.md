@@ -627,3 +627,11 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   harness itself had regressed (`()=>{}` instead of `()=>mkEl()`), dropping
   chainability. The rig gets the same suspicion as the product: verify the
   test setup independently before "fixing" passing code.
+
+## 2026-09-23 (follow-up 47) — JS battery re-greened on current template
+
+- Rebuilt the headless harness against the current dashboard template and
+  ran render + dose-row + 3-file CSV export across live-v4, pre-v4, and
+  MMD-bearing payloads: all seven render targets populate, no unrendered
+  values leak, three CSVs emit per payload. Covers UI edits since the last
+  battery (MMD controls/segment, merged export, provenance fallbacks).
