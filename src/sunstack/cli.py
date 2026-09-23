@@ -113,6 +113,20 @@ def _print_config() -> None:
     )
     print(f"CAMS EAC4: {config.CAMS_EAC4_START_YEAR} -> {config.CAMS_EAC4_END_YEAR}")
     print(f"ADS/CAMS credentials detected: {cds_credentials_present()}")
+    print("\nPhotobiology model (v4 action-spectrum):")
+    from .spectral import SPECTRAL_BACKEND_VERSION as _backend
+
+    print(f"  tan_score_model={config.TAN_SCORE_MODEL_VERSION}")
+    print(f"  global_reference={config.GLOBAL_MELANOGENIC_REFERENCE_VERSION} "
+          f"E_mel={config.GLOBAL_MELANOGENIC_REFERENCE_WM2} W/m^2")
+    print(f"  spectral_backend={_backend} (Tier C production; "
+          f"canonical_required={config.REQUIRE_CANONICAL_SPECTRUM})")
+    print(f"  tandose_max_gap_s={config.TANDOSE_MAX_INTERP_GAP_S:g}")
+    print(f"  skin_tilt_deg={config.SKIN_TILT_DEG:g} "
+          f"skin_azimuth_deg={config.SKIN_AZIMUTH_DEG:g}")
+    print(f"  uvi_disagree_warn/strong="
+          f"{config.UVI_DISAGREEMENT_WARN_FRAC:g}/"
+          f"{config.UVI_DISAGREEMENT_STRONG_FRAC:g} (confidence only)")
 
 
 def _calibration_paths(

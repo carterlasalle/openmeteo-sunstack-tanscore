@@ -1568,3 +1568,17 @@ def test_dose_row_marks_partial_window_and_day_doses():
                  "best_hour_tan_dose_complete",
                  "sed_best_window_complete", "sed_complete"):
         assert "pc(d." + flag + ")" in HTML.replace(" ", ""), flag
+
+
+def test_show_config_exposes_photobiology_model(capsys):
+    # Operators must see which model/reference/tier scoring uses; a config
+    # dump without the v4 block hides the most consequential settings.
+    from sunstack.cli import _print_config
+
+    _print_config()
+    out = capsys.readouterr().out
+    for token in ("Photobiology model", "tan_score_model=action-spectrum-v1",
+                  "global-mel-ref-v1-provisional", "tierC-broadband-v1",
+                  "tandose_max_gap_s=", "skin_tilt_deg=",
+                  "uvi_disagree_warn/strong="):
+        assert token in out, token
