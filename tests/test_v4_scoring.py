@@ -1213,14 +1213,8 @@ def test_export_preserves_run_attached_fractions(tmp_path):
         export_static_site(root, tmp_path / "bad", personal_mmd_j_m2=2000.0)
 
 
-def test_reference_builder_drops_missing_bands():
-    import numpy as np
-    import pandas as pd
-
+def test_reference_builder_drops_missing_bands(tmp_path):
     from sunstack.calibrate import build_local_reference
-
-    import tempfile
-    from pathlib import Path
 
     stamps = pd.date_range("2020-06-01", periods=6, freq="h", tz="UTC")
     training = pd.DataFrame({
@@ -1231,7 +1225,6 @@ def test_reference_builder_drops_missing_bands():
         "sza": [50.0] * 6,
         "ghi": [500.0] * 6,
     })
-    with tempfile.TemporaryDirectory() as td:
-        ref = build_local_reference(training, Path(td))
+    ref = build_local_reference(training, tmp_path)
     assert len(ref) == 5  # NaN-UVB row excluded, not zero-scored
     assert ref["melanogenic_effective_irradiance_wm2"].notna().all()
