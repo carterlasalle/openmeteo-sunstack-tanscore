@@ -27,10 +27,15 @@ def _recompute_v4_scores(frame: pd.DataFrame) -> pd.DataFrame:
 
     out = frame
     if {"predicted_uva_wm2", "predicted_uvb_wm2"}.issubset(out.columns):
-        e_mel = melanogenic_from_broadband(
-            pd.to_numeric(out["predicted_uva_wm2"], errors="coerce").fillna(0).to_numpy(),
-            pd.to_numeric(out["predicted_uvb_wm2"], errors="coerce").fillna(0).to_numpy(),
-        )
+        # No fillna(0): a missing band is UNKNOWN, never zero irradiance. The
+        # broadband helpers preserve NaN, and only genuine night rows are
+        # clamped to zero below — otherwise a missing UVB band would silently
+        # understate E_mel and Absolute.
+        from .spectral import pigment_darkening_from_broadband as _pig_broadband
+
+        uva_arr = pd.to_numeric(out["predicted_uva_wm2"], errors="coerce").to_numpy(dtype=float)
+        uvb_arr = pd.to_numeric(out["predicted_uvb_wm2"], errors="coerce").to_numpy(dtype=float)
+        e_mel = melanogenic_from_broadband(uva_arr, uvb_arr)
         if "is_day" in out:
             night = pd.to_numeric(out["is_day"], errors="coerce").fillna(1) == 0
             e_mel = np.where(night.to_numpy(), 0.0, e_mel)
@@ -41,10 +46,14 @@ def _recompute_v4_scores(frame: pd.DataFrame) -> pd.DataFrame:
             ), 1,
         )
         out["tan_score_model_version"] = config.TAN_SCORE_MODEL_VERSION
+        # The pigment-darkening channel follows the same corrected bands, or
+        # it would publish doses inconsistent with the corrected radiation.
+        out["pigment_darkening_effective_irradiance"] = np.round(
+            _pig_broadband(uva_arr, uvb_arr), 5)
     if "uv_index" in out:
         out["erythemal_irradiance_wm2"] = np.round(
             erythemal_irradiance_from_uvi(
-                pd.to_numeric(out["uv_index"], errors="coerce").fillna(0).to_numpy()
+                pd.to_numeric(out["uv_index"], errors="coerce").to_numpy(dtype=float)
             ), 5,
         )
     if {"uv_index", "predicted_uva_wm2"}.issubset(out.columns):
@@ -667,21 +676,27 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
             _day_match = _day_row.loc[_day_row["date"] == day]
             _day_doses = _day_match.iloc[0].to_dict() if len(_day_match) else {}
             _win_doses = _window_dose(g, window[0], window[1]) if window else {}
-        except (ImportError, ValueError, KeyError):
+        except (ImportError, ValueError, KeyError, RuntimeError):
             _day_doses, _win_doses = {}, {}
         # Best-30m / best-hour interval doses from trailing columns when present.
-        def _col_at(col: str, stamp, _daylight: pd.DataFrame = daylight) -> float:
+        # Trailing columns END at their row stamp: the dose for the forward
+        # interval [t, t+30m) selected as best_30m_start=t lives on the row at
+        # t+30m, so read there (searching the full day grid g, since t+30m can
+        # sit outside the daylight slice). Missing end stamp -> NaN, never a
+        # neighboring slot's dose relabeled.
+        def _col_at(col: str, stamp, _grid: pd.DataFrame = g) -> float:
             try:
-                hit = _daylight.loc[_daylight["dt"] == stamp, col]
+                hit = _grid.loc[pd.to_datetime(_grid["dt"]) == pd.to_datetime(stamp), col]
                 return float(hit.iloc[0]) if len(hit) else float("nan")
-            except (KeyError, ValueError, IndexError):
+            except (KeyError, ValueError, IndexError, TypeError):
                 return float("nan")
+        _best_end = best["dt"] + pd.Timedelta(minutes=30)
         best_hour_end = (best_hour + pd.Timedelta(minutes=60)) if best_hour is not None else None
         try:
             from .doses import window_dose as _wd2
 
             _hour_doses = _wd2(g, best_hour, best_hour_end) if best_hour is not None else {}
-        except (ImportError, ValueError, KeyError):
+        except (ImportError, ValueError, KeyError, RuntimeError):
             _hour_doses = {}
         rows.append(
             {
@@ -702,8 +717,8 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                     float(best.get("tan_forecast_confidence_0_100", np.nan)), 1
                 ),
                 "best_30m_start": best["dt"].isoformat(),
-                "best_30m_tan_dose_j_m2": _col_at("tan_dose_30m_j_m2", best["dt"]),
-                "best_30m_sed": _col_at("sed_30m", best["dt"]),
+                "best_30m_tan_dose_j_m2": _col_at("tan_dose_30m_j_m2", _best_end),
+                "best_30m_sed": _col_at("sed_30m", _best_end),
                 "best_hour_start": best_hour.isoformat()
                 if best_hour is not None
                 else None,
@@ -722,9 +737,11 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                 "uvb_dose_window_j_m2": float(_win_doses.get("uvb_dose_window_j_m2", float("nan"))),
                 "tan_dose_day_j_m2": float(_day_doses.get("tan_dose_day_j_m2", float("nan"))),
                 "tan_dose_day_reference_minutes": float(_day_doses.get("tan_dose_day_reference_minutes", float("nan"))),
-                "tan_dose_complete": bool(_day_doses.get("tan_dose_complete", True)),
-                "tan_dose_coverage_fraction": float(_day_doses.get("tan_dose_coverage_fraction", 1.0)),
+                "tan_dose_complete": bool(_day_doses.get("tan_dose_complete", False)),
+                "tan_dose_coverage_fraction": float(_day_doses.get("tan_dose_coverage_fraction", float("nan"))),
                 "sed_day_total": float(_day_doses.get("sed_day_total", float("nan"))),
+                "sed_complete": bool(_day_doses.get("sed_complete", False)),
+                "sed_coverage_fraction": float(_day_doses.get("sed_coverage_fraction", float("nan"))),
                 "uva_dose_day_j_m2": float(_day_doses.get("uva_dose_day_j_m2", float("nan"))),
                 "uvb_dose_day_j_m2": float(_day_doses.get("uvb_dose_day_j_m2", float("nan"))),
                 "peak_uv_index": round(float(best.get("uv_index", np.nan)), 2),

@@ -65,7 +65,29 @@ class ActionSpectrum:
 _cache: dict[str, ActionSpectrum] = {}
 
 
+def _package_bytes(*parts: str) -> bytes | None:
+    """File bytes from the installed wheel (``sunstack/_data/...``).
+
+    Wheels built from this repo force-include the photobiology runtime data
+    (see pyproject ``force-include``); an installed CLI has no repository
+    checkout, so package resources take precedence over the repo layout.
+    Returns None when unavailable (source checkout without install).
+    """
+    try:
+        from importlib import resources
+
+        ref = resources.files("sunstack").joinpath("_data").joinpath(*parts)
+        if ref.is_file():
+            return ref.read_bytes()
+    except (ImportError, OSError, TypeError, ValueError):
+        pass
+    return None
+
+
 def _load_meta(stem: str) -> dict:
+    raw = _package_bytes("action_spectra", f"{stem}.meta.json")
+    if raw is not None:
+        return json.loads(raw.decode("utf-8"))
     meta_path = _spectra_dir() / f"{stem}.meta.json"
     if not meta_path.exists():
         raise FileNotFoundError(
@@ -78,14 +100,22 @@ def load_action_spectrum(stem: str = "parrish_delayed_melanogenesis") -> ActionS
     """Load and strictly validate an action spectrum resource."""
     if stem in _cache:
         return _cache[stem]
-    csv_path = _spectra_dir() / f"{stem}.csv"
-    if not csv_path.exists():
-        raise FileNotFoundError(
-            "ERROR photobiology: melanogenesis action spectrum unavailable: "
-            f"{csv_path}"
-        )
+    raw = _package_bytes("action_spectra", f"{stem}.csv")
+    if raw is not None:
+        import io as _io
+
+        df = pd.read_csv(_io.StringIO(raw.decode("utf-8")))
+        sha = hashlib.sha256(raw).hexdigest()
+    else:
+        csv_path = _spectra_dir() / f"{stem}.csv"
+        if not csv_path.exists():
+            raise FileNotFoundError(
+                "ERROR photobiology: melanogenesis action spectrum unavailable: "
+                f"{csv_path}"
+            )
+        df = pd.read_csv(csv_path)
+        sha = hashlib.sha256(csv_path.read_bytes()).hexdigest()
     meta = _load_meta(stem)
-    df = pd.read_csv(csv_path)
     if "wavelength_nm" not in df or "effectiveness" not in df:
         raise ValueError(
             f"ERROR photobiology: {stem}.csv must have wavelength_nm,effectiveness columns"
@@ -112,7 +142,6 @@ def load_action_spectrum(stem: str = "parrish_delayed_melanogenesis") -> ActionS
         )
     if bool((eff <= 0).all()):
         raise ValueError(f"ERROR photobiology: {stem} is all-zero effectiveness")
-    sha = hashlib.sha256(csv_path.read_bytes()).hexdigest()
     recorded = str(meta.get("checksum_sha256", ""))
     if recorded and recorded != sha:
         raise ValueError(
@@ -227,7 +256,10 @@ def _trapezoidal_dose(
     secs = _epoch_seconds(t)
     dose = 0.0
     covered = 0.0
-    total_span = float(secs[valid].max() - secs[valid].min()) if valid.sum() >= 2 else 0.0
+    # Span the full requested window (first to last TIMESTAMP), not just the
+    # valid samples: trailing/leading missing runs must dilute coverage, and
+    # missing endpoints must fail the completeness gate below.
+    total_span = float(secs.max() - secs.min())
     complete = True
     idx = np.where(valid)[0]
     from itertools import pairwise
@@ -242,6 +274,10 @@ def _trapezoidal_dose(
         dose += 0.5 * (v[a] + v[b]) * dt
         covered += dt
     coverage = (covered / total_span) if total_span > 0 else 1.0
+    if not valid[0] or not valid[-1]:
+        # Samples missing at either end of the window: the integral is cut
+        # short, so it must not be presented as complete.
+        complete = False
     return float(max(dose, 0.0)), bool(complete), float(np.clip(coverage, 0, 1))
 
 

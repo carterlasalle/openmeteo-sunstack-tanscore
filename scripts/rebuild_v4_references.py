@@ -1,14 +1,14 @@
 """Rebuild v4 references: local_reference (per site) + empirical grounding for the global reference.
 
-- Local: runs calibrate.build_local_reference on each site's training table,
-  which scores with melanogenic-effective irradiance (never legacy 55/30/15).
-  Legacy absolute is kept as a diagnostic column only.
-- Global: computes the pooled daylight E_mel distribution (Tier-C) across all
-  sites' training climatology and records it in the global reference manifest
-  as empirical grounding. The adopted reference value is NOT silently changed
-  by this script: it stays at the versioned value unless --adopt-empirical-p999
-  is passed, which would require a new reference version (refused here without
-  an explicit new version string).
+Order of operations (adoption-safe):
+
+1. Compute the pooled daylight E_mel distribution across all sites first.
+2. If --adopt-empirical-p999 is passed (requires --new-version), apply the
+   adopted value/version to the runtime config AND the manifest BEFORE any
+   local reference is built, so local percentiles, version files, and the
+   manifest can never disagree.
+3. Build each site's local reference (melanogenic-effective scoring; legacy
+   55/30/15 kept as a diagnostic column only).
 
 Re-run after any action-spectrum or spectral-backend change.
 """
@@ -27,7 +27,7 @@ import pandas as pd
 sys.path.insert(0, "src")
 
 from sunstack import config  # noqa: E402
-from sunstack.calibrate import build_local_reference, prepare_nasa_training  # noqa: E402, F401
+from sunstack.calibrate import build_local_reference  # noqa: E402
 from sunstack.spectral import melanogenic_from_broadband  # noqa: E402
 
 
@@ -40,16 +40,7 @@ def _git_sha() -> str:
         return "unknown"
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--root", default=".", help="Repository root")
-    ap.add_argument("--adopt-empirical-p999", action="store_true",
-                    help="Adopt pooled p99.9 as the reference (requires --new-version)")
-    ap.add_argument("--new-version", default=None)
-    args = ap.parse_args()
-    root = Path(args.root)
-
-    sites = config.load_sites(root / "locations.yaml")
+def _pooled_distribution(sites: list[config.Site], root: Path) -> dict[str, float]:
     pooled: list[np.ndarray] = []
     for site in sites:
         caldir = root / ("data/calibration" if site.default
@@ -60,9 +51,6 @@ def main() -> None:
             continue
         with config.use_site(site):
             training = pd.read_parquet(train_p)
-            ref = build_local_reference(training, caldir)
-            print(f"{site.slug}: rebuilt local_reference ({len(ref)} rows, "
-                  f"model={config.TAN_SCORE_MODEL_VERSION})")
             day = training.loc[
                 (pd.to_numeric(training["ghi"], errors="coerce").fillna(0) > 10)
                 & (pd.to_numeric(training["sza"], errors="coerce").fillna(180) < 90)]
@@ -72,7 +60,6 @@ def main() -> None:
             else:
                 uvb = pd.to_numeric(day["uvi"], errors="coerce").fillna(0).to_numpy() * 0.15
             pooled.append(melanogenic_from_broadband(uva, uvb))
-
     if not pooled:
         raise SystemExit("no training climatology found; nothing rebuilt")
     all_e = np.concatenate(pooled)
@@ -81,6 +68,20 @@ def main() -> None:
     emp["p100max"] = round(float(all_e.max()), 3)
     emp["n"] = int(all_e.size)
     print("pooled daylight E_mel (Tier-C, melanogenic W/m^2):", emp)
+    return emp
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--root", default=".", help="Repository root")
+    ap.add_argument("--adopt-empirical-p999", action="store_true",
+                    help="Adopt pooled p99.9 as the reference (requires --new-version)")
+    ap.add_argument("--new-version", default=None)
+    args = ap.parse_args()
+    root = Path(args.root)
+
+    sites = config.load_sites(root / "locations.yaml")
+    emp = _pooled_distribution(sites, root)
 
     ref_path = root / "data/calibration/global_melanogenic_reference/reference.json"
     manifest = json.loads(ref_path.read_text(encoding="utf-8"))
@@ -100,12 +101,29 @@ def main() -> None:
             raise SystemExit("--adopt-empirical-p999 requires --new-version (no silent recalibration)")
         manifest["global_reference_e_mel_wm2"] = emp["p99.9"]
         manifest["global_reference_version"] = args.new_version
+        # Apply to the LIVE runtime config before building anything, so local
+        # references, version files, and the manifest all agree.
+        config.GLOBAL_MELANOGENIC_REFERENCE_WM2 = float(emp["p99.9"])
+        config.GLOBAL_MELANOGENIC_REFERENCE_VERSION = args.new_version
         print(f"ADOPTED new reference {emp['p99.9']} ({args.new_version})")
     else:
         print(f"reference value unchanged: {manifest['global_reference_e_mel_wm2']} "
               f"({manifest['global_reference_version']})")
     ref_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {ref_path}")
+
+    for site in sites:
+        caldir = root / ("data/calibration" if site.default
+                         else f"data/sites/{site.slug}/calibration")
+        train_p = caldir / "training_calibration_hourly.parquet"
+        if not train_p.exists():
+            continue
+        with config.use_site(site):
+            training = pd.read_parquet(train_p)
+            ref = build_local_reference(training, caldir)
+            print(f"{site.slug}: rebuilt local_reference ({len(ref)} rows, "
+                  f"model={config.TAN_SCORE_MODEL_VERSION}, "
+                  f"ref={config.GLOBAL_MELANOGENIC_REFERENCE_VERSION})")
 
 
 if __name__ == "__main__":

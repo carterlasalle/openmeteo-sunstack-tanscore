@@ -164,9 +164,26 @@ def export_static_site(
         build_calendar_ics(daily, str(summary.get("run", "")), hourly), encoding="utf-8"
     )
     # Per-30-minute interval events (doses, tier, native-HRRR vs interpolated
-    # labeling). Additive artifact; daily calendar.ics is unchanged.
+    # labeling). Night rows carry no usable sun: emit daylight intervals only
+    # (is_day when present, else any positive UV/E_mel signal). Columns absent
+    # entirely mean an old table: keep all rows rather than emit nothing.
+    daylight = half
+    try:
+        def _col(name: str) -> pd.Series:
+            if name not in half.columns:
+                return pd.Series(0.0, index=half.index, dtype="float64")
+            return pd.to_numeric(half[name], errors="coerce").fillna(0)
+
+        if {"is_day", "uv_index", "melanogenic_effective_irradiance_wm2"}.isdisjoint(half.columns):
+            pass
+        else:
+            _mask = (_col("is_day") > 0) | (_col("uv_index") > 0) | (
+                _col("melanogenic_effective_irradiance_wm2") > 0)
+            daylight = half.loc[_mask]
+    except (KeyError, ValueError, TypeError):
+        pass
     (out_dir / "calendar-30min.ics").write_text(
-        build_interval_ics(half, str(summary.get("run", "")),
+        build_interval_ics(daylight, str(summary.get("run", "")),
                            site_slug=site.slug, tz_name=site.timezone),
         encoding="utf-8",
     )

@@ -10,12 +10,12 @@ E_mel max: 1.103 W/m^2 (global ref 1.6).
 
 ## Doses
 
-Daily TanDose range: 15569-22501 J/m^2 mel; daily SED range: 27.65-40.23.
+Daily TanDose range: 15576-22501 J/m^2 mel; daily SED range: 27.65-40.23.
 tan_dose_complete all: True; coverage min: 1.000.
 
 ## Windows (intensity-ranked, dose-reported)
 
-Top hourly window overall: 69.7; best-window TanDose example (day 1): 9610 J/m^2, SED 17.27.
+Top hourly window overall: 69.7; best-window TanDose example (day 1): 10854 J/m^2, SED 19.61.
 Daily ICS events: 14; 30-min ICS events: 671.
 
 Artifacts (scratch, not committed): /tmp/v4_rescore/pacific-palisades

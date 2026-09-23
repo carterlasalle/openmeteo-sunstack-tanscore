@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from .calibrate import num
+from .config import TAN_SCORE_MODEL_VERSION
 
 
 class SunStackError(RuntimeError):
@@ -77,7 +78,7 @@ def validate_scored_hourly(df: pd.DataFrame) -> list[ValidationIssue]:
             issues.append(ValidationIssue("ERROR", "photobiology", "E_mel exceeds 5 W/m^2 (unphysical for natural sun)"))
     if "tan_score_model_version" in df:
         versions = set(pd.Series(df["tan_score_model_version"]).dropna().astype(str).unique().tolist())
-        if versions and versions != {"action-spectrum-v1"}:
+        if versions and versions != {TAN_SCORE_MODEL_VERSION}:
             issues.append(ValidationIssue("ERROR", "photobiology", f"unexpected tan_score_model_version: {sorted(versions)}"))
     if "spectral_tier" in df:
         tiers = set(pd.Series(df["spectral_tier"]).dropna().astype(str).unique().tolist())
@@ -151,9 +152,13 @@ def validate_action_spectra(strict_canonical: bool = False) -> list[ValidationIs
         except (FileNotFoundError, ValueError) as exc:
             issues.append(ValidationIssue("ERROR", "photobiology", str(exc)))
             continue
-        if spec.tier == "provisional" and strict_canonical and stem == "parrish_delayed_melanogenesis":
+        if strict_canonical and stem == "parrish_delayed_melanogenesis" and spec.tier != "canonical":
+            # Same rule as require_canonical_spectrum: anything but canonical
+            # fails, including an "unknown" tier from metadata without a tier
+            # key (which must not slip past validation only to be rejected
+            # later inside score_forecast).
             issues.append(ValidationIssue(
                 "ERROR", "photobiology",
-                f"strict mode requires the canonical spectrum but {stem} tier is provisional",
+                f"strict mode requires the canonical spectrum but {stem} tier is {spec.tier!r}",
             ))
     return issues

@@ -235,7 +235,15 @@ def _bootstrap_inner(
         "skill_rows": len(skill),
         "direct_cams_credentials": cds_credentials_present(),
         "model_metrics": model_metrics,
-        "absolute_score_definition": {
+        "tan_score_model": {
+            "tan_score_model_version": config.TAN_SCORE_MODEL_VERSION,
+            "global_reference_version": config.GLOBAL_MELANOGENIC_REFERENCE_VERSION,
+            "global_reference_e_mel_wm2": config.GLOBAL_MELANOGENIC_REFERENCE_WM2,
+            "formula": "score = clip(100 * E_mel / E_mel_global_reference, 0, 100)",
+        },
+        "legacy_absolute_score_definition_55_30_15": {
+            "status": "DEPRECATED: retained for migration diagnostics only; "
+                      "never used in v4 production scoring",
             "uvi_reference": config.ABSOLUTE_UVI_REFERENCE,
             "uva_reference_wm2": config.ABSOLUTE_UVA_REFERENCE_WM2,
             "weights": config.ABSOLUTE_TAN_WEIGHTS,
@@ -417,8 +425,10 @@ def _run_live_inner(
         from .doses import add_interval_doses as _add_hourly_doses
 
         tan_hourly = _add_hourly_doses(tan_hourly)
-    except (ImportError, ValueError):
-        pass
+    except (ImportError, ValueError) as exc:
+        LOG.error("[doses] hourly interval-dose integration failed: %s", exc)
+        if strict:
+            raise
     # Strict photobiology gate: spectrum resource must evaluate.
     from .validation import validate_action_spectra
 
@@ -487,6 +497,11 @@ def _run_live_inner(
             "endpoint": "Copernicus ADS",
         }
     )
+    # Version strings are single-sourced from photobiology; a model bump must
+    # never require hunting literals across modules.
+    from .photobiology import PHOTOBIOLOGY_MODEL_VERSION as _PBV
+    from .photobiology import TAN_DOSE_MODEL_VERSION as _TDV
+
     summary = {
         "run": stamp,
         "created_at": datetime.now().astimezone().isoformat(),
@@ -507,9 +522,9 @@ def _run_live_inner(
         "calibration_tier": str(tan_hourly["tan_calibration_tier"].iloc[0]) if "tan_calibration_tier" in tan_hourly and len(tan_hourly) else None,
         "source_health": source_health,
         "validation_issues": _issue_dicts(source_issues + cams_issues + photo_issues + score_issues),
-        "photobiology_model_version": "action-spectrum-v1",
+        "photobiology_model_version": _PBV,
         "tan_score_model_version": config.TAN_SCORE_MODEL_VERSION,
-        "tan_dose_model_version": "action-spectrum-v1",
+        "tan_dose_model_version": _TDV,
         "global_reference_version": config.GLOBAL_MELANOGENIC_REFERENCE_VERSION,
         "global_reference_e_mel_wm2": config.GLOBAL_MELANOGENIC_REFERENCE_WM2,
         "score_semantics": {
@@ -606,6 +621,22 @@ def _run_live_inner(
 
 def _global_reference_status() -> tuple[bool, str]:
     """Locate + sanity-check the versioned global melanogenic reference."""
+    try:
+        from importlib import resources
+
+        ref = (resources.files("sunstack") / "_data" /
+               "global_melanogenic_reference" / "reference.json")
+        if ref.is_file():
+            import json as _json
+
+            manifest = _json.loads(ref.read_text(encoding="utf-8"))
+            value = float(manifest.get("global_reference_e_mel_wm2", 0))
+            version = str(manifest.get("global_reference_version", ""))
+            if value > 0 and version:
+                return True, f"{version} ({value:g} W/m^2 mel) [packaged]"
+            return False, "packaged reference.json has invalid value/version"
+    except (ImportError, OSError, TypeError, ValueError):
+        pass
     here = Path(__file__).resolve()
     candidates = [here.parent.parent.parent / "data" / "calibration" /
                   "global_melanogenic_reference" / "reference.json",

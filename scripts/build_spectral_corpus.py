@@ -112,7 +112,8 @@ def main() -> None:
     if uvspec:
         try:
             r = subprocess.run([uvspec, "-v"], capture_output=True, text=True, timeout=30)
-            lib_version = (r.stdout or r.stderr or "").strip().splitlines()[0][:120]
+            lines = (r.stdout or r.stderr or "").strip().splitlines()
+            lib_version = lines[0][:120] if lines else "uvspec-found-version-unknown"
         except (OSError, subprocess.SubprocessError):
             lib_version = "uvspec-found-version-unknown"
     manifest = {

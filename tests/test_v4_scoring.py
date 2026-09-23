@@ -455,3 +455,388 @@ def test_tierAB_claim_without_manifest_fails_loud(tmp_path, monkeypatch):
                         lambda *a, **k: "B")
     with pytest.raises(RuntimeError, match="no emulator manifest"):
         score_forecast(_best_air(), Path(tmp_path), None, _confidence())
+
+
+def test_best_hour_dose_integrates_full_hour():
+    # Constant E_mel over a full hour must dose E*3600 (the old exclusive end
+    # integrated only 30 minutes here).
+    from sunstack.doses import window_dose
+
+    stamps = pd.date_range("2026-06-21 12:00", periods=3, freq="30min")
+    frame = pd.DataFrame({
+        "dt": stamps,
+        "time": stamps.strftime("%Y-%m-%dT%H:%M"),
+        "melanogenic_effective_irradiance_wm2": [0.5, 0.5, 0.5],
+        "erythemal_irradiance_wm2": [0.15, 0.15, 0.15],
+        "predicted_uva_wm2": [35.0] * 3,
+        "predicted_uvb_wm2": [1.0] * 3,
+    })
+    got = window_dose(frame, stamps[0], stamps[0] + pd.Timedelta(minutes=60))
+    assert abs(got["tan_dose_best_window_j_m2"] - 0.5 * 3600) < 1e-6
+    assert abs(got["sed_best_window"] - 0.15 * 3600 / 100) < 1e-9
+
+
+def test_best_30m_dose_belongs_to_forward_interval():
+    from sunstack.doses import add_interval_doses
+    from sunstack.opportunity import build_daily_summary
+
+    dts = pd.date_range("2026-06-21 11:00", periods=5, freq="30min")
+    frame = pd.DataFrame({
+        "dt": dts,
+        "time": dts.strftime("%Y-%m-%dT%H:%M"),
+        "overall_tan_opportunity_0_100": [10.0, 90.0, 10.0, 10.0, 10.0],
+        "outdoor_blocked": [False] * 5,
+        "temperature_2m": [80.0] * 5,
+        "apparent_temperature": [80.0] * 5,
+        "wind_speed_10m": [5.0] * 5,
+        "wind_gusts_10m": [6.0] * 5,
+        "melanogenic_effective_irradiance_wm2": [1.0, 1.0, 0.0, 0.0, 0.0],
+        "erythemal_irradiance_wm2": [0.1, 0.1, 0.0, 0.0, 0.0],
+        "predicted_uva_wm2": [30.0] * 5,
+        "predicted_uvb_wm2": [0.5] * 5,
+    })
+    out = build_daily_summary(add_interval_doses(frame))
+    row = out.iloc[0]
+    # Best slot starts 11:30; its forward half hour [11:30, 12:00) doses the
+    # 1.0->0.0 leg: 0.5*1.0*1800 = 900, not the trailing 1800 ending at 11:30.
+    assert abs(row["best_30m_tan_dose_j_m2"] - 900.0) < 1e-6
+
+
+def test_day_totals_use_wall_date_without_time_utc(monkeypatch):
+    from sunstack import config as _config
+    from sunstack.doses import day_totals
+
+    monkeypatch.setattr(_config, "TIMEZONE", "America/Los_Angeles")
+    stamps = ([f"2026-06-21T{h:02d}:{m:02d}"
+               for h in range(7) for m in (0, 30)] +
+              ["2026-06-21T12:00"])
+    frame = pd.DataFrame({
+        "time": stamps,
+        "melanogenic_effective_irradiance_wm2": [0.4] * len(stamps),
+        "erythemal_irradiance_wm2": [0.1] * len(stamps),
+        "predicted_uva_wm2": [30.0] * len(stamps),
+        "predicted_uvb_wm2": [0.5] * len(stamps),
+    })
+    days = day_totals(frame)
+    assert len(days) == 1 and days.loc[0, "date"] == "2026-06-21"
+    assert days.loc[0, "tan_dose_day_j_m2"] > 0
+
+
+def test_configured_gap_threshold_reaches_day_and_window(monkeypatch):
+    from sunstack import config as _config
+    from sunstack.doses import day_totals, window_dose
+
+    stamps = pd.to_datetime(
+        ["2026-06-21T10:00", "2026-06-21T11:00",
+         "2026-06-21T13:00", "2026-06-21T14:00"])
+    frame = pd.DataFrame({
+        "time": stamps.strftime("%Y-%m-%dT%H:%M"),
+        "time_utc": stamps.tz_localize("UTC"),
+        "melanogenic_effective_irradiance_wm2": [0.5] * 4,
+        "erythemal_irradiance_wm2": [0.15] * 4,
+        "predicted_uva_wm2": [35.0] * 4,
+        "predicted_uvb_wm2": [1.0] * 4,
+    })
+    assert window_dose(frame, stamps[0], stamps[3])["tan_dose_best_window_j_m2"] > 0
+    assert day_totals(frame).loc[0, "tan_dose_complete"]
+    monkeypatch.setattr(_config, "TANDOSE_MAX_INTERP_GAP_S", 3600.0)
+    split = window_dose(frame, stamps[0], stamps[3])
+    assert split["tan_dose_best_window_j_m2"] == 2 * 0.5 * 3600
+    days = day_totals(frame)
+    assert not bool(days.loc[0, "tan_dose_complete"])
+    assert days.loc[0, "tan_dose_coverage_fraction"] < 1.0
+
+
+def test_daily_summary_carries_sed_completeness():
+    from sunstack.doses import add_interval_doses
+    from sunstack.opportunity import build_daily_summary
+
+    out = build_daily_summary(add_interval_doses(_half_hour_frame(1.0)))
+    row = out.iloc[0]
+    assert "sed_complete" in out.columns and "sed_coverage_fraction" in out.columns
+    assert bool(row["sed_complete"])
+    assert row["sed_coverage_fraction"] == 1.0
+
+
+def test_day_dose_failure_defaults_to_incomplete(monkeypatch):
+    from sunstack import doses as _doses
+    from sunstack.opportunity import build_daily_summary
+
+    def _boom(frame):
+        raise RuntimeError("no climatology")
+
+    monkeypatch.setattr(_doses, "day_totals", _boom)
+    out = build_daily_summary(_half_hour_frame(1.0))
+    row = out.iloc[0]
+    assert pd.isna(row["tan_dose_day_j_m2"])
+    assert not bool(row["tan_dose_complete"])
+    assert pd.isna(row["tan_dose_coverage_fraction"])
+
+
+def test_stale_reference_yields_no_local_percentiles(tmp_path):
+    import json
+
+    import pandas as pd
+
+    from sunstack.tanscore import score_forecast
+
+    caldir = Path(tmp_path)
+    (caldir / "local_reference_version.json").write_text(json.dumps(
+        {"tan_score_model_version": "legacy-55-30-15",
+         "global_reference_version": "global-mel-ref-v1-provisional",
+         "global_reference_e_mel_wm2": 1.6}))
+    ref = pd.DataFrame({
+        "time_utc": pd.to_datetime(["2026-06-21T12:00Z"] * 300, utc=True),
+        "day_of_year": [172] * 300,
+        "solar_elevation_deg": [60.0] * 300,
+        "absolute_tan_score_0_100": [10.0] * 300,
+    })
+    ref.to_parquet(caldir / "local_reference.parquet", index=False)
+    out = score_forecast(_best_air(), caldir, None, _confidence())
+    assert out["local_tan_score_0_100"].isna().all()
+    assert out["local_reference_stale"].all()
+
+
+def test_reference_value_override_flags_stale(tmp_path):
+    import json
+
+    from sunstack.tanscore import score_forecast
+
+    caldir = Path(tmp_path)
+    (caldir / "local_reference_version.json").write_text(json.dumps(
+        {"tan_score_model_version": "action-spectrum-v1",
+         "global_reference_version": "global-mel-ref-v1-provisional",
+         "global_reference_e_mel_wm2": 999.0}))
+    out = score_forecast(_best_air(), caldir, None, _confidence())
+    assert out["local_reference_stale"].all()
+    assert out["local_tan_score_0_100"].isna().all()
+
+
+def test_interval_ics_closes_events_and_skips_night(tmp_path):
+    from sunstack.output import export_static_site
+    from sunstack.ui import build_interval_ics
+
+    half = pd.DataFrame({
+        "time": ["2026-09-15T12:00", "2026-09-15T12:30", "2026-09-15T02:00"],
+        "tan_score_absolute_0_100": [40.0, 42.0, 0.0],
+        "overall_tan_opportunity_0_100": [50.0, 55.0, 0.0],
+        "tan_dose_30m_j_m2": [900.0, 950.0, 0.0],
+        "sed_30m": [2.5, 2.6, 0.0],
+        "uv_index": [5.0, 5.2, 0.0],
+        "is_day": [1, 1, 0],
+        "subhour_source": ["interpolated_hourly"] * 3,
+    })
+    ics = build_interval_ics(half, "20260915_004803")
+    assert ics.count("BEGIN:VEVENT") == 3
+    assert ics.count("END:VEVENT") == 3
+
+    latest = tmp_path / "latest"
+    (latest / "tables").mkdir(parents=True)
+    hourly = pd.DataFrame({
+        "time": ["2026-09-15T12:00", "2026-09-15T02:00"],
+        "temperature_2m": [80.0, 60.0],
+        "overall_tan_opportunity_0_100": [50.0, 0.0],
+        "tan_score_absolute_0_100": [40.0, 0.0],
+        "local_tan_score_0_100": [80.0, 5.0],
+        "atmospheric_quality_percentile_0_100": [60.0, 5.0],
+        "tan_forecast_confidence_0_100": [50.0, 10.0],
+    })
+    dayhalf = pd.DataFrame({
+        "dt": pd.to_datetime(["2026-09-15 12:00", "2026-09-15 12:30",
+                              "2026-09-15 02:00", "2026-09-15 02:30"]),
+        "time": ["2026-09-15T12:00", "2026-09-15T12:30",
+                 "2026-09-15T02:00", "2026-09-15T02:30"],
+        "temperature_2m": [80.0, 81.0, 60.0, 60.0],
+        "overall_tan_opportunity_0_100": [50.0, 55.0, 0.0, 0.0],
+        "tan_score_absolute_0_100": [40.0, 42.0, 0.0, 0.0],
+        "local_tan_score_0_100": [80.0, 82.0, 5.0, 5.0],
+        "atmospheric_quality_percentile_0_100": [60.0, 62.0, 5.0, 5.0],
+        "tan_forecast_confidence_0_100": [50.0, 52.0, 10.0, 10.0],
+        "uv_index": [5.0, 5.2, 0.0, 0.0],
+        "is_day": [1, 1, 0, 0],
+    })
+    hourly.to_parquet(latest / "tables" / "tan_forecast_hourly.parquet", index=False)
+    dayhalf.to_parquet(latest / "tables" / "tan_forecast_30min.parquet", index=False)
+    (latest / "summary.json").write_text(
+        '{"run": "test123", "created_at": "2026-09-15T00:00:00-04:00"}')
+    export_static_site(tmp_path, tmp_path / "site")
+    site_ics = (tmp_path / "site" / "calendar-30min.ics").read_text()
+    assert site_ics.count("BEGIN:VEVENT") == 2
+    assert site_ics.count("END:VEVENT") == 2
+    assert "02:00" not in site_ics
+
+
+def test_compare_guards_pre_v4_secondary_input(tmp_path, monkeypatch):
+    import sys
+
+    sys.path.insert(0, "src")
+    from scripts.compare_legacy_v4 import main as _compare_main
+
+    hourly2 = tmp_path / "hourly2.parquet"
+    pd.DataFrame({
+        "time": ["2026-09-15T12:00"],
+        "predicted_uva_wm2": [30.0],
+        "predicted_uvb_wm2": [0.5],
+    }).to_parquet(hourly2, index=False)
+    out = tmp_path / "report.md"
+    monkeypatch.setattr(sys, "argv", ["compare", "--hourly",
+                                      "data/calibration/training_calibration_hourly.parquet",
+                                      "--hourly2", str(hourly2),
+                                      "--out", str(out)])
+    _compare_main()
+    text = out.read_text(encoding="utf-8")
+    assert "predates v4" in text
+
+
+def test_version_constants_have_single_source():
+    from sunstack import config as _config
+    from sunstack import photobiology as _pb
+
+    assert _config.TAN_SCORE_MODEL_VERSION == _pb.TAN_SCORE_MODEL_VERSION
+    assert _config.TAN_SCORE_MODEL_VERSION == _pb.PHOTOBIOLOGY_MODEL_VERSION
+    assert _config.TAN_SCORE_MODEL_VERSION == _pb.TAN_DOSE_MODEL_VERSION
+
+
+def test_canonical_env_parsing_is_explicit():
+    import subprocess
+
+    for value, want in (
+        ("off", "False"), ("", "False"), ("0", "False"),
+        ("no", "False"), ("1", "True"), ("yes", "True"),
+        ("YES", "True"),
+    ):
+        proc = subprocess.run(
+            ["python3", "-c",
+             ("import sys; sys.path.insert(0, 'src'); "
+              "from sunstack import config; print(config.REQUIRE_CANONICAL_SPECTRUM)")],
+            capture_output=True, text=True, check=False, env={
+                "PATH": "/usr/bin:/bin", "SUNSTACK_REQUIRE_CANONICAL_SPECTRUM": value,
+                "HOME": "/home/ubuntu"},
+        )
+        assert proc.stdout.strip() == want, (value, proc.stdout, proc.stderr)
+
+
+def _load_script(name):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(name, f"scripts/{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_rebuild_adopt_orders_manifest_before_references(tmp_path, monkeypatch):
+    import json
+    import sys
+
+    import numpy as np
+    import pandas as pd
+    import yaml
+
+    (tmp_path / "locations.yaml").write_text(yaml.safe_dump(
+        [{"slug": "town", "name": "Town", "lat": 40.0, "lon": -80.0,
+          "timezone": "UTC", "enabled": True, "default": True}]),
+        encoding="utf-8")
+    caldir = tmp_path / "data" / "calibration"
+    caldir.mkdir(parents=True)
+    n = 400
+    stamps = pd.date_range("2020-06-01", periods=n, freq="h", tz="UTC")
+    pd.DataFrame({
+        "time_utc": stamps,
+        "uva": np.linspace(0, 45, n),
+        "uvb": np.linspace(0, 1.2, n),
+        "uvi": np.linspace(0, 8, n),
+        "sza": np.linspace(85, 20, n),
+        "ghi": np.linspace(5, 900, n),
+    }).to_parquet(caldir / "training_calibration_hourly.parquet", index=False)
+    refdir = caldir / "global_melanogenic_reference"
+    refdir.mkdir(parents=True)
+    (refdir / "reference.json").write_text(json.dumps(
+        {"global_reference_e_mel_wm2": 1.6,
+         "global_reference_version": "global-mel-ref-v1-provisional"}),
+        encoding="utf-8")
+    rb = _load_script("rebuild_v4_references")
+    # The script legitimately mutates global config when adopting; pin the
+    # originals here so teardown restores them for every other test.
+    import sunstack.config as _sconfig
+
+    monkeypatch.setattr(_sconfig, "GLOBAL_MELANOGENIC_REFERENCE_WM2",
+                        _sconfig.GLOBAL_MELANOGENIC_REFERENCE_WM2)
+    monkeypatch.setattr(_sconfig, "GLOBAL_MELANOGENIC_REFERENCE_VERSION",
+                        _sconfig.GLOBAL_MELANOGENIC_REFERENCE_VERSION)
+    monkeypatch.setattr(sys, "argv",
+                        ["rebuild", "--root", str(tmp_path),
+                         "--adopt-empirical-p999", "--new-version", "test-v9"])
+    rb.main()
+    manifest = json.loads((refdir / "reference.json").read_text(encoding="utf-8"))
+    assert manifest["global_reference_version"] == "test-v9"
+    assert manifest["global_reference_e_mel_wm2"] == manifest["empirical_two_site_grounding"]["distribution"]["p99.9"]
+    ver = json.loads((caldir / "local_reference_version.json").read_text(encoding="utf-8"))
+    assert ver["global_reference_version"] == "test-v9"
+    assert ver["global_reference_e_mel_wm2"] == manifest["global_reference_e_mel_wm2"]
+    check = pd.read_parquet(caldir / "local_reference.parquet")
+    e = check["melanogenic_effective_irradiance_wm2"].to_numpy(dtype=float)
+    # Builder clips scores at 100 (adopted ref == p99.9 < p100max). Tolerance
+    # covers last-ulp drift: the builder scores unrounded E_mel while the
+    # parquet stores it rounded to 1e-5, which can flip a 0.1 rounding boundary.
+    got = check["absolute_tan_score_0_100"].to_numpy(dtype=float)
+    expect = np.clip(np.round(100.0 * e / manifest["global_reference_e_mel_wm2"], 1),
+                     0, 100)
+    assert np.allclose(got, expect, atol=0.11, equal_nan=True)
+    # Sensitivity guard: the OLD reference must NOT explain these scores.
+    stale = np.clip(np.round(100.0 * e / 1.6, 1), 0, 100)
+    assert not np.allclose(got, stale, atol=0.11, equal_nan=True)
+
+
+def test_corpus_builder_survives_empty_uvspec_output(tmp_path, monkeypatch):
+    import json
+    import shutil
+    import subprocess
+    import sys
+
+    rb = _load_script("build_spectral_corpus")
+
+    class _Done:
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(shutil, "which", lambda name: "/fake/uvspec")
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Done())
+    monkeypatch.setattr(sys, "argv",
+                        ["build", "--samples", "8", "--out", str(tmp_path / "corpus")])
+    rb.main()
+    manifest = json.loads((tmp_path / "corpus" / "manifest.json").read_text(encoding="utf-8"))
+    # Fake binary present but versionless: no crash, design + manifest land.
+    assert manifest["status"] == "ready-to-run"
+    assert manifest["libRadtran"] == "uvspec-found-version-unknown"
+    assert (tmp_path / "corpus" / "design.csv").exists()
+
+
+def test_closure_requires_canonical_utc(tmp_path, monkeypatch):
+    import sys
+
+    rb = _load_script("validate_external")
+    latest = tmp_path / "latest"
+    latest.mkdir(parents=True)
+    cams = pd.DataFrame({
+        "time_utc": pd.date_range("2026-09-22 12:00", periods=6, freq="h", tz="UTC"),
+        "cams_uv_biologically_effective_dose": [0.05] * 6,
+        "cams_uv_biologically_effective_dose_clear_sky": [0.06] * 6,
+    })
+    hourly = pd.DataFrame({
+        "time": ["2026-09-22T12:00"] * 6,  # naive local-looking, NO time_utc
+        "uv_index": [2.0] * 6,
+    })
+    cams.to_parquet(latest / "cams_direct_forecast.parquet", index=False)
+    hourly.to_parquet(latest / "tan_forecast_hourly.parquet", index=False)
+    (tmp_path / "cal").mkdir()
+    (tmp_path / "cal" / "model_metrics.json").write_text(
+        '{"rows": 0, "validation_split_year": 2024}')
+    out = tmp_path / "report.md"
+    monkeypatch.setattr(sys, "argv",
+                        ["validate", "--latest", str(latest),
+                         "--calibration", str(tmp_path / "cal"),
+                         "--out", str(out)])
+    rb.main()
+    text = out.read_text(encoding="utf-8")
+    assert "never parsed as UTC" in text

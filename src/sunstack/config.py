@@ -180,7 +180,7 @@ GLOBAL_MELANOGENIC_REFERENCE_VERSION = os.getenv(
 TAN_SCORE_MODEL_VERSION = "action-spectrum-v1"
 REQUIRE_CANONICAL_SPECTRUM = (
     os.getenv("SUNSTACK_REQUIRE_CANONICAL_SPECTRUM", "0").strip().lower()
-    not in {"0", "false", "no"}
+    in {"1", "true", "yes", "on"}
 )
 # Tier-B emulator manifest path. None means no validated emulator is wired:
 # any claim of tier A/B then fails loudly in score_forecast instead of

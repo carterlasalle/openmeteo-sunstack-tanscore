@@ -107,7 +107,7 @@ CAMS UVBED field: `cams_uv_biologically_effective_dose` (dose rate, W/m^2 erythe
 | ozone=high | 25 | 3.6296 | 4.0419 | -3.2496 |
 
 No training touched CAMS UVBED targets, so this comparison is independent.
-NOTE: the bias concentrates at high sun (SZA 30-50) with near-zero CAMS values while Open-Meteo peaks — consistent with a ~4-5 h diurnal phase offset in the decoded CAMS valid times (under investigation in history._dataset_time_column), not with a radiometric scale error. The UVI-disagreement confidence penalty is the correct architectural response until the phase is resolved.
+NOTE: the bias concentrates at high sun (SZA 30-50) with near-zero CAMS values while Open-Meteo peaks — consistent with a ~4-5 h diurnal phase offset in the decoded CAMS valid times (under investigation in history._dataset_time_column), not with a radiometric scale error. This attribution is unconfirmed until a measured phase analysis supports it; meanwhile the UVI-disagreement confidence penalty is the correct architectural response.
 
 ## Open-Meteo UVI self-consistency
 

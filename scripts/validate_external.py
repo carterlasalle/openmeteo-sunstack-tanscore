@@ -137,11 +137,13 @@ def main() -> None:
         uv = [c for c in cams.columns if "biologically_effective" in c.lower() and "clear" not in c.lower()]
         uvc = [c for c in cams.columns if "biologically_effective" in c.lower() and "clear" in c.lower()]
         lines += ["## CAMS UVBED vs Open-Meteo UVI (erythemal closure)", ""]
-        if uv and uvc and "uv_index" in hourly:
+        if uv and uvc and "uv_index" in hourly and "time_utc" in hourly:
             bed = pd.to_numeric(cams[uv[0]], errors="coerce").to_numpy()
             cams_uvi = bed * 40.0
             # Align by nearest hour on the overlapping span (diagnostic, not training).
-            ht = pd.to_datetime(hourly["time_utc"] if "time_utc" in hourly else hourly["time"], utc=True)
+            # Canonical UTC only: naive local `time` must never be parsed as
+            # UTC here, or the join and season strata shift by the site offset.
+            ht = pd.to_datetime(hourly["time_utc"], utc=True)
             ct = pd.to_datetime(cams["time_utc"], utc=True)
             om_uvi = pd.to_numeric(hourly["uv_index"], errors="coerce").to_numpy()
             # Resample CAMS to hourly stamps by merge_asof.
@@ -169,9 +171,7 @@ def main() -> None:
                         hourly.get("aod340"), errors="coerce"),
                     "ozone": pd.to_numeric(
                         hourly.get("ozone_du"), errors="coerce"),
-                    "month": pd.to_datetime(
-                        hourly.get("time_utc") if "time_utc" in hourly
-                        else hourly.get("time"), utc=True).dt.month,
+                    "month": ht.dt.month,
                 }).sort_values("t")
                 m2 = pd.merge_asof(merged.sort_values("t"), ctx, on="t",
                                    direction="nearest",
@@ -214,12 +214,14 @@ def main() -> None:
                       "near-zero CAMS values while Open-Meteo peaks — consistent "
                       "with a ~4-5 h diurnal phase offset in the decoded CAMS "
                       "valid times (under investigation in history._dataset_time_column), "
-                      "not with a radiometric scale error. The UVI-disagreement "
-                      "confidence penalty is the correct architectural response "
-                      "until the phase is resolved.",
+                      "not with a radiometric scale error. This attribution is "
+                      "unconfirmed until a measured phase analysis supports it; "
+                      "meanwhile the UVI-disagreement confidence penalty is the "
+                      "correct architectural response.",
                       ""]
         else:
-            lines += ["CAMS UVBED or hourly UVI columns missing.", ""]
+            lines += ["CAMS UVBED, hourly UVI, or hourly time_utc columns missing; "
+                      "closure skipped (naive local times are never parsed as UTC).", ""]
     else:
         lines += ["## CAMS/Open-Meteo", "",
                   f"Latest tables not found under {latest}; run a live forecast first.", ""]

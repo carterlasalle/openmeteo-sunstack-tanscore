@@ -389,3 +389,52 @@ def test_absolute_has_no_uva_uvb_interaction():
     d_uvb_low_uva = score(35.0, 1.2) - score(35.0, 0.4)
     d_uvb_high_uva = score(55.0, 1.2) - score(55.0, 0.4)
     assert abs(d_uvb_low_uva - d_uvb_high_uva) < 1e-9
+
+
+def test_packaged_spectra_take_precedence_over_repo(tmp_path, monkeypatch):
+    import hashlib
+    import json as _json
+
+    import sunstack.photobiology as pb
+
+    waves = list(range(280, 401))
+    effs = [0.5] * len(waves)
+    csv_text = "wavelength_nm,effectiveness\n" + "\n".join(
+        f"{w},{e}" for w, e in zip(waves, effs)) + "\n"
+    meta = {"resource": "zz_pack.csv", "source_title": "packaged",
+            "tier": "canonical",
+            "checksum_sha256": hashlib.sha256(csv_text.encode()).hexdigest()}
+
+    def fake_package_bytes(*parts):
+        name = parts[-1]
+        if name == "zz_pack.csv":
+            return csv_text.encode()
+        if name == "zz_pack.meta.json":
+            return _json.dumps(meta).encode()
+        return None
+
+    monkeypatch.setattr(pb, "_package_bytes", fake_package_bytes)
+    pb._cache.pop("zz_pack", None)
+    try:
+        spec = pb.load_action_spectrum("zz_pack")
+    finally:
+        pb._cache.pop("zz_pack", None)
+    assert spec.tier == "canonical"
+    assert spec.sha256 == meta["checksum_sha256"]
+    assert float(spec.effectiveness[0]) == 0.5
+
+
+def test_unknown_tier_fails_strict_canonical_gate(monkeypatch):
+    import sunstack.photobiology as pb
+    from sunstack.photobiology import ActionSpectrum
+    from sunstack.validation import validate_action_spectra
+
+    stub = ActionSpectrum(
+        name="parrish_delayed_melanogenesis",
+        wavelengths_nm=__import__("numpy").arange(280, 401, dtype=float),
+        effectiveness=__import__("numpy").full(121, 0.01),
+        tier="unknown", source="stub", sha256="x")
+    monkeypatch.setattr(pb, "load_action_spectrum", lambda stem="x": stub)
+    issues = validate_action_spectra(strict_canonical=True)
+    assert any(i.severity == "ERROR" and "unknown" in i.message for i in issues)
+    assert not [i for i in validate_action_spectra(False) if i.severity == "ERROR"]

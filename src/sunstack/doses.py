@@ -198,17 +198,27 @@ def day_totals(frame: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     work = frame.copy()
     work["_secs"] = _utc_seconds(work)
-    # Local date for day grouping.
-    try:
-        from zoneinfo import ZoneInfo
+    # Local date for day grouping. Half-hour frames carry local wall-clock
+    # `time`/`dt` WITHOUT a time_utc column (strings do not survive the
+    # numeric resample), so a wall date must be read directly: parsing it as
+    # UTC and converting again would shift whole mornings into the previous
+    # day at non-UTC sites and silently drop dawn exposure from day totals.
+    if "time_utc" in work.columns:
+        try:
+            from zoneinfo import ZoneInfo
 
-        tz = ZoneInfo(config.TIMEZONE)
-        local = pd.to_datetime(work["time_utc"] if "time_utc" in work else work["time"],
-                               utc=True).dt.tz_convert(tz)
-        work["_date"] = local.dt.date.astype(str)
-    except (TypeError, ValueError, KeyError, AttributeError):
-        work["_date"] = pd.to_datetime(
-            work["time"] if "time" in work else work["time_utc"]).astype(str).str.slice(0, 10)
+            tz = ZoneInfo(config.TIMEZONE)
+            local = pd.to_datetime(work["time_utc"], utc=True).dt.tz_convert(tz)
+            work["_date"] = local.dt.date.astype(str)
+        except (TypeError, ValueError, KeyError, AttributeError):
+            work["_date"] = pd.to_datetime(work["time_utc"], utc=True).dt.date.astype(str)
+    else:
+        wall = pd.to_datetime(work["dt"] if "dt" in work.columns else work["time"])
+        try:
+            work["_date"] = wall.dt.date.astype(str)
+        except AttributeError:
+            work["_date"] = wall.astype(str).str.slice(0, 10)
+    gap = float(config.TANDOSE_MAX_INTERP_GAP_S)
     rows = []
     for date, g in work.sort_values("_secs").groupby("_date"):
         e = _group_col(g, "melanogenic_effective_irradiance_wm2")
@@ -216,10 +226,10 @@ def day_totals(frame: pd.DataFrame) -> pd.DataFrame:
         uva = _group_col(g, "predicted_uva_wm2")
         uvb = _group_col(g, "predicted_uvb_wm2")
         t = pd.to_datetime(g["time_utc"] if "time_utc" in g else g["time"], utc=True)
-        td = integrate_tandose(t, e)
-        sd = integrate_sed(t, ery)
-        uva_d = integrate_band_dose(t, uva)
-        uvb_d = integrate_band_dose(t, uvb)
+        td = integrate_tandose(t, e, gap)
+        sd = integrate_sed(t, ery, gap)
+        uva_d = integrate_band_dose(t, uva, gap)
+        uvb_d = integrate_band_dose(t, uvb, gap)
         rows.append({
             "date": date,
             "tan_dose_day_j_m2": round(float(td["tan_dose_melanogenic_j_m2"]), 1),
@@ -230,17 +240,25 @@ def day_totals(frame: pd.DataFrame) -> pd.DataFrame:
             "tan_dose_coverage_fraction": round(float(td["tan_dose_coverage_fraction"]), 3),
             "sed_day_total": round(float(sd["sed"]), 3),
             "sed_complete": bool(sd["sed_complete"]),
+            "sed_coverage_fraction": round(float(sd["sed_coverage_fraction"]), 3),
             "uva_dose_day_j_m2": round(float(uva_d["dose_j_m2"]), 1),
             "uvb_dose_day_j_m2": round(float(uvb_d["dose_j_m2"]), 2),
         })
     return pd.DataFrame(rows)
 
 
-def window_dose(frame: pd.DataFrame, start, end) -> dict[str, float]:
-    """Cumulative doses over a candidate window [start, end)."""
+def window_dose(frame: pd.DataFrame, start, end,
+                max_gap_s: float | None = None) -> dict[str, float]:
+    """Cumulative doses over a candidate window [start, end].
+
+    Samples are instantaneous: the end stamp bounds the final trapezoid leg,
+    so it is included (half-open ends would silently drop the last interval
+    of every window dose).
+    """
+    gap = float(config.TANDOSE_MAX_INTERP_GAP_S) if max_gap_s is None else float(max_gap_s)
     sub = frame.copy()
     sub["_t"] = pd.to_datetime(sub["dt"] if "dt" in sub else sub["time"], errors="coerce")
-    mask = (sub["_t"] >= pd.to_datetime(start)) & (sub["_t"] < pd.to_datetime(end))
+    mask = (sub["_t"] >= pd.to_datetime(start)) & (sub["_t"] <= pd.to_datetime(end))
     g = sub.loc[mask]
     if g.empty:
         return {"tan_dose_best_window_j_m2": 0.0, "sed_best_window": 0.0,
@@ -253,10 +271,10 @@ def window_dose(frame: pd.DataFrame, start, end) -> dict[str, float]:
             return pd.Series(np.nan, index=g.index, dtype="float64")
         return pd.to_numeric(g[name], errors="coerce")
 
-    td = integrate_tandose(t, _gcol("melanogenic_effective_irradiance_wm2"))
-    sd = integrate_sed(t, _ery_or_uvi(g, _gcol("erythemal_irradiance_wm2")))
-    uva_d = integrate_band_dose(t, _gcol("predicted_uva_wm2"))
-    uvb_d = integrate_band_dose(t, _gcol("predicted_uvb_wm2"))
+    td = integrate_tandose(t, _gcol("melanogenic_effective_irradiance_wm2"), gap)
+    sd = integrate_sed(t, _ery_or_uvi(g, _gcol("erythemal_irradiance_wm2")), gap)
+    uva_d = integrate_band_dose(t, _gcol("predicted_uva_wm2"), gap)
+    uvb_d = integrate_band_dose(t, _gcol("predicted_uvb_wm2"), gap)
     return {
         "tan_dose_best_window_j_m2": round(float(td["tan_dose_melanogenic_j_m2"]), 1),
         "sed_best_window": round(float(sd["sed"]), 3),

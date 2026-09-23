@@ -23,6 +23,7 @@ def _ensure_dual_scores(df: pd.DataFrame, src: Path, lines: list[str]) -> pd.Dat
         import sys
 
         sys.path.insert(0, "src")
+        from sunstack import config as _cfg
         from sunstack.calibrate import absolute_tan_score as _legacy
         from sunstack.photobiology import absolute_tan_score_from_melanogenic_irradiance as _v4
         from sunstack.spectral import melanogenic_from_broadband as _em
@@ -34,7 +35,8 @@ def _ensure_dual_scores(df: pd.DataFrame, src: Path, lines: list[str]) -> pd.Dat
         df = df.copy()
         df["legacy_absolute_tan_score_55_30_15"] = np.round(_legacy(uvi, uva), 1)
         df["tan_score_absolute_0_100"] = np.round(
-            _v4(_em(uva, uvb), 1.6), 1)
+            _v4(_em(uva, uvb),
+                float(_cfg.GLOBAL_MELANOGENIC_REFERENCE_WM2)), 1)
         has_both = True
         lines.append(f"Source: `{src}` ({len(df)} rows; v4 recomputed Tier-C provisional).")
     else:
@@ -184,9 +186,14 @@ def main() -> None:
         lines += [f"## Current South Bend runs ({args.label2})", ""]
         df2 = pd.read_parquet(src2) if src2.suffix == ".parquet" else pd.read_csv(src2)
         df2 = _ensure_dual_scores(df2, src2, lines)
-        sec2, _ = _section(df2)
-        lines += sec2
-        lines += _answered_questions(df2)
+        if {"legacy_absolute_tan_score_55_30_15",
+                "tan_score_absolute_0_100"}.issubset(df2.columns):
+            sec2, _ = _section(df2)
+            lines += sec2
+            lines += _answered_questions(df2)
+        else:
+            lines += ["(Live input predates v4 dual scoring; "
+                      "no comparison section generated.)", ""]
     lines += [
         "## What to inspect",
         "- September-11-like excellent-local hours should remain excellent "

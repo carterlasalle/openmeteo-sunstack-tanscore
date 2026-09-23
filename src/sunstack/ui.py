@@ -278,6 +278,7 @@ def build_interval_ics(
             _ics_fold(f"DTEND:{_ics_stamp(end, tz_name)}"),
             _ics_fold(f"SUMMARY:{_ics_text('Sun ' + str(start)[11:16] + ' (' + (bits[0] if bits else 'update') + ')')}"),
             _ics_fold(f"DESCRIPTION:{_ics_text('. '.join(bits))}"),
+            _ics_fold("END:VEVENT"),
         ]))
     body = "\r\n".join(events)
     head = ("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SunStack//TanScore//EN\r\n"
@@ -365,6 +366,7 @@ def build_calendar_ics(
                     _ics_fold(f"DTEND:{_ics_stamp(end, tz_name)}"),
                     _ics_fold(f"SUMMARY:{_ics_text(summary)}"),
                     _ics_fold(f"DESCRIPTION:{_ics_text(desc)}"),
+                    _ics_fold("END:VEVENT"),
                 ]
             )
         )

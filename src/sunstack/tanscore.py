@@ -195,10 +195,11 @@ def predict_uva_uvb(features: pd.DataFrame, calibration_dir: Path) -> tuple[np.n
         tier = "nasa_power_ml_plus_cams_spectral" if full_cams else "nasa_power_ml"
     else:
         # Last-resort fallback only. It is explicitly labeled so it can never be
-        # mistaken for the calibrated model.
-        ghi = num(features, "ghi").fillna(0).to_numpy()
+        # mistaken for the calibrated model. Missing inputs stay missing
+        # (NaN): only confirmed night rows (below) become zero.
+        ghi = num(features, "ghi").to_numpy(dtype=float)
         uva = np.clip(0.055 * ghi, 0, 70)
-        uvi = num(features, "uv_index").fillna(0).to_numpy()
+        uvi = num(features, "uv_index").to_numpy(dtype=float)
         uvb = np.clip(0.10 * uvi, 0, 3)
         tier = "uncalibrated_fallback"
     # No sun above the horizon means no surface UV, full stop. The ML models
@@ -475,8 +476,11 @@ def score_forecast(
     ]
 
     # Independent erythemal channel (SED input). NEVER added to TanScore.
+    # Missing UVI stays missing: only confirmed night rows read as zero via
+    # their present 0.0 UVI, so the SED integrator can mark true gaps instead
+    # of trapezoids through invented zeros.
     out["erythemal_irradiance_wm2"] = np.round(
-        erythemal_irradiance_from_uvi(num(out, "uv_index").fillna(0).to_numpy()), 5
+        erythemal_irradiance_from_uvi(num(out, "uv_index").to_numpy(dtype=float)), 5
     )
     # Separate UVA-dominant pigment-darkening channel (existing pigment only).
     try:
@@ -511,14 +515,13 @@ def score_forecast(
         ).round(4)
 
     ref_path = calibration_dir / "local_reference.parquet"
-    local_ref = pd.read_parquet(ref_path) if ref_path.exists() else pd.DataFrame()
-    out = add_local_scores(out, local_ref)
-    out["local_tan_label"] = [_grade_local(float(x)) for x in num(out, "local_tan_score_0_100").fillna(np.nan)]
-    # Loud local-reference provenance: legacy-55/30/15 percentiles must never
-    # be mistaken for v4 percentiles. A missing/mismatched version file marks
-    # every row stale instead of silently mixing climatologies.
+    # Version-gate BEFORE scoring percentiles: a stale/missing version file
+    # means the parquet may hold legacy-55/30/15 percentiles, which must never
+    # be mixed into v4 overall opportunity. Reject first (NaN = unavailable),
+    # mark loudly; validation WARNs downstream.
     out["local_reference_version"] = "unknown"
     out["local_reference_stale"] = True
+    _ref_usable = False
     try:
         import json as _json
 
@@ -527,10 +530,25 @@ def score_forecast(
             _ver = _json.loads(_ver_path.read_text(encoding="utf-8"))
             out["local_reference_version"] = str(
                 _ver.get("tan_score_model_version", "unknown"))
-            out["local_reference_stale"] = bool(
-                _ver.get("tan_score_model_version") != config.TAN_SCORE_MODEL_VERSION)
-    except (OSError, ValueError):
+            _model_ok = (_ver.get("tan_score_model_version")
+                         == config.TAN_SCORE_MODEL_VERSION)
+            _refver_ok = (_ver.get("global_reference_version", None) in
+                          (None, config.GLOBAL_MELANOGENIC_REFERENCE_VERSION))
+            _refval = _ver.get("global_reference_e_mel_wm2", None)
+            _refval_ok = (_refval is None or float(_refval) ==
+                          float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2))
+            # An env-overridden reference value without a version bump changes
+            # Absolute silently: without a recorded value to compare, a mere
+            # version match is not enough to trust the file. Missing value is
+            # tolerated only for files written before the value was recorded.
+            _ref_usable = bool(_model_ok and _refver_ok and _refval_ok)
+            out["local_reference_stale"] = not _ref_usable
+    except (OSError, ValueError, TypeError):
         pass
+    local_ref = (pd.read_parquet(ref_path)
+                 if (_ref_usable and ref_path.exists()) else pd.DataFrame())
+    out = add_local_scores(out, local_ref)
+    out["local_tan_label"] = [_grade_local(float(x)) for x in num(out, "local_tan_score_0_100").fillna(np.nan)]
 
     # Keep quality and uncertainty separate. A low confidence never changes the
     # physical TanScore; it only changes how much to trust that forecast.
@@ -568,8 +586,13 @@ def score_forecast(
         from .spectral import apply_skin_plane as _apply_plane
 
         out = _apply_plane(out)
-    except (ImportError, ValueError):
-        pass
+    except ValueError as exc:
+        import logging as _logging
+
+        _logging.getLogger("sunstack").error(
+            "Skin-plane configuration invalid (tilt=%s, azimuth=%s): %s",
+            config.SKIN_TILT_DEG, config.SKIN_AZIMUTH_DEG, exc)
+        raise
     out = add_sun_posture(out)
     return out
 

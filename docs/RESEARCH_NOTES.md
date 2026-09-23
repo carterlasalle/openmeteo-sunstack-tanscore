@@ -442,3 +442,33 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
 - `SUNSTACK_TIERB_MANIFEST` documented in `.env.example` (was code-only).
   (`rebuild_v4_references.py` intentionally not rerun: it date-stamps the
   reference manifest and rewrites large calibration tables.)
+
+## 2026-09-23 (follow-up 18) — 30 review comments worked (CodeRabbit + Codex)
+
+- Real bugs fixed, all verified: window doses dropped the final trapezoid
+  leg (`< end` on instantaneous samples — best-hour doses were 30-min doses;
+  now inclusive, rescore report regenerated: day-1 window 9610->10854 J);
+  `day_totals` grouped naive local wall times as UTC, leaking dawn hours out
+  of day totals at non-UTC sites (wall dates now used when `time_utc` is
+  absent); daily rows defaulted to complete/coverage-1.0 on dose failure
+  (now False/NaN); SED day coverage was dropped (now carried end to end);
+  both ICS builders emitted unterminated VEVENTs (daily one predated v4);
+  interval calendar spammed ~48 events/day incl. nights (daylight filter).
+- Loudness hardened per review: stale local references are rejected BEFORE
+  percentiles (NaN, never mixed into overall); reference value overrides
+  trip staleness; Tier A/B claims need a manifest; missing bands stay NaN
+  through recompute; dose failures log + re-raise in strict; canonical-tier
+  rule unified (`!= canonical`); version strings single-sourced via config
+  with a consistency test; explicit env truthy sets; assert-to-SystemExit in
+  the rescore gate; empty-uvspec crash fixed; compare script uses configured
+  reference and guards pre-v4 secondary inputs; validation closure requires
+  canonical UTC with a single month derivation (phase attribution now marked
+  unconfirmed pending measurement); wheel force-includes spectra + global
+  reference with importlib.resources resolution and repo fallback.
+- Rebuild script restructured adopt-first so manifest, version files, and
+  local references can never disagree; tests pin the ordering (including a
+  sensitivity guard proving the adopted ref actually scored the references).
+- Review items verified and escalated honestly: the crude cloud-cover split
+  stays INCONCLUSIVE in the migration report (mechanism-level ratio bins
+  carry the claim); `_utc_seconds` naive handling documented as DST-limited
+  only for relative seconds.

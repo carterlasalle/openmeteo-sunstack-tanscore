@@ -60,7 +60,8 @@ def main() -> None:
         photo_issues = validate_action_spectra(False)
         score_issues = validate_scored_hourly(scored)
         errors = [i for i in photo_issues + score_issues if i.severity == "ERROR"]
-        assert not errors, f"v4 validation errors: {errors}"
+        if errors:
+            raise SystemExit(f"v4 validation errors: {errors}")
 
         half = build_30min_forecast(scored, hrrr)
         half = attach_fitzpatrick(half, None)
@@ -87,7 +88,7 @@ def main() -> None:
             "",
             f"Site: {site.slug}; input rows: hourly={len(scored)}, "
             f"half-hour={len(half)}, days={len(daily)}.",
-            f"Validators: photobiology + scored-hourly ERROR count = 0.",
+            f"Validators: photobiology + scored-hourly ERROR count = {len(errors)}.",
             "",
             "## Score migration on this run",
             "",
