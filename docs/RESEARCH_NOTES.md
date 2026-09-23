@@ -164,3 +164,555 @@ bootstrap. Identical code path per site, strict on, no fallback tiers —
 quality cannot regress by construction. 502s in the Sep-22 log are ADS
 queue saturation (Bad Gateway from the retrieve proxy, retried after 120s),
 not request-shape errors; the 400s are the unpublished newest cycle.
+
+## 2026-09-23 — Photobiology v4 (action-spectrum TanScore + TanDose)
+
+Replaces the heuristic 55/30/15 Absolute (55% UVI + 30% UVA + 15%
+sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
+
+- `E_mel = integral E_lambda S_mel dlambda` (Parrish-approximated provisional
+  spectrum, log-space interpolation, 280-400 nm @1 nm); Absolute =
+  100*E_mel/1.6 (global-mel-ref-v1-provisional, 99.9th percentile).
+- Tier-C broadband runtime mapping derives band weights from the spectrum
+  itself (w_uvb~0.57, w_uva~0.005); wavelength-additive by construction, no
+  sqrt interaction (Keong 1990 photoaddition, PMID 2103131; Wolber 2008 kept
+  as downstream-response evidence only).
+- TanDose = trapezoidal integral of E_mel with gap splitting
+  (SUNSTACK_TANDOSE_MAX_GAP_S); SED = integral(E_ery)/100 independent channel
+  that never increases scores; UVA/UVB physical doses diagnostic only.
+- Direct CAMS UVBED/clear-sky/downward UV plus all spectral aerosol optics
+  (340/355/380/400) propagated; CAMS UVI = 40*UVBED; CAMS/OM disagreement
+  reduces confidence only. Validation on the Palisades latest run shows a
+  ~4-5 h CAMS-vs-OM diurnal phase offset (MAE ~3.2 UVI) under investigation;
+  the disagreement penalty is the correct architectural response.
+- Local reference rebuilt with v4 scores (legacy kept as diagnostic column
+  `legacy_absolute_tan_score_55_30_15` for one migration version).
+- Human-literature aggregates encoded in data/research/exposure_studies.json
+  (no fabricated subject data); TanResponse stays interface-only until a
+  fitted model beats cumulative dose on held-out studies.
+- Primary references: Parrish 1982 (PMID 7122713), Keong 1990 (PMID 2103131),
+  Ravnbak & Wulf 2007 (PMID 17256147), Miller 2008 (PMID 18616777), Ravnbak
+  2009 (PMID 19688146), Ravnbak 2010 (PMID 20584251), Wolber 2008
+  (PMID 18627527), MITF timer mechanistic prior (PMID 30401431).
+
+## 2026-09-23 (follow-up) — v4 references rebuilt, stratified validation, literature gates
+
+- Rebuilt `local_reference` (south-bend 108744 rows, pacific-palisades 111696
+  rows) with v4 action-spectrum scores via `scripts/rebuild_v4_references.py`
+  (legacy kept as diagnostic column only). Empirical grounding: pooled
+  daylight Tier-C E_mel p99.9 = 1.522 W/m^2 across both sites' NASA POWER
+  climatology; adopted reference 1.6 retains ~5% headroom for unsampled
+  equatorial/high-altitude extremes (recorded in reference.json, value unchanged).
+- `docs/validation/external_validation.md` now stratifies holdout UVA/UVB
+  errors and CAMS-closure error by SZA/cloud/season/AOD340/ozone. Closure bias
+  concentrates at high sun (SZA 30-50, bias -4.4) with near-zero CAMS values
+  at Open-Meteo peak — consistent with a ~4-5 h decoded-valid-time phase
+  offset, not a scale error; UVI-disagreement confidence penalty is the
+  correct response pending a fix in CAMS time decoding.
+- `scripts/check_literature.py` -> `docs/validation/literature_sanity.md`:
+  all gates pass (Parrish UVB/UVA 1247x, Keong photoaddition exact,
+  erythema/melanogenesis spectral crossing 1.44x at 300 nm vs 3.11x at
+  340 nm, IPD UVA-dominant/UVB-silent, SED/TanDose divergence 5.40 vs 2706).
+  Two provisional-shape bugs caught by the gates and fixed: IPD Gaussian was
+  too broad shortward (added 312 nm logistic cutoff), and the assumed
+  erythema>>melanogenesis ordering at 320 nm was backwards (spectra cross).
+- Migration report gains UVA-rich vs UVB-rich divergence quintiles: most
+  UVB-rich +9.8, most UVA-rich -0.7 under v4 — the intended reordering.
+- Tier-B path scaffolded: `scripts/build_spectral_corpus.py` (stratified
+  design over SZA/ozone/altitude/aerosol/albedo/cloud ranges, DRAFT uvspec
+  template, manifest with checksums; runs uvspec only when installed) plus a
+  strict `validate_tierB_manifest` contract in spectral.py.
+- Remainders wired: per-30-minute `calendar-30min.ics` export, pigment-channel
+  CSV columns, Visible-Darkening Potential in the UI dose row,
+  personalization columns in live outputs (NaN until measured MMD supplied),
+  broadband sqrt-correction rationale documented (sublinear broadband
+  response, not a scoring weight).
+
+## 2026-09-23 (follow-up 2) — CAMS time-decoder hardening + offline v4 re-score
+
+- CAMS time-axis audit: the decoded `cams_direct_forecast` grid is correctly
+  spaced (121 hourly rows) so the ~4-5 h CAMS-vs-OM diurnal offset is a phase
+  anchoring question, not a collapse; raw netCDFs are not retained locally so
+  the decode source cannot be re-examined here. Hardened
+  `history._dataset_time_column` with `_cams_step_delta`: bare numeric steps
+  are read as hours (CAMS leadtime_hour convention) instead of falling into
+  `pd.to_timedelta`'s nanosecond default, which would collapse a forecast onto
+  its reference time. Locked with `tests/test_cams_time_decode.py` (6 tests:
+  valid_time passthrough, reference/timedelta, reference/numeric-hours,
+  time/timedelta, time-only fallback, no-time empty, all through real .nc
+  files via `normalize_cams_netcdf_zip`).
+- Offline end-to-end v4 re-score (`scripts/rescore_latest_v4.py`) of the real
+  Palisades latest run: 336 hourly -> 671 half-hours -> 14 days with ZERO
+  photobiology/scoring validation errors; v4 max 68.9 at E_mel 1.10 (below
+  the 1.6 global ref, correct for a temperate-September peak); daily TanDose
+  15.6-22.5 kJ mel with complete coverage; 14 daily + 671 interval ICS
+  events. Local scores 100% non-null against the rebuilt v4 reference.
+  Report: `docs/validation/v4_rescore_verification.md` (artifacts in scratch).
+
+## 2026-09-23 (follow-up 3) — audit-driven scoring tests
+
+- New `tests/test_v4_scoring.py` (7 tests) pins previously untested
+  production behavior offline: v4 Absolute equals 100*E_mel/E_ref with the
+  legacy value present-but-unused; all 16 direct CAMS fields propagate with
+  real sanitized column names (UVBED->erythemal, CAMS UVI = 40x,
+  transmission, downward-UV differentiation to ~0.25 W/m^2); strong
+  CAMS/Open-Meteo disagreement discounts confidence 80->52 while E_mel and
+  Absolute stay bit-identical; window selection is dose-invariant (photon
+  scaling x10 selects identical windows, doses x10); canonical dose columns
+  exist at primitive/interval/window/day levels; SED gaps split with
+  complete=false; TanResponse baseline returns cumulative dose only.
+- Window-ranking semantics confirmed and documented: eligible groups (within
+  12 of peak opportunity) prefer sustained length; TanDose never enters
+  ranking. Fixed two of my own test expectations (hourly UVI-6 SED is 5.4,
+  not 2.7; eligibility threshold is inclusive).
+
+## 2026-09-23 (follow-up 4) — audit: honest unknown doses + row-level gap flags
+
+- Found by audit: `_rolling_dose` returned 0.0 when NO timestamps fell in a
+  trailing window (e.g. trailing-30m dose on an hourly grid) — 0 implies no
+  exposure, but the truth is unknown. Now returns NaN with
+  `tan_dose_{15m,30m,1h}_complete=false` and coverage 0; night rows with real
+  coverage still integrate as true zero. Row-level
+  `tan_dose_*/sed_*_complete` + `coverage_fraction` flags added per §1.3
+  (timestamp-only, shared across dose families; SED carries its own pair).
+- Pinned: sub-grid windows are NaN-not-zero, night-zero stays complete,
+  Absolute is location-independent while Local percentiles move with the
+  reference climatology (§21 invariant).
+
+## 2026-09-23 (follow-up 5) — full §§1-27 completion audit
+
+- Verified with evidence: spectrum metadata complete + checksums OK (all 4);
+  global manifest carries all 10 required fields; summary writer emits all
+  §20 keys; daily summaries carry every §18 field; snow still hard-blocks
+  opportunity while albedo stays in physics.
+- Fixed: Tier-B reserved-input contract (`emulator_manifest`
+  `tierB_reserved_inputs`) now names a consumer for every carried-but-unused
+  CAMS field, closing §7's fetch-and-drop gap; local-reference version +
+  stale flag on every scored row with a validation WARN on mismatch (§10
+  loudness); duplicate-wavelength diagnostics now precede monotonicity so the
+  error names the actual defect (§19).
+- Pinned: spectrum rejection paths (negative/non-monotonic/duplicated/
+  truncated/missing), impossible-irradiance rejection, manifest metadata
+  contract, pigment/opportunity separation — 88 tests passing.
+- Honestly remaining (need network, raw files, or libRadtran): live-run
+  refresh of committed `latest/` tables, raw-CAMS phase-anchor trace,
+  equatorial/high-altitude corpus + Tier-B training, TanResponse fitting
+  (spec-gated), South-Bend-specific run inspection (no SB latest locally).
+
+## 2026-09-23 (follow-up 6) — first live v4 South Bend run (Open-Meteo live, CAMS absent)
+
+- Ran `sunstack run --site south-bend --allow-degraded` (no ADS credentials
+  in this environment, so direct CAMS was empty and the tier system behaved
+  as designed: `tan_calibration_tier=nasa_power_ml`, spectral tier C,
+  UVI-agreement confidence path idle). 336 hourly -> full 30-min/daily chain
+  with all v4 columns, `local_reference_stale=false`, local scores 100%
+  against the rebuilt reference, daily TanDose complete coverage.
+- Headline SB question answered on live late-September data: peak hour
+  Absolute 47.8 / Local 91.8 (UVI 5.35, UVA 43.7) — excellent locally without
+  becoming globally near-100. v4 mean/max 8.8/47.8 vs legacy 9.3/43.2,
+  Spearman 0.989; divergence bins on live data repeat the climatology result
+  (most UVB-rich +3.1, most UVA-rich -2.9).
+- Export pipeline verified end-to-end on the live run: `docs/data.json`
+  payload carries v4 columns + full §20 summary keys, `calendar.ics` 13
+  daily events, new `calendar-30min.ics` 671 interval events.
+- The run's auto-publish commit was reverted to keep generated docs out of
+  the feature PR (publishing belongs to the scheduled workflow); run tables
+  remain locally under data/ (gitignored) for inspection.
+
+## 2026-09-23 (follow-up 7) — live export surface verified to scratch
+
+- `sunstack export --site south-bend` against the live v4 run: payload
+  complete at all levels, §20 summary keys present with honestly degraded
+  CAMS fields (`direct_cams_used=false`, `cams_cycle=null`,
+  `calibration_tier=nasa_power_ml`), CAMS ERROR retained in
+  `validation_issues`, 13 daily + 671 interval calendar events, all UI
+  anchors present. Details: `docs/validation/live_export_verification.md`.
+  Export wrote only the scratch dir; committed docs untouched.
+
+## 2026-09-23 (follow-up 8) — migration report answers §25 on live SB data
+
+- `docs/migration/legacy_vs_v4_comparison.md` gains a live-South-Bend section
+  (336 hourly rows, dual-scored in production, not recomputed): peak Absolute
+  47.8 at Local 91.8 (CONFIRMED excellent-locally/not-globally-near-100);
+  confidence/lead Spearman -0.43 vs Absolute/lead -0.00 (CONFIRMED separate).
+- Cloud-cover proxy check came back INCONCLUSIVE rather than forced:
+  matched-level deltas (-0.8 cloudy vs -1.3 clear, n=41/44) slightly favor
+  clear, because this run's cloudy sample is small and low-sun. The
+  UVA/UVB-ratio bins — the direct mechanism test — confirm strongly in the
+  same data (+3.1 most UVB-rich to -2.9 most UVA-rich), so the report says
+  exactly that instead of laundering a weak proxy into a pass.
+
+## 2026-09-23 (follow-up 9) — degrade loud, never needlessly, never silently
+
+- Missing inputs now integrate as UNKNOWN (NaN + incomplete) at every level:
+  `_trapezoidal_dose` returns NaN/False/0.0 on zero valid samples and
+  0.0/False/0.0 on a lone sample; `add_interval_doses` no longer `fillna(0)`s
+  absent irradiance (only measured night zeros integrate as zero);
+  `day_totals`/`window_dose` treat missing columns as NaN; interior NaN
+  samples are skipped as absent rather than zeroed. SED still derives from
+  UVI when erythemal is absent (data we have), via shared `_ery_or_uvi`.
+- No-extrapolation rule in the 30-min resample: pandas time-interpolation
+  forward-fills trailing NaNs, which flatlined every CAMS column across the
+  9 days past the 5-day CAMS horizon. Stamps outside each column's hourly
+  valid span now revert to NaN; interior interpolation kept. Run-constant
+  tier/version metadata (spectral_tier, model versions, cams_cycle, …) is
+  carried forward instead — data we have, kept; observations we lack, never
+  fabricated. Time-varying CAMS fields are explicitly excluded from carrying.
+
+## 2026-09-23 (follow-up 10) — no-extrapolation verified on real CAMS data
+
+- Re-ran the Palisades v4 re-score post-hardening: 30-min `uvi_cams` is valid
+  on exactly the hourly valid span (ends 06:00 local 9/27) with zero stamps
+  fabricated past the CAMS horizon, while `spectral_tier=C`,
+  `tan_score_model_version`, and `cams_cycle` carry through all 671 rows and
+  the new 30-min complete/coverage flags populate (mean coverage 0.999).
+- Near-miss documented: scratch analysis initially read a 7-hour discrepancy
+  into the tails by parsing tz-naive local `dt` strings as UTC. The pipeline
+  was correct; the notebook was wrong. Timezone-naive wall times must never
+  be compared against UTC stamps without localization — added here so the
+  next audit does not re-litigate it.
+
+## 2026-09-23 (follow-up 11) — dashboard JS proven, dose-row labels fixed
+
+- The inline dashboard script is invisible to ruff, so it was checked with
+  `node --check` (parses clean) and executed headlessly: full page script
+  evaluated with a stub DOM against the live South Bend `data.json`, then
+  `renderDoses()` driven for a mid-forecast day. Row renders with real values
+  and no NaN/undefined leaks (peak-30m 1299 J mel, best-window 8571 J,
+  day 15463 J / 161 ref-min, SED 27.54, IPD ~3x TanDose as expected from the
+  spectra). Harness was /tmp scratch (no node infra in repo); method kept
+  here for repeatability.
+- Label bug fixed by that exercise: the row showed the day's first two
+  (midnight) rows under "this 30 min / next hour" headings. It now reads
+  peak-30m (with timestamp), best-hour (with timestamp), best-window, and
+  day values, with Visible-Darkening Potential computed as the day's max
+  30-min IPD dose.
+
+## 2026-09-23 (follow-up 12) — provenance fallback mislabel fixed
+
+- Executing the dashboard against a simulated pre-v4 payload showed the
+  provenance line claiming action-spectrum-v1/Tier-C/global-ref-1.6 for
+  legacy-55/30/15 data (missing-key fallbacks defaulted to v4 names), while
+  the dose row honestly showed em-dashes. Fallbacks now read
+  legacy-55-30-15 / pre-v4 legacy / pre-v4 broadband / pre-v4 / n/a, verified
+  by re-execution on both payload shapes plus `node --check`.
+
+## 2026-09-23 (follow-up 13) — re-read + reskin proof
+
+- Re-read `doses.py` after three rewrites: removed the dead `uv_cm2` kind
+  branch (cm2 is computed inline) and sharpened the `_window_flags`
+  docstring. No semantic changes; suite green.
+- `sunstack reskin` proven against the real committed pre-v4 docs (both
+  sites, to scratch): run tags preserved, current build SHA stamped,
+  calendar.ics untouched at 13 events, and the reskinned page executed
+  headlessly shows legacy provenance with em-dash doses — the fallback fix
+  holds on the genuine reskin path, not just synthetic payloads.
+
+## 2026-09-23 (follow-up 14) — doctor pre-flights the photobiology core
+
+- `sunstack doctor` now checks action spectra (all three endpoints, with the
+  canonical-tier gate when configured) and the versioned global reference
+  (located, parsed, value sanity-checked) as hard pre-flight gates, plus a
+  loud STALE/unknown warning for mismatched local-reference versions.
+  Verified against live workspace data and pinned with tests; no CI workflow
+  changes (test-pinned workflow files deliberately untouched).
+
+## 2026-09-23 (follow-up 16) — Tier-B gate wired + reskin on v4 data
+
+- `validate_tierB_manifest` had no production caller (tested but dead). It is
+  now enforced in `score_forecast`: any tier A/B claim requires
+  `SUNSTACK_TIERB_MANIFEST` to point at a manifest passing the contract;
+  with it unset (current state), claiming A/B raises loudly instead of
+  scoring Tier-C physics under a Tier-B label. Pinned with a monkeypatched
+  tier test. `doctor --probe` also smoke-tested live (3/3 feeds OK).
+- Reskin proven on v4-shaped data: reskinned the live South Bend export to
+  scratch (run tag preserved, build SHA restamped to current commit) and
+  executed the page — v4 provenance plus real dose values render. A missing
+  second site page fails the reskin loudly (FileNotFoundError, non-zero
+  exit) instead of publishing a half-reskinned site, which is the correct
+  behavior.
+
+## 2026-09-23 (follow-up 17) — reproducibility battery, all stable
+
+- `build_action_spectra.py` rerun byte-stable (no drift in data files).
+- `check_literature.py`: 6/6 PASS. `validate_external.py` reruns clean
+  against SB calibration + live latest. `compare_legacy_v4.py` regenerates
+  the committed migration report byte-identically. `rescore_latest_v4.py`
+  reproduces its verification report byte-identically.
+- `SUNSTACK_TIERB_MANIFEST` documented in `.env.example` (was code-only).
+  (`rebuild_v4_references.py` intentionally not rerun: it date-stamps the
+  reference manifest and rewrites large calibration tables.)
+
+## 2026-09-23 (follow-up 18) — 30 review comments worked (CodeRabbit + Codex)
+
+- Real bugs fixed, all verified: window doses dropped the final trapezoid
+  leg (`< end` on instantaneous samples — best-hour doses were 30-min doses;
+  now inclusive, rescore report regenerated: day-1 window 9610->10854 J);
+  `day_totals` grouped naive local wall times as UTC, leaking dawn hours out
+  of day totals at non-UTC sites (wall dates now used when `time_utc` is
+  absent); daily rows defaulted to complete/coverage-1.0 on dose failure
+  (now False/NaN); SED day coverage was dropped (now carried end to end);
+  both ICS builders emitted unterminated VEVENTs (daily one predated v4);
+  interval calendar spammed ~48 events/day incl. nights (daylight filter).
+- Loudness hardened per review: stale local references are rejected BEFORE
+  percentiles (NaN, never mixed into overall); reference value overrides
+  trip staleness; Tier A/B claims need a manifest; missing bands stay NaN
+  through recompute; dose failures log + re-raise in strict; canonical-tier
+  rule unified (`!= canonical`); version strings single-sourced via config
+  with a consistency test; explicit env truthy sets; assert-to-SystemExit in
+  the rescore gate; empty-uvspec crash fixed; compare script uses configured
+  reference and guards pre-v4 secondary inputs; validation closure requires
+  canonical UTC with a single month derivation (phase attribution now marked
+  unconfirmed pending measurement); wheel force-includes spectra + global
+  reference with importlib.resources resolution and repo fallback.
+- Rebuild script restructured adopt-first so manifest, version files, and
+  local references can never disagree; tests pin the ordering (including a
+  sensitivity guard proving the adopted ref actually scored the references).
+- Review items verified and escalated honestly: the crude cloud-cover split
+  stays INCONCLUSIVE in the migration report (mechanism-level ratio bins
+  carry the claim); `_utc_seconds` naive handling documented as DST-limited
+  only for relative seconds.
+
+## 2026-09-23 (follow-up 19) — post-review consolidation verified
+
+- All review-driven behavior changes re-exercised end to end: rescore,
+  validation, migration, and literature scripts rerun green with committed
+  reports byte-identical (window-dose correction already captured in the
+  regenerated rescore doc); suite 113 passing; no caller breakage from the
+  `window_dose` signature extension or broadened dose-failure handlers.
+
+## 2026-09-23 (follow-up 20) — merged CSV export executed, no new reviews
+
+- Upstream's all-days CSV export merged with the v4-extended column sets and
+  executed headlessly against both live-v4 and simulated pre-v4 payloads: 3
+  CSVs (196 hourly + 392 half-hour + 14 day rows), v4 headers present, and
+  missing keys render as blanks (never "undefined"). No new bot comments
+  since the review round; branch mergeable clean.
+
+## 2026-09-23 (follow-up 22) — personal MMD inputs reach the CLI
+
+- `sunstack run/setup` accept `--personal-mmd` (melanogenic-effective J/m²)
+  plus `--personal-mmd-basis MEASURED|OBJECTIVE_ESTIMATE|COARSE_ESTIMATE`,
+  threaded run stafette→run→summary so `personal_mmd_fraction` and its basis
+  land in hourly/30-min tables and the run manifest. Proven on the live SB
+  hourly table (99.7% finite fractions at 12 kJ, physics byte-identical) and
+  pinned with parser-threading tests; README documents scope (CLI today,
+  dashboard/API inputs follow-up).
+
+## 2026-09-23 (follow-up 23) — dashboard/API personal-MMD inputs
+
+- `/api/data` + `/api/refresh` accept `personal_mmd`/`personal_mmd_basis`
+  (400 on unlabeled/invalid values; parsing factored into testable
+  `_parse_personal_mmd`), threaded through `_filtered_payload` and refresh
+  runs; the dashboard gains My-MMD + basis inputs and a day-max fraction
+  segment in the dose row; static export accepts and bakes the same options
+  (default: no personal data). Shared calendar stays environmental-only.
+- Headless execution caught a null-coercion bug first: JSON null fractions
+  read as 0.00 instead of absent. Max-filters now exclude null/undefined/""
+  before numeric coercion (also applied to the IPD peak), verified on
+  MMD-bearing, MMD-absent, and pre-v4 payloads.
+
+## 2026-09-23 (follow-up 27) — wheel packaging proven installed
+
+- Built the wheel with hatchling: all 9 runtime data files land under
+  `sunstack/_data/` (4 spectra + 4 metadata + global reference manifest).
+  Installed with `--target` into an isolated dir and imported from outside
+  the repo: the melanogenesis spectrum loads with the released checksum
+  (0eccdc6ff267) and evaluates E_mel. The P1 install failure is closed, not
+  just addressed.
+
+## 2026-09-23 (follow-up 30) — full dashboard render proven headlessly
+
+- Beyond single-function harnesses: the entire `render()` path (hero, day
+  strip, hourly + 30-min tables, sun figure, dose row, provenance, debug
+  dump) now executes under node with a stub DOM against both the live v4
+  payload and the simulated pre-v4 payload. All seven render targets
+  populate; no throws; both payloads select the same best day (shared score
+  columns, as expected). Method: full page script minus auto-`init()`,
+  chainable element stubs (`appendChild`/`createElementNS` return elements).
+
+## 2026-09-23 (follow-up 31) — committed references reproduce byte-identically
+
+- Ran `rebuild_v4_references.py` (no-adopt path) against an isolated skeleton
+  with symlinked training tables: all six outputs (both sites'
+  local_reference.parquet/.csv and local_reference_version.json) are
+  byte-identical to the committed files. The rebuild path is deterministic;
+  the committed climatology provably comes from current code.
+
+## 2026-09-23 (follow-up 34) — cloudy-day ratio divergence confirmed
+
+- A second live South Bend run under real overcast (day cloud mean 74,
+  UVI max 2.35) confirms the mechanism at low absolute levels: same-day
+  UVA/UVB-ratio quintiles run +2.77 → +2.30 → -0.20 → -0.90 → -1.07
+  (n=12 daylight hours), monotonic in the predicted direction, while the
+  crude cloud_cover split stays uninformative (n=1 clear row). The
+  migration report's live section now cites this run; its verdicts
+  (CONFIRMED peak scaling, CONFIRMED confidence separation, INCONCLUSIVE
+  cloud proxy) are unchanged.
+- Auto-published docs churn reverted again (publishing belongs to the
+  scheduled workflow); run tables retained locally.
+
+## 2026-09-23 (follow-up 36) — loud paths proven at the real CLI
+
+- Strict `run` without ADS credentials fails immediately with the exact
+  remediation (`DataValidationError` + FATAL banner + log path), before any
+  network or scoring — no silent degraded run possible by accident.
+- `doctor` exits 2 with CAMS setup guidance when credentials are absent.
+- `--personal-mmd` without `--personal-mmd-basis` exits 2 with usage at
+  parse time, before any pipeline work.
+
+## 2026-09-23 (re-verify) — wheel packaging still proven from current tree
+
+- Rebuilt the wheel from the current tree and re-verified: 9 runtime data
+  files under `sunstack/_data/`, isolated install imports cleanly outside
+  the repo, spectrum checksum matches the released value (0eccdc6ff267).
+
+## 2026-09-23 (follow-up 41) — current tree re-verified on a fresh live run
+
+- Fresh South Bend live run against all review-round code: 336 hourly rows
+  carry every v4 column with `local_reference_stale=false` and 100% local
+  coverage; 30-min rows carry tier/model/cycle metadata plus the new
+  complete flags; daily rows carry SED completeness/coverage. Peak Absolute
+  48.7 / Local 83.2 on 9/25 — still moderate globally. Auto-publish churn
+  reverted as usual.
+
+## 2026-09-23 (follow-up 42) — OPEN: E_mel/E_ery falls with SZA on live data
+
+- Live SB run: Tier-C E_mel over Open-Meteo-erythemal irradiance runs 5.7 at
+  SZA 30-50 down to 1.9 at SZA 80-95 (Spearman -0.87, n=151 daylight rows).
+  Per-wavelength endpoint logic says the ratio should RISE as the spectrum
+  reddens (spectra cross near 300-320 nm; longer wavelengths favor
+  melanogenesis). Leading hypothesis: Tier-C uniform UVB weighting overstates
+  midday E_mel (68% of it comes from the UVB term while real solar UVB
+  concentrates at 305-315 nm), and the bias shrinks as UVB fades — matching
+  the observed fall. Confounders not ruled out: ML UVA/UVB SZA biases, OM
+  UVI low-sun floors, twilight noise (weak-sun E_mel spans 0.006-0.18).
+  Deliberately NOT used to retune weights. Resolution: Tier-B spectral shape
+  with held-out validation, which must reproduce the SZA-ratio curve.
+
+## 2026-09-23 (follow-up 43) — SZA-ratio fall attributed, Tier-C exonerated
+
+- Three-way disentangling of the E_mel/E_ery SZA fall, all on committed data:
+  (1) Tier C on measured POWER broadband gives a FLAT ratio ~7.4 across SZA
+  0-80° (Spearman +0.94 with SZA) — the uniform-band shape does not produce
+  the fall; (2) ML mapping skill on POWER inputs holds UVA +1% and UVB
+  +3-8% flat to SZA 80 (only flipping -5% past 80) — the estimator does not
+  produce it either; (3) archived Open-Meteo UVI vs POWER truth runs +5.9%
+  at 30-50°, +51% at 50-65°, +175% at 65-80° — the E_ery denominator is
+  inflated exactly where the live ratio falls. Primary driver: forecast-UVI
+  high-sun bias (corroborated by the +29% BSRN NWP-brightness finding);
+  POWER truth is itself modeled, so corroborating, not definitive. No
+  weights were touched at any point in this investigation.
+
+## 2026-09-23 (follow-up 45) — degraded bootstrap completes end to end
+
+- A CAMS-less bootstrap previously crashed inside sklearn binning
+  (all-NaN atmospheric columns) instead of producing the documented lower
+  tier. Training now drops constant/NaN feature columns loudly (logged +
+  recorded in bundle/metrics) and a scratch `--allow-degraded
+  --skip-cams-history` bootstrap completes: 12-feature bundle, v4 model
+  block + deprecated-labeled legacy block in the calibration summary, fresh
+  local reference + version file. Proven with a synthetic degraded-training
+  test and the full scratch run; committed calibration untouched.
+
+## 2026-09-23 (follow-up 45) — full render re-proven; harness korsakoff caught
+
+- Re-established the full-render headless proof on the current template
+  (post-MMD-controls, dose segment, export merge): all seven render targets
+  populate on live-v4 and simulated pre-v4 payloads with no throws.
+- Debugging detour worth recording: the run first failed inside drawSunFig
+  with `appendChild` resolving to an empty-bodied stub. Systematic
+  elimination (chain semantics OK in isolation, method identity checks,
+  source inspection) proved the dashboard code innocent — the scratch
+  harness itself had regressed (`()=>{}` instead of `()=>mkEl()`), dropping
+  chainability. The rig gets the same suspicion as the product: verify the
+  test setup independently before "fixing" passing code.
+
+## 2026-09-23 (follow-up 47) — JS battery re-greened on current template
+
+- Rebuilt the headless harness against the current dashboard template and
+  ran render + dose-row + 3-file CSV export across live-v4, pre-v4, and
+  MMD-bearing payloads: all seven render targets populate, no unrendered
+  values leak, three CSVs emit per payload. Covers UI edits since the last
+  battery (MMD controls/segment, merged export, provenance fallbacks).
+
+## 2026-09-23 (follow-ups 48-50) — audit-found gaps fixed, pinned, live-proven
+
+- Full 30-comment bot-review audit against the tree: 29 verified fixed;
+  one live gap (follow-up 48): both sub-hour broadband-correction sites
+  recomputed v4 channels but dropped `pigment_darkening_effective_irradiance`
+  from the copy-back list, leaving corrected rows with pre-correction
+  pigment doses. Fixed + pinned (fails pre-fix, passes post-fix).
+- Follow-up 49: `window_dose` on a sample-free window returned 0.0 on every
+  channel; now NaN per the unknown-vs-zero contract + pinned.
+- Follow-up 50: `window_dose` computed complete/coverage in its primitives
+  but dropped them, so daily rows published best-window/best-hour doses with
+  no partial-vs-whole signal. Flags now flow primitive -> window dict ->
+  daily row -> all-days CSV (`dHead` carries the four window flags);
+  TANDOSE documents the per-level contract; pinned (clean grid complete 1.0,
+  missing-endpoint window incomplete with diluted coverage, SED independent).
+- Live re-verification (`run --site south-bend --allow-degraded`,
+  data/runs/20260923_100038, 336 hourly / 671 half-hour / 14 daily):
+  window flags present on all 14 daily rows (complete, coverage 1.0);
+  pigment exact (0.0 diff) on all 36 native-HRRR corrected rows —
+  the follow-up-48 fix confirmed on real data. Interpolated rows show
+  sub-1e-3 diffs vs channel-from-bands for BOTH pigment (3.2e-4 max) and
+  E_mel (3e-5 max): pure interpolation nonlinearity, identical treatment
+  per channel, worst at low sun — architecture-consistent, not a defect.
+  Headline unchanged: peak Absolute 47.8 / Local 91.8; stale flags false;
+  spectral tier C throughout (no CAMS credentials in this environment).
+
+- Addendum: wheel re-proven on the post-fix tree (fresh `python -m build`,
+  isolated `--target` install, no repo `_data` fallback present): all 4
+  spectra + global reference resolve from the wheel payload, scoring and the
+  new window-flag keys work from the installed artifact. Palisades live run
+  (`--allow-degraded`, 336 hourly / 671 half-hour / 14 daily): window flags
+  present + complete, pigment exact on all 36 native rows, peak Absolute
+  66.1 / Local 91.5 — same healthy locally-excellent pattern at the sunnier
+  site. Both runs' schedule-published generated docs reverted off the
+  feature branch per standing rule.
+
+- Addendum (validation reproducibility on current tree): `check_literature`
+  6/6 PASS; `compare_legacy_v4` on the fresh SB live hourly reproduces the
+  documented signature (most-UVB-rich +3.2, most-UVA-rich -2.9);
+  `validate_external` reproduces the stratified POWER holdout (UVA R² 0.9989,
+  UVB R² 0.9894, full SZA/cloud/season/AOD/ozone strata). CAMS-closure
+  sections skip loudly — the run's tables contain no
+  `cams_direct_forecast.parquet` because this environment has no ADS
+  credentials (degraded mode by design), and the script says so instead of
+  passing silently.
+
+- Addendum (reference reproducibility re-proven on current tree): ran
+  `rebuild_v4_references.py` (no adopt) — pooled p99.9 = 1.522 reconfirmed,
+  all 6 committed local_reference.* files (both sites, csv+parquet+version)
+  byte-identical to the rebuild output; manifest value/version untouched,
+  only `code_git_sha` provenance advanced (refreshed to HEAD, sole consumer
+  is the rebuild script itself).
+
+- Addendum (doctor gate semantics re-probed, pipefail lesson): `doctor`
+  returns False -> CLI exit 2 on any failed check, and the default
+  `REQUIRE_DIRECT_CAMS=1` keeps no-credential environments failing loudly
+  (explicit `--allow-degraded` opts out; the empty-string edge keeps the
+  secure/loud side, unlike the canonical-spectrum var where it broke runs).
+  Canonical-strict names the defect precisely
+  (`...but parrish_delayed_melanogenesis tier is 'provisional'`). Caution:
+  `sunstack doctor ... | tail` always reports EXIT 0 — `$?` reads `tail`,
+  not sunstack. Measure exits without pipes.
+
+- Addendum (personalization separation on live SB tables, offline):
+  `attach_personalization` with MEASURED MMD 2000 J/m² over the 336 live
+  hourly rows labels basis MEASURED throughout, yields 335 finite fractions
+  (0.0–1.35; >1 = over-threshold exposure, unclamped by design), and leaves
+  Absolute/E_mel columns bit-identical — environmental physics untouched.
+
+- Addendum (export serialization of window flags, offline): `export
+  --site-dir /tmp/...` against live-shaped latest tables emits all eight
+  window/hour flag keys into data.json daily rows with correct values, and
+  the served index.html carries the extended dHead — the follow-up-50
+  contract holds through the full static-site path, not just the builders.
+
+- Addendum (live HTTP serve proof): uvicorn serving production-wired
+  `create_app(data)` answered `/` and `/api/data?location=south-bend` 200;
+  daily rows carry all eight window/hour flags, and
+  `&personal_mmd=2000&personal_mmd_basis=MEASURED` yields 392/392 finite
+  half-hour fractions. Serve path needs no code change.

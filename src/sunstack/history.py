@@ -368,16 +368,33 @@ def _dataset_time_column(df: pd.DataFrame) -> pd.Series:
         if name in df:
             return pd.to_datetime(df[name], utc=True)
     if "forecast_reference_time" in df and "step" in df:
-        return pd.to_datetime(df["forecast_reference_time"], utc=True) + pd.to_timedelta(df.loc[:, "step"])
+        return pd.to_datetime(df["forecast_reference_time"], utc=True) + _cams_step_delta(df)
     if "time" in df and "step" in df:
         base = pd.to_datetime(df["time"], utc=True)
         try:
-            return base + pd.to_timedelta(df.loc[:, "step"])
+            return base + _cams_step_delta(df)
         except (TypeError, ValueError):
             return base
     if "time" in df:
         return pd.to_datetime(df["time"], utc=True)
     raise ValueError("No recognizable time coordinate in CAMS netCDF")
+
+
+def _cams_step_delta(df: pd.DataFrame) -> pd.Series:
+    """Forecast-step column as a timedelta.
+
+    xarray usually decodes CF steps to timedelta64 already. A bare numeric
+    step is interpreted as hours (the CAMS request uses leadtime_hour), never
+    as nanoseconds: ``pd.to_timedelta`` on integers defaults to ns, which
+    would collapse the whole forecast onto the reference time.
+    """
+    step = df.loc[:, "step"]
+    if pd.api.types.is_timedelta64_dtype(step):
+        return pd.to_timedelta(step)
+    numeric = pd.to_numeric(step, errors="coerce")
+    if numeric.notna().any():
+        return pd.to_timedelta(numeric.fillna(0), unit="h")
+    return pd.to_timedelta(step)
 
 
 def normalize_cams_netcdf_zip(path: Path, extract_dir: Path, source: str) -> pd.DataFrame:

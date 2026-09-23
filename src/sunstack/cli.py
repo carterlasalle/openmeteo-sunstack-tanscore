@@ -47,6 +47,7 @@ from .normalize import (
 from .opportunity import (
     apply_outdoor_feasibility,
     attach_fitzpatrick,
+    attach_personalization,
     build_30min_forecast,
     build_daily_summary,
 )
@@ -112,6 +113,20 @@ def _print_config() -> None:
     )
     print(f"CAMS EAC4: {config.CAMS_EAC4_START_YEAR} -> {config.CAMS_EAC4_END_YEAR}")
     print(f"ADS/CAMS credentials detected: {cds_credentials_present()}")
+    print("\nPhotobiology model (v4 action-spectrum):")
+    from .spectral import SPECTRAL_BACKEND_VERSION as _backend
+
+    print(f"  tan_score_model={config.TAN_SCORE_MODEL_VERSION}")
+    print(f"  global_reference={config.GLOBAL_MELANOGENIC_REFERENCE_VERSION} "
+          f"E_mel={config.GLOBAL_MELANOGENIC_REFERENCE_WM2} W/m^2")
+    print(f"  spectral_backend={_backend} (Tier C production; "
+          f"canonical_required={config.REQUIRE_CANONICAL_SPECTRUM})")
+    print(f"  tandose_max_gap_s={config.TANDOSE_MAX_INTERP_GAP_S:g}")
+    print(f"  skin_tilt_deg={config.SKIN_TILT_DEG:g} "
+          f"skin_azimuth_deg={config.SKIN_AZIMUTH_DEG:g}")
+    print(f"  uvi_disagree_warn/strong="
+          f"{config.UVI_DISAGREEMENT_WARN_FRAC:g}/"
+          f"{config.UVI_DISAGREEMENT_STRONG_FRAC:g} (confidence only)")
 
 
 def _calibration_paths(
@@ -234,7 +249,15 @@ def _bootstrap_inner(
         "skill_rows": len(skill),
         "direct_cams_credentials": cds_credentials_present(),
         "model_metrics": model_metrics,
-        "absolute_score_definition": {
+        "tan_score_model": {
+            "tan_score_model_version": config.TAN_SCORE_MODEL_VERSION,
+            "global_reference_version": config.GLOBAL_MELANOGENIC_REFERENCE_VERSION,
+            "global_reference_e_mel_wm2": config.GLOBAL_MELANOGENIC_REFERENCE_WM2,
+            "formula": "score = clip(100 * E_mel / E_mel_global_reference, 0, 100)",
+        },
+        "legacy_absolute_score_definition_55_30_15": {
+            "status": "DEPRECATED: retained for migration diagnostics only; "
+                      "never used in v4 production scoring",
             "uvi_reference": config.ABSOLUTE_UVI_REFERENCE,
             "uva_reference_wm2": config.ABSOLUTE_UVA_REFERENCE_WM2,
             "weights": config.ABSOLUTE_TAN_WEIGHTS,
@@ -292,6 +315,8 @@ def run_live(
     strict: bool = True,
     skin_type: int | None = None,
     min_temp_f: float | None = None,
+    personal_mmd_j_m2: float | None = None,
+    personal_mmd_basis: str | None = None,
     fresh: bool = True,
     site: config.Site | None = None,
 ) -> Path:
@@ -306,6 +331,8 @@ def run_live(
                 min_temp_f=min_temp_f,
                 fresh=fresh,
                 site=site,
+                personal_mmd_j_m2=personal_mmd_j_m2,
+                personal_mmd_basis=personal_mmd_basis,
             )
     return _run_live_inner(
         root,
@@ -315,6 +342,8 @@ def run_live(
         skin_type=skin_type,
         min_temp_f=min_temp_f,
         fresh=fresh,
+        personal_mmd_j_m2=personal_mmd_j_m2,
+        personal_mmd_basis=personal_mmd_basis,
     )
 
 
@@ -325,6 +354,8 @@ def _run_live_inner(
     strict: bool = True,
     skin_type: int | None = None,
     min_temp_f: float | None = None,
+    personal_mmd_j_m2: float | None = None,
+    personal_mmd_basis: str | None = None,
     fresh: bool = True,
     site: config.Site | None = None,
 ) -> Path:
@@ -409,16 +440,43 @@ def _run_live_inner(
     tan_hourly = score_forecast(best_air, calibration_dir, cams_direct, sun_windows)
     tan_hourly = apply_outdoor_feasibility(tan_hourly, min_temp_f)
     tan_hourly = attach_fitzpatrick(tan_hourly, skin_type)
+    try:
+        from .doses import add_interval_doses as _add_hourly_doses
+
+        tan_hourly = _add_hourly_doses(tan_hourly)
+    except (ImportError, ValueError) as exc:
+        LOG.error("[doses] hourly interval-dose integration failed: %s", exc)
+        if strict:
+            raise
+    # Objective-first personalization columns (environmental physics untouched;
+    # fractions stay NaN until a measured/compatible MMD is supplied). Runs
+    # AFTER interval doses so the hourly fraction has a dose to divide.
+    tan_hourly = attach_personalization(
+        tan_hourly, personal_mmd_j_m2=personal_mmd_j_m2,
+        basis=personal_mmd_basis)
+    # Strict photobiology gate: spectrum resource must evaluate.
+    from .validation import validate_action_spectra
+
+    photo_issues = validate_action_spectra(
+        strict_canonical=config.REQUIRE_CANONICAL_SPECTRUM and strict
+    )
+    for issue in photo_issues:
+        getattr(LOG, "error" if issue.severity == "ERROR" else "warning")(
+            "[%s] %s", issue.source, issue.message
+        )
     score_issues = validate_scored_hourly(tan_hourly)
     for issue in score_issues:
         getattr(LOG, "error" if issue.severity == "ERROR" else "warning")(
             "[%s] %s", issue.source, issue.message
         )
     if strict:
-        raise_on_errors(score_issues, "TanScore output validation failed")
+        raise_on_errors(photo_issues + score_issues, "TanScore output validation failed")
 
     tan_30 = build_30min_forecast(tan_hourly, hrrr15)
     tan_30 = attach_fitzpatrick(tan_30, skin_type)
+    tan_30 = attach_personalization(
+        tan_30, personal_mmd_j_m2=personal_mmd_j_m2,
+        basis=personal_mmd_basis, dose_col="tan_dose_30m_j_m2")
     daily_tan = build_daily_summary(tan_30)
     tan_windows = best_tan_windows(tan_hourly)
 
@@ -466,6 +524,11 @@ def _run_live_inner(
             "endpoint": "Copernicus ADS",
         }
     )
+    # Version strings are single-sourced from photobiology; a model bump must
+    # never require hunting literals across modules.
+    from .photobiology import PHOTOBIOLOGY_MODEL_VERSION as _PBV
+    from .photobiology import TAN_DOSE_MODEL_VERSION as _TDV
+
     summary = {
         "run": stamp,
         "created_at": datetime.now().astimezone().isoformat(),
@@ -475,22 +538,34 @@ def _run_live_inner(
         "site_name": site.name if site else config.default_site().name,
         "strict": strict,
         "skin_type": skin_type,
+        "personal_mmd_j_m2": personal_mmd_j_m2,
+        "personalization_basis": personal_mmd_basis,
         "min_tan_temperature_f": float(
             config.MIN_TAN_TEMP_F if min_temp_f is None else min_temp_f
         ),
         "successful_openmeteo_feeds": len(successes),
         "total_openmeteo_feeds": len(results),
         "direct_cams_used": not cams_direct.empty,
+        "cams_cycle": str(cams_direct["cams_cycle"].iloc[0]) if "cams_cycle" in cams_direct and len(cams_direct) else None,
         "calibration_available": (calibration_dir / "uva_uvb_models.joblib").exists(),
+        "calibration_tier": str(tan_hourly["tan_calibration_tier"].iloc[0]) if "tan_calibration_tier" in tan_hourly and len(tan_hourly) else None,
         "source_health": source_health,
-        "validation_issues": _issue_dicts(source_issues + cams_issues + score_issues),
+        "validation_issues": _issue_dicts(source_issues + cams_issues + photo_issues + score_issues),
+        "photobiology_model_version": _PBV,
+        "tan_score_model_version": config.TAN_SCORE_MODEL_VERSION,
+        "tan_dose_model_version": _TDV,
+        "global_reference_version": config.GLOBAL_MELANOGENIC_REFERENCE_VERSION,
+        "global_reference_e_mel_wm2": config.GLOBAL_MELANOGENIC_REFERENCE_WM2,
         "score_semantics": {
-            "absolute": "global physical melanogenic intensity; not locally normalized",
-            "local": "historical local seasonal percentile",
+            "absolute": "global physical melanogenic intensity (100*E_mel/E_mel_global_ref); not locally normalized",
+            "local": "historical local seasonal percentile (rebuilt with v4 scores)",
             "atmospheric": "local percentile at similar season and solar elevation",
-            "confidence": "forecast/model confidence",
+            "confidence": "forecast/model confidence (includes CAMS/Open-Meteo UVI agreement; never alters physics)",
             "overall": "weighted geometric merge of the four components, absolute-dominant/capped, then multiplied by outdoor feasibility",
             "overall_weights": config.OVERALL_SCORE_WEIGHTS,
+            "tandose": "model-defined action-spectrum-weighted cumulative delayed-melanogenesis exposure (melanogenic-effective J/m^2); NOT an internationally standardized dose",
+            "sed": "independent erythemal channel: integral(E_ery dt)/100; NEVER positively increases TanScore/Opportunity",
+            "uva_uvb_dose": "diagnostic physical broadband doses; NOT action-spectrum-weighted biological endpoints",
         },
         "hard_blocks": {
             "active_rain": True,
@@ -508,6 +583,17 @@ def _run_live_inner(
             "cams_direct_forecast": len(cams_direct),
         },
     }
+    try:
+        from .photobiology import model_metadata as _model_metadata
+        from .spectral import emulator_manifest as _emulator_manifest
+
+        summary.update(_model_metadata({
+            "global_reference_version": config.GLOBAL_MELANOGENIC_REFERENCE_VERSION,
+            "global_reference_e_mel_wm2": config.GLOBAL_MELANOGENIC_REFERENCE_WM2,
+        }))
+        summary.update(_emulator_manifest())
+    except (ImportError, ValueError, RuntimeError) as exc:
+        summary["photobiology_metadata_error"] = str(exc)
     (run_dir / "summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8"
     )
@@ -562,6 +648,45 @@ def _run_live_inner(
     return run_dir
 
 
+def _global_reference_status() -> tuple[bool, str]:
+    """Locate + sanity-check the versioned global melanogenic reference."""
+    try:
+        from importlib import resources
+
+        ref = (resources.files("sunstack") / "_data" /
+               "global_melanogenic_reference" / "reference.json")
+        if ref.is_file():
+            import json as _json
+
+            manifest = _json.loads(ref.read_text(encoding="utf-8"))
+            value = float(manifest.get("global_reference_e_mel_wm2", 0))
+            version = str(manifest.get("global_reference_version", ""))
+            if value > 0 and version:
+                return True, f"{version} ({value:g} W/m^2 mel) [packaged]"
+            return False, "packaged reference.json has invalid value/version"
+    except (ImportError, OSError, TypeError, ValueError):
+        pass
+    here = Path(__file__).resolve()
+    candidates = [here.parent.parent.parent / "data" / "calibration" /
+                  "global_melanogenic_reference" / "reference.json",
+                  Path.cwd() / "data" / "calibration" /
+                  "global_melanogenic_reference" / "reference.json"]
+    for cand in candidates:
+        if cand.exists():
+            try:
+                import json as _json
+
+                manifest = _json.loads(cand.read_text(encoding="utf-8"))
+                value = float(manifest.get("global_reference_e_mel_wm2", 0))
+                version = str(manifest.get("global_reference_version", ""))
+                if value > 0 and version:
+                    return True, f"{version} ({value:g} W/m^2 mel)"
+                return False, f"{cand}: invalid value/version"
+            except (OSError, ValueError) as exc:
+                return False, f"{cand}: unreadable ({exc})"
+    return False, "reference.json not found"
+
+
 def doctor(root: Path, probe: bool = False) -> bool:
     _, calibration_dir, _ = _calibration_paths(root)
     checks = {
@@ -572,10 +697,45 @@ def doctor(root: Path, probe: bool = False) -> bool:
             calibration_dir / "openmeteo_model_skill.parquet"
         ).exists(),
     }
+    # Photobiology pre-flight (§19): without evaluable spectra + reference the
+    # model cannot run at all — always fatal, even --allow-degraded (degraded
+    # covers source tiers, never missing physics files).
+    from .validation import validate_action_spectra
+
+    photo_issues = validate_action_spectra(
+        strict_canonical=config.REQUIRE_CANONICAL_SPECTRUM)
+    photo_errors = [i for i in photo_issues if i.severity == "ERROR"]
+    checks["action spectra (melanogenesis/erythema/IPD)"] = not photo_errors
+    ref_ok, ref_detail = _global_reference_status()
+    checks["global melanogenic reference"] = ref_ok
     print("SunStack doctor")
     print(f"  location: {config.LATITUDE}, {config.LONGITUDE} ({config.TIMEZONE})")
     for k, v in checks.items():
         print(f"  {k}: {'OK' if v else 'MISSING'}")
+    for issue in photo_errors:
+        print(f"  photobiology ERROR: [{issue.source}] {issue.message}")
+    print(f"  global reference detail: {ref_detail}")
+    # Stale local climatology is loud but non-fatal (validation WARNs at run).
+    stale_note = ""
+    try:
+        import json as _json
+
+        ver_path = calibration_dir / "local_reference_version.json"
+        if ver_path.exists():
+            ver = _json.loads(ver_path.read_text(encoding="utf-8"))
+            if ver.get("tan_score_model_version") != config.TAN_SCORE_MODEL_VERSION:
+                stale_note = (
+                    f"  local reference STALE (model "
+                    f"{ver.get('tan_score_model_version')}; current "
+                    f"{config.TAN_SCORE_MODEL_VERSION}): rebuild with "
+                    f"scripts/rebuild_v4_references.py")
+        else:
+            stale_note = ("  local reference version: unknown (no "
+                          "local_reference_version.json)")
+    except (OSError, ValueError):
+        stale_note = "  local reference version: unreadable"
+    if stale_note:
+        print(stale_note)
     ok = (
         all(checks.values())
         if config.REQUIRE_DIRECT_CAMS
@@ -598,7 +758,7 @@ def doctor(root: Path, probe: bool = False) -> bool:
     return ok
 
 
-def debug_report(root: Path) -> None:
+def debug_report(root: Path, photobiology: bool = False) -> None:
     print("SunStack debug")
     latest = root / "latest"
     print("  latest:", latest.resolve() if latest.exists() else "MISSING")
@@ -612,6 +772,64 @@ def debug_report(root: Path) -> None:
         if manifest.exists():
             print("\nOpen-Meteo manifest:")
             print(manifest.read_text())
+    if photobiology:
+        debug_photobiology(root)
+
+
+def debug_photobiology(root: Path) -> None:
+    """Expose every photobiology internal: versions, spectra, E_mel, doses."""
+    import pandas as pd
+
+    print("\nSunStack photobiology debug")
+    try:
+        from .photobiology import load_action_spectrum, model_metadata
+        from .spectral import band_effective_weights, emulator_manifest
+
+        for stem in ("parrish_delayed_melanogenesis", "cie_erythema_reference",
+                     "ipd_action_spectrum"):
+            try:
+                spec = load_action_spectrum(stem)
+                print(f"  spectrum {stem}: tier={spec.tier} sha256={spec.sha256[:16]}... source={spec.source}")
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"  spectrum {stem}: ERROR {exc}")
+        w_uvb, w_uva = band_effective_weights()
+        print(f"  Tier-C band weights: w_uvb={w_uvb:.6f} w_uva={w_uva:.6f}")
+        print(f"  emulator: {emulator_manifest()}")
+        print(f"  metadata: {model_metadata()}")
+    except (ImportError, ValueError, RuntimeError) as exc:
+        print(f"  photobiology core ERROR: {exc}")
+    print(f"  global_reference: {config.GLOBAL_MELANOGENIC_REFERENCE_VERSION} "
+          f"E_mel={config.GLOBAL_MELANOGENIC_REFERENCE_WM2} W/m^2")
+    print(f"  tan_score_model={config.TAN_SCORE_MODEL_VERSION} "
+          f"require_canonical={config.REQUIRE_CANONICAL_SPECTRUM}")
+    latest = root / "latest"
+    hourly = latest / "tables" / "tan_forecast_hourly.parquet"
+    if hourly.exists():
+        try:
+            df = pd.read_parquet(hourly)
+            cols = ["time", "melanogenic_effective_irradiance_wm2", "uv_index",
+                    "uvi_openmeteo", "uvi_cams", "uvi_difference_percent",
+                    "tan_score_absolute_0_100", "legacy_absolute_tan_score_55_30_15",
+                    "erythemal_irradiance_wm2",
+                    "pigment_darkening_effective_irradiance",
+                    "tan_dose_1h_j_m2", "sed_1h",
+                    "uva_dose_1h_j_m2", "uvb_dose_1h_j_m2",
+                    "pigment_darkening_dose_1h_j_m2",
+                    "spectral_backend",
+                    "spectral_tier", "tan_score_model_version", "cams_cycle",
+                    "tan_calibration_tier", "uv_input_disagree", "tan_forecast_confidence_0_100"]
+            show = [c for c in cols if c in df.columns]
+            print(f"  latest hourly photobiology columns present: {show}")
+            missing = [c for c in cols if c not in df.columns]
+            if missing:
+                print(f"  MISSING columns (stale run?): {missing}")
+            else:
+                day = df.head(6).loc[:, show].to_string(index=False)
+                print(day)
+        except (OSError, ValueError) as exc:
+            print(f"  hourly read ERROR: {exc}")
+    else:
+        print("  no latest hourly table")
 
 
 def _publish_site(site: config.Site) -> None:
@@ -663,6 +881,8 @@ def run_one_site(
     strict: bool = True,
     skin_type: int | None = None,
     min_temp_f: float | None = None,
+    personal_mmd_j_m2: float | None = None,
+    personal_mmd_basis: str | None = None,
     fresh: bool = True,
     force_cams: bool = False,
     auto_calibrate: bool = True,
@@ -700,6 +920,8 @@ def run_one_site(
         strict=strict,
         skin_type=skin_type,
         min_temp_f=min_temp_f,
+        personal_mmd_j_m2=personal_mmd_j_m2,
+        personal_mmd_basis=personal_mmd_basis,
         fresh=fresh,
         site=site,
     )
@@ -726,6 +948,8 @@ def _run_all_sites(
     strict: bool = True,
     skin_type: int | None = None,
     min_temp: float | None = None,
+    personal_mmd_j_m2: float | None = None,
+    personal_mmd_basis: str | None = None,
     fresh: bool = True,
     force_cams: bool = False,
     auto_calibrate: bool = True,
@@ -744,6 +968,8 @@ def _run_all_sites(
                 strict=strict,
                 skin_type=skin_type,
                 min_temp_f=min_temp,
+                personal_mmd_j_m2=personal_mmd_j_m2,
+                personal_mmd_basis=personal_mmd_basis,
                 fresh=fresh,
                 force_cams=force_cams,
                 auto_calibrate=auto_calibrate,
@@ -756,9 +982,7 @@ class _SiteSkipped(RuntimeError):
     """A site was deliberately skipped (cold calibration); not a failure."""
 
 
-def main() -> None:
-    from argparse import Namespace
-
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="SunStack: calibrated absolute/local TanScore + outdoor opportunity UI"
     )
@@ -800,6 +1024,21 @@ def main() -> None:
         help="Optional Fitzpatrick I-VI context",
     )
     parser.add_argument(
+        "--personal-mmd",
+        type=float,
+        default=None,
+        help="Optional measured/estimated personal MMD in melanogenic-effective "
+             "J/m^2 (compatible action-weighted system only); enables "
+             "personal_mmd_fraction without touching environmental physics",
+    )
+    parser.add_argument(
+        "--personal-mmd-basis",
+        default=None,
+        choices=["MEASURED", "OBJECTIVE_ESTIMATE", "COARSE_ESTIMATE"],
+        help="Provenance label for --personal-mmd (Fitzpatrick-only estimates "
+             "stay COARSE_ESTIMATE with wide uncertainty)",
+    )
+    parser.add_argument(
         "--min-temp",
         type=float,
         default=None,
@@ -812,6 +1051,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--probe", action="store_true", help="Doctor: make real live API probe requests"
+    )
+    parser.add_argument(
+        "--photobiology",
+        action="store_true",
+        help="Debug: include full photobiology internals (spectra, E_mel, doses, tiers)",
     )
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", type=int, default=None)
@@ -827,7 +1071,19 @@ def main() -> None:
         default="docs",
         help="Static site output dir for the export command",
     )
+    return parser
+
+
+def main() -> None:
+    from argparse import Namespace
+
+    parser = _build_parser()
     args: Namespace = parser.parse_args()
+    if args.personal_mmd is not None and not args.personal_mmd_basis:
+        # Same rule as the dashboard/API 400: an MMD without an explicit
+        # basis would publish fractions with implied-but-absent provenance.
+        parser.error("--personal-mmd requires --personal-mmd-basis "
+                     "(MEASURED, OBJECTIVE_ESTIMATE, or COARSE_ESTIMATE)")
     root = Path(args.out)
     _setup_logging(root, debug=args.verbose)
     strict = config.STRICT_DEFAULT and not args.allow_degraded
@@ -843,7 +1099,7 @@ def main() -> None:
             if not doctor(root, probe=args.probe):
                 sys.exit(2)
         elif args.command == "debug":
-            debug_report(root)
+            debug_report(root, photobiology=args.photobiology)
         elif args.command in {"setup", "bootstrap"}:
             for site in sites:
                 bootstrap(
@@ -864,6 +1120,8 @@ def main() -> None:
                         min_temp_f=args.min_temp,
                         fresh=True,
                         site=site,
+                        personal_mmd_j_m2=args.personal_mmd,
+                        personal_mmd_basis=args.personal_mmd_basis,
                     )
                 print("\nSetup complete. Launch the dashboard with: uv run sunstack ui")
         elif args.command == "ui":
@@ -887,6 +1145,8 @@ def main() -> None:
                     skin_type=args.skin_type,
                     min_temp_f=args.min_temp or 50.0,
                     site_slug=site.slug,
+                    personal_mmd_j_m2=args.personal_mmd,
+                    personal_mmd_basis=args.personal_mmd_basis,
                 )
                 print(
                     f"Static site {site.slug}: {info['out_dir']} ({info['hourly_rows']} hourly, {info['half_rows']} half-hour, {info['days']} days, {info['events']} events)"
@@ -910,6 +1170,8 @@ def main() -> None:
                 strict=strict,
                 skin_type=args.skin_type,
                 min_temp=args.min_temp,
+                personal_mmd_j_m2=args.personal_mmd,
+                personal_mmd_basis=args.personal_mmd_basis,
                 fresh=not args.cached_live,
                 force_cams=args.force_cams,
                 auto_calibrate=not args.no_auto_calibrate,

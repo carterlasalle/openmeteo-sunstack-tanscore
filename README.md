@@ -42,12 +42,20 @@ Every hour and 30-minute period exposes the components separately:
 
 | Score | What it means |
 |---|---|
-| `tan_score_absolute_0_100` | Globally anchored melanogenic intensity. **Not** graded on a South Bend curve |
-| `local_tan_score_0_100` | Percentile versus historical daylight around this location and season |
+| `tan_score_absolute_0_100` | Globally anchored melanogenic intensity: 100 * E_mel / fixed global reference. **Not** graded on a South Bend curve |
+| `local_tan_score_0_100` | Percentile versus historical daylight around this location and season (rebuilt with v4 scores) |
 | `atmospheric_quality_percentile_0_100` | Local percentile after controlling for season and solar elevation |
-| `tan_forecast_confidence_0_100` | Trust in the window from deterministic/ensemble evidence |
+| `tan_forecast_confidence_0_100` | Trust in the window from deterministic/ensemble evidence + CAMS/Open-Meteo UVI agreement |
 | `outdoor_feasibility_0_100` | Practical outdoor usability only |
 | `overall_tan_opportunity_0_100` | The easy-to-read overall number |
+
+Doses are reported separately from intensity (never ranked as intensity):
+
+| Dose | What it means |
+|---|---|
+| `tan_dose_*_j_m2` | Model-defined melanogenic-effective cumulative exposure (NOT a standardized unit) |
+| `sed_*` | Independent erythemal channel; never increases TanScore or Opportunity |
+| `uva_dose_*` / `uvb_dose_*` | Diagnostic physical broadband doses, not biological endpoints |
 
 ### Overall formula
 
@@ -74,6 +82,8 @@ A `uv_input_disagree` flag fires when broadband and UV inputs describe different
 ## Fitzpatrick skin type
 
 Dashboard and CLI accept optional Fitzpatrick I–VI (`uv run sunstack run --skin-type 2`, or the UI selector). It is **qualitative personal-response/risk context only** — it never multiplies environmental TanScore, because measured MED/MMD overlaps substantially within Fitzpatrick groups.
+
+For a measured or defensibly estimated personal MMD in melanogenic-effective J/m², `uv run sunstack run --personal-mmd 12000 --personal-mmd-basis MEASURED` adds `personal_mmd_fraction` (TanDose ÷ personal MMD) with its provenance label — still without touching environmental physics. The dashboard (My MMD + basis inputs) and `/api/data` + `/api/refresh` (`personal_mmd`/`personal_mmd_basis` query params, 400 on unlabeled or invalid values) expose the same fractions; the shared calendar stays environmental-only.
 
 ## Quick start
 
@@ -121,16 +131,21 @@ src/sunstack/
   history.py       NASA POWER, archives, previous runs, CAMS EAC4 + direct CAMS forecast
   normalize.py     per-source normalization
   derive.py        consensus, ensemble probabilities, solar diagnostics
-  tanscore.py      UVA/UVB estimators, absolute + local scoring
+  tanscore.py      UVA/UVB estimators, action-spectrum absolute scoring, UVI fusion
+  photobiology.py  E_mel / TanDose / SED core, spectra validation, strict gates
+  spectral.py      skin-plane spectral layer, tiers A-D, Tier-C broadband mapping
+  doses.py         trapezoidal TanDose/SED/UVA/UVB integration with gap flags
+  tan_response.py  future delayed-pigmentation response interface (not shipped)
   opportunity.py   30-min forecast, outdoor feasibility, daily summaries, Fitzpatrick context
-  validation.py    strict gates (sources, CAMS fields, score ranges)
+  validation.py    strict gates (sources, CAMS fields, photobiology, score ranges)
   output.py        static-site + calendar export
   ui.py            dashboard, data + refresh + calendar APIs
-  calibrate.py     training + local reference + skill
+  calibrate.py     training + local reference (v4 rebuilt) + skill
 data/
   latest/          current snapshot (summary, raw manifests, tables)
   runs/            every run, timestamped
   calibration/     models, reference distribution, skill
+  research/action_spectra/  versioned action spectra + provenance metadata
 docs/              published static site (each run republishes)
 ```
 
@@ -165,6 +180,10 @@ TanScore is an environmental/pigmentation-potential model, **not a safe exposure
 | [SECURITY.md](SECURITY.md) | Supported versions and vulnerability reporting |
 | [AGENTS.md](AGENTS.md) | Repository-specific instructions for coding agents |
 | [RESEARCH_NOTES.md](docs/RESEARCH_NOTES.md) | Dated calibration and incident evidence log |
+| [PHOTOBIOLOGY_MODEL.md](docs/PHOTOBIOLOGY_MODEL.md) | v4 action-spectrum model, equations, interaction-term evidence |
+| [TANDOSE.md](docs/TANDOSE.md) | TanDose definition (model-defined, not standardized) |
+| [ACTION_SPECTRA.md](docs/ACTION_SPECTRA.md) | Spectrum provenance, tiers, interpolation rules |
+| [SPECTRAL_MODEL.md](docs/SPECTRAL_MODEL.md) | Spectral layer, tiers A-D, skin-plane physics |
 | [.env.example](.env.example) | Every tunable threshold |
 
 ## Contributing

@@ -24,7 +24,7 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
     html = HTML
     html = _swap_once(
         html,
-        "fetch(`/api/data?skin_type=${s}&min_temp=${m}&location=${encodeURIComponent(LOC)}`)",
+        "fetch(`/api/data?skin_type=${s}&min_temp=${m}&personal_mmd=${p}&personal_mmd_basis=${b}&location=${encodeURIComponent(LOC)}`)",
         "fetch('./data.json')",
     )
     try:
@@ -56,8 +56,8 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
     )
     html = _swap_once(
         html,
-        "const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch('./data.json');",
-        f"const s=document.getElementById('skin').value,m='50';const r=await fetch('./data.json?v={run_stamp}');",
+        "const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value,p=document.getElementById('mmd').value,b=document.getElementById('mmdbasis').value;const r=await fetch('./data.json');",
+        f"const s=document.getElementById('skin').value,m='50',p='',b='';const r=await fetch('./data.json?v={run_stamp}');",
     )
     html = _swap_once(
         html,
@@ -109,11 +109,16 @@ def export_static_site(
     skin_type: int | None = None,
     min_temp_f: float = 50.0,
     site_slug: str | None = None,
+    personal_mmd_j_m2: float | None = None,
+    personal_mmd_basis: str | None = None,
 ) -> dict[str, object]:
     """Publish the latest run as a static site: index + data + calendar.
 
     template replacement asserts a unique anchor, so live-UI drift fails
     loudly here instead of shipping a subtly broken page.
+
+    Personal MMD is baked only when explicitly supplied (like skin_type);
+    the default export carries no personal data.
     """
     from . import config
     from .calibrate import scol
@@ -124,6 +129,7 @@ def export_static_site(
         _resolve_site,
         _site_nav,
         build_calendar_ics,
+        build_interval_ics,
         build_sha,
     )
 
@@ -132,7 +138,8 @@ def export_static_site(
     entered.__enter__()
     try:
         run, hourly, half, daily, summary = _filtered_payload(
-            root, skin_type, min_temp_f, site
+            root, skin_type, min_temp_f, site,
+            personal_mmd_j_m2, personal_mmd_basis,
         )
     finally:
         entered.__exit__(None, None, None)
@@ -161,6 +168,30 @@ def export_static_site(
     )
     (out_dir / "calendar.ics").write_text(
         build_calendar_ics(daily, str(summary.get("run", "")), hourly), encoding="utf-8"
+    )
+    # Per-30-minute interval events (doses, tier, native-HRRR vs interpolated
+    # labeling). Night rows carry no usable sun: emit daylight intervals only
+    # (is_day when present, else any positive UV/E_mel signal). Columns absent
+    # entirely mean an old table: keep all rows rather than emit nothing.
+    daylight = half
+    try:
+        def _col(name: str) -> pd.Series:
+            if name not in half.columns:
+                return pd.Series(0.0, index=half.index, dtype="float64")
+            return pd.to_numeric(half[name], errors="coerce").fillna(0)
+
+        if {"is_day", "uv_index", "melanogenic_effective_irradiance_wm2"}.isdisjoint(half.columns):
+            pass
+        else:
+            _mask = (_col("is_day") > 0) | (_col("uv_index") > 0) | (
+                _col("melanogenic_effective_irradiance_wm2") > 0)
+            daylight = half.loc[_mask]
+    except (KeyError, ValueError, TypeError):
+        pass
+    (out_dir / "calendar-30min.ics").write_text(
+        build_interval_ics(daylight, str(summary.get("run", "")),
+                           site_slug=site.slug, tz_name=site.timezone),
+        encoding="utf-8",
     )
     starts = daily.get("best_window_start")
     return {

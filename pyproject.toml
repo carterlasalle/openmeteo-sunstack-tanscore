@@ -33,6 +33,13 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/sunstack"]
 
+# Photobiology runtime data must ship inside the wheel: an installed `sunstack`
+# has no repository checkout to fall back to. Resolved via importlib.resources
+# with a repo-layout fallback (see photobiology._package_bytes).
+[tool.hatch.build.targets.wheel.force-include]
+"data/research/action_spectra" = "sunstack/_data/action_spectra"
+"data/calibration/global_melanogenic_reference" = "sunstack/_data/global_melanogenic_reference"
+
 [tool.uv]
 required-version = "==0.12.15"
 

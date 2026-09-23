@@ -30,28 +30,93 @@ def _to_utc_from_openmeteo(times: pd.Series) -> pd.Series:
 
 
 def _cams_features(cams: pd.DataFrame | None) -> pd.DataFrame:
+    """Propagate every direct CAMS UV/aerosol/column field (never fetch-and-drop).
+
+    Adds erythemal irradiance (CAMS UVBED is a dose rate/irradiance, NOT an
+    already-integrated SED), clear-sky companion, CAMS UVI (= 40 * E_ery),
+    UV transmission, and downward-surface-UV irradiance derived from the
+    accumulated CAMS field by time differencing. All spectral aerosol optics
+    (AOD / absorption AOD / SSA / asymmetry at 340/355/380/400 nm) plus ozone,
+    water vapor, cloud liquid/ice, total cloud, albedo, and radiation context
+    are carried through for the spectral layer.
+    """
+    base_cols = [
+        "time_utc", "ozone_du", "aod340", "aod380", "cams_forecast_albedo",
+    ]
     if cams is None or cams.empty:
-        return pd.DataFrame(columns=["time_utc", "ozone_du", "aod340", "aod380", "cams_forecast_albedo"])
+        return pd.DataFrame(columns=base_cols)
     out = pd.DataFrame({"time_utc": pd.to_datetime(cams["time_utc"], utc=True).astype("datetime64[ns, UTC]")})
-    c340 = _find_col(cams, ("aerosol", "optical", "depth", "340"), ("absorption", "fine"))
-    c380 = _find_col(cams, ("aerosol", "optical", "depth", "380"), ("absorption", "fine"))
+
+    def grab(tokens: tuple[str, ...], excludes: tuple[str, ...] = ()) -> pd.Series:
+        col = _find_col(cams, tokens, excludes)
+        return num(cams, col) if col else pd.Series(np.nan, index=cams.index, dtype="float64")
+
+    # Spectral aerosol optics at all four UV wavelengths.
+    for wave in ("340", "355", "380", "400"):
+        out[f"cams_aod_{wave}"] = grab(("aerosol", "optical", "depth", wave), ("absorption",))
+        # Absorption AOD columns also contain "aerosol optical depth" tokens;
+        # require "absorption" to disambiguate from total AOD above.
+        out[f"cams_abs_aod_{wave}"] = grab(("absorption", "aerosol", "optical", wave))
+        out[f"cams_ssa_{wave}"] = grab(("single", "scattering", "albedo", wave))
+        out[f"cams_asymmetry_{wave}"] = grab(("asymmetry", wave))
+    # Back-compat aliases used by the UVA/UVB estimator feature frame.
+    out["aod340"] = out["cams_aod_340"]
+    out["aod355"] = out["cams_aod_355"]
+    out["aod380"] = out["cams_aod_380"]
+    out["aod400"] = out["cams_aod_400"]
+
     ozone = _find_col(cams, ("total", "column", "ozone"))
-    albedo = _find_col(cams, ("forecast", "albedo"))
-    if c340:
-        out["aod340"] = num(cams, c340)
-    else:
-        out["aod340"] = np.nan
-    if c380:
-        out["aod380"] = num(cams, c380)
-    else:
-        out["aod380"] = np.nan
     if ozone:
         oz = num(cams, ozone)
         med = oz.dropna().median() if oz.notna().any() else np.nan
         out["ozone_du"] = oz / 2.1415e-5 if pd.notna(med) and med < 5 else oz
+        out["cams_ozone_du"] = out["ozone_du"]
     else:
         out["ozone_du"] = np.nan
+        out["cams_ozone_du"] = np.nan
+
+    out["cams_water_vapor"] = grab(("water", "vapour"))
+    out["cams_cloud_liquid_water"] = grab(("cloud", "liquid", "water"))
+    out["cams_cloud_ice_water"] = grab(("cloud", "ice", "water"))
+    out["cams_total_cloud"] = grab(("total", "cloud", "cover"))
+    albedo = _find_col(cams, ("forecast", "albedo"))
     out["cams_forecast_albedo"] = num(cams, albedo) if albedo else np.nan
+    out["cams_direct_radiation"] = grab(("direct", "normal", "short", "wave"))
+    out["cams_surface_solar_down"] = grab(("surface", "short", "wave", "downwards"))
+
+    # Direct CAMS UV diagnostics. UVBED fields are dose RATES (W/m^2
+    # erythemally weighted); they map 1:1 to erythemal irradiance.
+    uvbed = grab(("uv", "biologically", "effective", "dose"), ("clear",))
+    if uvbed.isna().all():
+        uvbed = grab(("biologically", "effective"), ("clear",))
+    uvbed_clear = grab(("biologically", "effective", "clear",))
+    out["cams_erythemal_irradiance_wm2"] = uvbed
+    out["cams_clear_sky_erythemal_irradiance_wm2"] = uvbed_clear
+    out["cams_uv_index"] = uvbed * 40.0
+    out["cams_uv_index_clear_sky"] = uvbed_clear * 40.0
+    with np.errstate(divide="ignore", invalid="ignore"):
+        out["cams_uv_transmission"] = (uvbed / uvbed_clear.replace(0, np.nan)).clip(0, 1.5)
+
+    # Downward surface UV is an ACCUMULATED dose (J/m^2); differentiate to W/m^2.
+    down_acc = grab(("downward", "uv"))
+    if down_acc.isna().all():
+        down_acc = grab(("downward_uv",))
+    out["cams_downward_uv_accumulated_j_m2"] = down_acc
+    try:
+        tsec = pd.to_datetime(cams["time_utc"], utc=True).map(lambda x: x.timestamp())
+        dvals = pd.to_numeric(down_acc, errors="coerce").to_numpy(dtype=float)
+        irr = np.full_like(dvals, np.nan, dtype=float)
+        dt = np.diff(np.asarray(tsec, dtype=float))
+        dv = np.diff(dvals)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            rate = np.where(dt > 0, dv / dt, np.nan)
+        irr[1:] = np.clip(rate, 0, None)
+        # First stamp has no backward difference; forward-fill from next if day.
+        if len(irr) > 1 and not np.isfinite(irr[0]) and np.isfinite(irr[1]):
+            irr[0] = irr[1]
+        out["cams_downward_surface_uv_wm2"] = irr
+    except (TypeError, ValueError):
+        out["cams_downward_surface_uv_wm2"] = np.nan
     return out
 
 
@@ -88,7 +153,10 @@ def build_live_feature_frame(best: pd.DataFrame, cams_direct: pd.DataFrame | Non
 
     camsf = _cams_features(cams_direct)
     if cams_direct is not None and not cams_direct.empty and "cams_cycle" in cams_direct:
-        out["cams_cycle"] = str(cams_direct["cams_cycle"].iloc[0])
+        # Mode, not row zero: fallback cycles can concatenate, and the label
+        # must describe the bulk of the data, not whichever row came first.
+        modes = pd.Series(cams_direct["cams_cycle"]).dropna().mode()
+        out["cams_cycle"] = str(modes.iloc[0]) if len(modes) else np.nan
     else:
         out["cams_cycle"] = np.nan
     if not camsf.empty:
@@ -126,10 +194,11 @@ def predict_uva_uvb(features: pd.DataFrame, calibration_dir: Path) -> tuple[np.n
         tier = "nasa_power_ml_plus_cams_spectral" if full_cams else "nasa_power_ml"
     else:
         # Last-resort fallback only. It is explicitly labeled so it can never be
-        # mistaken for the calibrated model.
-        ghi = num(features, "ghi").fillna(0).to_numpy()
+        # mistaken for the calibrated model. Missing inputs stay missing
+        # (NaN): only confirmed night rows (below) become zero.
+        ghi = num(features, "ghi").to_numpy(dtype=float)
         uva = np.clip(0.055 * ghi, 0, 70)
-        uvi = num(features, "uv_index").fillna(0).to_numpy()
+        uvi = num(features, "uv_index").to_numpy(dtype=float)
         uvb = np.clip(0.10 * uvi, 0, 3)
         tier = "uncalibrated_fallback"
     # No sun above the horizon means no surface UV, full stop. The ML models
@@ -313,29 +382,170 @@ def add_sun_posture(frame: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _require_photobiology_or_fail() -> tuple[object, float, str]:
+    """Load melanogenesis spectrum + global reference, failing loudly."""
+    from .photobiology import load_action_spectrum
+
+    try:
+        spec = load_action_spectrum("parrish_delayed_melanogenesis")
+    except (FileNotFoundError, ValueError) as exc:
+        raise RuntimeError(f"ERROR photobiology: {exc}") from exc
+    ref = float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2)
+    if not np.isfinite(ref) or ref <= 0:
+        raise RuntimeError("ERROR photobiology: global melanogenic reference invalid")
+    return spec, ref, spec.tier
+
+
 def score_forecast(
     best_enriched: pd.DataFrame,
     calibration_dir: Path,
     cams_direct: pd.DataFrame | None = None,
     forecast_confidence: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
+    from .photobiology import (
+        TAN_SCORE_MODEL_VERSION as _TSV,
+    )
+    from .photobiology import (
+        absolute_tan_score_from_melanogenic_irradiance,
+        erythemal_irradiance_from_uvi,
+    )
+    from .spectral import (
+        SPECTRAL_BACKEND_VERSION,
+        melanogenic_from_broadband,
+        pigment_darkening_from_broadband,
+        spectral_tier_for_row,
+    )
+
     features = build_live_feature_frame(best_enriched, cams_direct)
     if features.empty:
         return features
+    # Strict photobiology gate: missing spectrum or bad reference fails loudly,
+    # never silently falls back to the legacy 55/30/15 formula.
+    if config.REQUIRE_CANONICAL_SPECTRUM:
+        from .photobiology import require_canonical_spectrum
+
+        require_canonical_spectrum("parrish_delayed_melanogenesis")
+    _spec, global_ref, spectrum_tier = _require_photobiology_or_fail()
+
     uva, uvb, tier = predict_uva_uvb(features, calibration_dir)
     out = features.copy()
     out["predicted_uva_wm2"] = np.round(uva, 3)
     out["predicted_uvb_wm2"] = np.round(uvb, 4)
     out["tan_calibration_tier"] = tier
+
+    # v4 physical core: wavelength-additive Tier-C E_mel, no hand weights.
+    e_mel = melanogenic_from_broadband(
+        np.asarray(uva, dtype=float), np.asarray(uvb, dtype=float)
+    )
+    night = num(out, "is_day").fillna(1) == 0
+    e_mel = np.where(night.to_numpy(), 0.0, e_mel)
+    out["melanogenic_effective_irradiance_wm2"] = np.round(e_mel, 5)
     out["tan_score_absolute_0_100"] = np.round(
+        absolute_tan_score_from_melanogenic_irradiance(e_mel, global_ref), 1
+    )
+    out["tan_score_model_version"] = _TSV
+    out["photobiology_action_spectrum_tier"] = spectrum_tier
+    out["global_reference_version"] = config.GLOBAL_MELANOGENIC_REFERENCE_VERSION
+    out["global_reference_e_mel_wm2"] = global_ref
+    out["spectral_backend"] = SPECTRAL_BACKEND_VERSION
+    out["spectral_tier"] = spectral_tier_for_row()
+    if str(out["spectral_tier"].iloc[0]) in ("A", "B"):
+        # No silent tier inflation: reference/emulator quality may only be
+        # claimed behind a validated manifest (SUNSTACK_TIERB_MANIFEST).
+        from .spectral import validate_tierB_manifest
+
+        if not config.TIERB_MANIFEST_PATH:
+            raise RuntimeError(
+                "ERROR spectral: tier A/B claimed with no emulator manifest "
+                "configured (SUNSTACK_TIERB_MANIFEST unset). Build the corpus "
+                "with scripts/build_spectral_corpus.py first."
+            )
+        import json as _json
+        from pathlib import Path as _Path
+
+        validate_tierB_manifest(
+            _json.loads(_Path(config.TIERB_MANIFEST_PATH).read_text(encoding="utf-8")))
+    # Temporary migration diagnostic: legacy value for comparison reports only.
+    # Never used in ranking or UI headline scores after validation.
+    out["legacy_absolute_tan_score_55_30_15"] = np.round(
         absolute_tan_score(num(out, "uv_index"), scol(out, "predicted_uva_wm2")), 1
     )
     out["absolute_tan_intensity_label"] = [
         _grade_absolute(float(x)) for x in num(out, "tan_score_absolute_0_100").fillna(np.nan)
     ]
 
+    # Independent erythemal channel (SED input). NEVER added to TanScore.
+    # Missing UVI stays missing: only confirmed night rows read as zero via
+    # their present 0.0 UVI, so the SED integrator can mark true gaps instead
+    # of trapezoids through invented zeros.
+    out["erythemal_irradiance_wm2"] = np.round(
+        erythemal_irradiance_from_uvi(num(out, "uv_index").to_numpy(dtype=float)), 5
+    )
+    # Separate UVA-dominant pigment-darkening channel (existing pigment only).
+    try:
+        out["pigment_darkening_effective_irradiance"] = np.round(
+            pigment_darkening_from_broadband(
+                np.asarray(uva, dtype=float), np.asarray(uvb, dtype=float)
+            ), 5,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        raise RuntimeError(f"ERROR photobiology: {exc}") from exc
+    out["pigment_darkening_endpoint"] = (
+        "existing-pigment oxidation/redistribution / persistent darkening"
+    )
+
+    # UVI source fusion: keep sources independent; agreement modulates
+    # confidence only, never the action-spectrum weighting or E_mel.
+    out["uvi_openmeteo"] = num(out, "uv_index")
+    if "cams_uv_index" in out:
+        out["uvi_cams"] = num(out, "cams_uv_index")
+    else:
+        out["uvi_cams"] = np.nan
+    with np.errstate(divide="ignore", invalid="ignore"):
+        denom = np.maximum(
+            np.maximum(out["uvi_openmeteo"].to_numpy(dtype=float),
+                       out["uvi_cams"].to_numpy(dtype=float)), 0.5,
+        )
+        out["uvi_difference_absolute"] = (
+            out["uvi_openmeteo"] - out["uvi_cams"]
+        ).round(3)
+        out["uvi_difference_percent"] = (
+            (out["uvi_openmeteo"] - out["uvi_cams"]).abs() / denom
+        ).round(4)
+
     ref_path = calibration_dir / "local_reference.parquet"
-    local_ref = pd.read_parquet(ref_path) if ref_path.exists() else pd.DataFrame()
+    # Version-gate BEFORE scoring percentiles: a stale/missing version file
+    # means the parquet may hold legacy-55/30/15 percentiles, which must never
+    # be mixed into v4 overall opportunity. Reject first (NaN = unavailable),
+    # mark loudly; validation WARNs downstream.
+    out["local_reference_version"] = "unknown"
+    out["local_reference_stale"] = True
+    _ref_usable = False
+    try:
+        import json as _json
+
+        _ver_path = calibration_dir / "local_reference_version.json"
+        if _ver_path.exists():
+            _ver = _json.loads(_ver_path.read_text(encoding="utf-8"))
+            out["local_reference_version"] = str(
+                _ver.get("tan_score_model_version", "unknown"))
+            _model_ok = (_ver.get("tan_score_model_version")
+                         == config.TAN_SCORE_MODEL_VERSION)
+            _refver_ok = (_ver.get("global_reference_version", None) in
+                          (None, config.GLOBAL_MELANOGENIC_REFERENCE_VERSION))
+            _refval = _ver.get("global_reference_e_mel_wm2", None)
+            _refval_ok = (_refval is None or float(_refval) ==
+                          float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2))
+            # An env-overridden reference value without a version bump changes
+            # Absolute silently: without a recorded value to compare, a mere
+            # version match is not enough to trust the file. Missing value is
+            # tolerated only for files written before the value was recorded.
+            _ref_usable = bool(_model_ok and _refver_ok and _refval_ok)
+            out["local_reference_stale"] = not _ref_usable
+    except (OSError, ValueError, TypeError):
+        pass
+    local_ref = (pd.read_parquet(ref_path)
+                 if (_ref_usable and ref_path.exists()) else pd.DataFrame())
     out = add_local_scores(out, local_ref)
     out["local_tan_label"] = [_grade_local(float(x)) for x in num(out, "local_tan_score_0_100").fillna(np.nan)]
 
@@ -356,6 +566,14 @@ def score_forecast(
     out["tan_forecast_confidence_0_100"] = apply_disagreement_penalty(
         out["tan_forecast_confidence_0_100"], out["uv_input_disagree"]
     )
+    # CAMS/Open-Meteo UVI disagreement reduces confidence (physics untouched).
+    disag = pd.to_numeric(out["uvi_difference_percent"], errors="coerce").fillna(0)
+    strong = disag >= config.UVI_DISAGREEMENT_STRONG_FRAC
+    mild = (disag >= config.UVI_DISAGREEMENT_WARN_FRAC) & ~strong
+    conf = pd.to_numeric(out["tan_forecast_confidence_0_100"], errors="coerce")
+    conf = conf.where(~mild, conf * 0.85).where(~strong, conf * 0.65)
+    out["tan_forecast_confidence_0_100"] = np.round(conf, 1)
+    out["uvi_source_disagree"] = (mild | strong).to_numpy(dtype=bool)
 
     # Useful contextual diagnostics that deliberately do NOT get TanScore weight.
     out["humidity_context_pct"] = num(out, "relative_humidity_2m")
@@ -363,6 +581,17 @@ def score_forecast(
     out["wind_context_mph"] = num(out, "wind_speed_10m")
     out["precipitation_context_probability_pct"] = num(out, "precipitation_probability")
     out["skin_plane_standard"] = "horizontal environmental reference"
+    try:
+        from .spectral import apply_skin_plane as _apply_plane
+
+        out = _apply_plane(out)
+    except ValueError as exc:
+        import logging as _logging
+
+        _logging.getLogger("sunstack").error(
+            "Skin-plane configuration invalid (tilt=%s, azimuth=%s): %s",
+            config.SKIN_TILT_DEG, config.SKIN_AZIMUTH_DEG, exc)
+        raise
     out = add_sun_posture(out)
     return out
 

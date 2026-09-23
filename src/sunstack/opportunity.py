@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -10,6 +11,62 @@ import pvlib.location
 
 from . import config
 from .calibrate import absolute_tan_score, num, scol
+
+LOG = logging.getLogger("sunstack")
+
+
+def _recompute_v4_scores(frame: pd.DataFrame) -> pd.DataFrame:
+    """Recompute E_mel + v4 Absolute (+ erythemal + legacy diagnostic) in place.
+
+    Used after sub-hour broadband corrections. Wavelength-additive Tier-C
+    reconstruction; no sqrt interaction. Never an interpolated spectral value
+    presented as native resolution (callers retain subhour_source).
+    """
+    from .photobiology import (
+        absolute_tan_score_from_melanogenic_irradiance,
+        erythemal_irradiance_from_uvi,
+    )
+    from .spectral import melanogenic_from_broadband
+
+    out = frame
+    if {"predicted_uva_wm2", "predicted_uvb_wm2"}.issubset(out.columns):
+        # No fillna(0): a missing band is UNKNOWN, never zero irradiance. The
+        # broadband helpers preserve NaN, and only genuine night rows are
+        # clamped to zero below — otherwise a missing UVB band would silently
+        # understate E_mel and Absolute.
+        from .spectral import pigment_darkening_from_broadband as _pig_broadband
+
+        uva_arr = pd.to_numeric(out["predicted_uva_wm2"], errors="coerce").to_numpy(dtype=float)
+        uvb_arr = pd.to_numeric(out["predicted_uvb_wm2"], errors="coerce").to_numpy(dtype=float)
+        e_mel = melanogenic_from_broadband(uva_arr, uvb_arr)
+        if "is_day" in out:
+            night = pd.to_numeric(out["is_day"], errors="coerce").fillna(1) == 0
+            e_mel = np.where(night.to_numpy(), 0.0, e_mel)
+        out["melanogenic_effective_irradiance_wm2"] = np.round(e_mel, 5)
+        out["tan_score_absolute_0_100"] = np.round(
+            absolute_tan_score_from_melanogenic_irradiance(
+                e_mel, float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2)
+            ), 1,
+        )
+        out["tan_score_model_version"] = config.TAN_SCORE_MODEL_VERSION
+        # The pigment-darkening channel follows the same corrected bands, or
+        # it would publish doses inconsistent with the corrected radiation.
+        out["pigment_darkening_effective_irradiance"] = np.round(
+            _pig_broadband(uva_arr, uvb_arr), 5)
+    if "uv_index" in out:
+        out["erythemal_irradiance_wm2"] = np.round(
+            erythemal_irradiance_from_uvi(
+                pd.to_numeric(out["uv_index"], errors="coerce").to_numpy(dtype=float)
+            ), 5,
+        )
+    if {"uv_index", "predicted_uva_wm2"}.issubset(out.columns):
+        out["legacy_absolute_tan_score_55_30_15"] = np.round(
+            absolute_tan_score(
+                pd.to_numeric(out["uv_index"], errors="coerce"),
+                pd.to_numeric(out["predicted_uva_wm2"], errors="coerce"),
+            ), 1,
+        )
+    return out
 
 RAIN_CODES = set(range(51, 68)) | {80, 81, 82}
 SNOW_CODES = set(range(71, 78)) | {85, 86}
@@ -183,6 +240,87 @@ def fitzpatrick_context(skin_type: int | None) -> dict[str, str | int | None]:
     }
 
 
+def personalization_context(
+    constitutive_ita_deg: float | None = None,
+    facultative_ita_deg: float | None = None,
+    melanin_index: float | None = None,
+    l_star: float | None = None,
+    pigment_protection_factor: float | None = None,
+    measured_med_sed: float | None = None,
+    measured_mmd: float | None = None,
+    measured_mmd_source_spectrum: str | None = None,
+    fitzpatrick_type: int | None = None,
+) -> dict[str, object]:
+    """Objective-first personalization context. Never alters environmental physics.
+
+    Precedence: measured/objective pigmentation > Fitzpatrick. No precise
+    personal MMD is computed from Fitzpatrick alone; Fitzpatrick-only
+    estimates are disabled by default (return None with wide-uncertainty note).
+    """
+    has_objective = any(
+        v is not None for v in (constitutive_ita_deg, facultative_ita_deg,
+                                melanin_index, l_star, pigment_protection_factor)
+    )
+    has_measured = measured_med_sed is not None or measured_mmd is not None
+    if has_measured:
+        basis = "MEASURED"
+    elif has_objective:
+        basis = "OBJECTIVE_ESTIMATE"
+    elif fitzpatrick_type is not None:
+        basis = "COARSE_ESTIMATE (Fitzpatrick-only, very wide uncertainty, disabled by default)"
+    else:
+        basis = "not personalized"
+    return {
+        "constitutive_ita_deg": constitutive_ita_deg,
+        "facultative_ita_deg": facultative_ita_deg,
+        "melanin_index": melanin_index,
+        "l_star": l_star,
+        "pigment_protection_factor": pigment_protection_factor,
+        "measured_med_sed": measured_med_sed,
+        "measured_mmd": measured_mmd,
+        "measured_mmd_source_spectrum": measured_mmd_source_spectrum,
+        "personalization_basis": basis,
+        "personalization_note": (
+            "Environmental TanDose is skin-type independent. "
+            "personal_mmd_fraction = TanDose / personal_mmd_equivalent_dose "
+            "only when a measured/compatible MMD exists; Fitzpatrick alone never yields a precise MMD."
+        ),
+    }
+
+
+def attach_personalization(
+    df: pd.DataFrame,
+    personal_mmd_j_m2: float | None = None,
+    basis: str | None = None,
+    dose_col: str = "tan_dose_1h_j_m2",
+) -> pd.DataFrame:
+    """Add personal_mmd_fraction without touching environmental columns.
+
+    An MMD without an explicit basis is rejected: fractions with implied-but-
+    absent provenance are worse than no fractions. Callers that only forward
+    user input (CLI/API/export) enforce the same rule at their boundary.
+    """
+    if personal_mmd_j_m2 is not None and basis is None:
+        raise ValueError(
+            "personal_mmd_j_m2 requires an explicit basis (MEASURED, "
+            "OBJECTIVE_ESTIMATE, or COARSE_ESTIMATE)")
+    out = df.copy()
+    out["personalization_basis"] = basis or "not personalized"
+    if personal_mmd_j_m2 is not None and np.isfinite(personal_mmd_j_m2) and personal_mmd_j_m2 > 0:
+        if dose_col in out:
+            dose = pd.to_numeric(out[dose_col], errors="coerce")
+            out["personal_mmd_fraction"] = (dose / personal_mmd_j_m2).round(3)
+        else:
+            # Dose column not computed yet (e.g. personalization attached
+            # before interval integration): UNKNOWN, never a crash.
+            out["personal_mmd_fraction"] = np.nan
+        out["personal_mmd_equivalent_dose_j_m2"] = personal_mmd_j_m2
+    else:
+        out["personal_mmd_fraction"] = np.nan
+        out["personal_mmd_equivalent_dose_j_m2"] = np.nan
+    return out
+
+
 def attach_fitzpatrick(df: pd.DataFrame, skin_type: int | None) -> pd.DataFrame:
     out = df.copy()
     ctx = fitzpatrick_context(skin_type)
@@ -267,6 +405,19 @@ def build_30min_forecast(
     )
     for col in bool_cols:
         base[col] = numeric[col].reindex(union_idx).sort_index().ffill().reindex(idx)
+    # Never extrapolate an observation beyond its hourly valid span. pandas
+    # time-interpolation forward-fills trailing NaNs, which would otherwise
+    # fabricate horizon-limited fields (e.g. every CAMS column flatlined
+    # across the 9 days past the 5-day CAMS horizon). Stamps outside each
+    # column's [first_valid, last_valid] hourly span revert to NaN; interior
+    # gaps keep their time interpolation, which is the honest middle.
+    for col in base.columns:
+        hseries = numeric[col].dropna() if col in numeric.columns else None
+        if hseries is None or hseries.empty:
+            base[col] = np.nan
+            continue
+        lo, hi = hseries.index.min(), hseries.index.max()
+        base.loc[(base.index < lo) | (base.index > hi), col] = np.nan
     base = base.reindex(columns=[c for c in numeric.columns if c in base.columns])
     base.index.name = "dt"
     out = base.reset_index()
@@ -323,9 +474,15 @@ def build_30min_forecast(
                 changed
             ] * np.sqrt(ratio[changed])
             if "tan_score_absolute_0_100" in out:
-                out.loc[changed, "tan_score_absolute_0_100"] = absolute_tan_score(
-                    out.loc[changed, "uv_index"], out.loc[changed, "predicted_uva_wm2"]
-                )
+                sub = out.loc[changed].copy()
+                sub = _recompute_v4_scores(sub)
+                for col in ("melanogenic_effective_irradiance_wm2",
+                            "tan_score_absolute_0_100", "erythemal_irradiance_wm2",
+                            "pigment_darkening_effective_irradiance",
+                            "legacy_absolute_tan_score_55_30_15",
+                            "tan_score_model_version"):
+                    if col in sub:
+                        out.loc[changed, col] = sub[col].to_numpy()
     # Discrete WMO weather codes / day-night flags must never be numerically interpolated.
     for discrete in ("weather_code", "is_day"):
         if discrete in h.columns:
@@ -337,6 +494,23 @@ def build_30min_forecast(
                 .reindex(idx)
             )
             out[discrete] = nearest.to_numpy()
+    # Run-constant model metadata is data we already have: carry it forward
+    # instead of degrading to missing. Only genuinely constant fields qualify
+    # — time-varying quantities (uvi_cams, CAMS irradiances, differences) must
+    # stay NaN where unobserved, never forward-filled into fabrication.
+    for constant in ("spectral_tier", "spectral_backend", "tan_score_model_version",
+                     "tan_dose_model_version", "global_reference_version",
+                     "photobiology_action_spectrum_tier", "tan_calibration_tier",
+                     "local_reference_version", "cams_cycle"):
+        if constant in h.columns:
+            out[constant] = (
+                h[constant]
+                .reindex(h.index.union(idx))
+                .sort_index()
+                .ffill()
+                .reindex(idx)
+                .to_numpy()
+            )
 
     # Guidance labels are pure functions of solar geometry, which interpolates
     # exactly like any numeric field above. Recompute at :30 stamps instead of
@@ -413,13 +587,27 @@ def build_30min_forecast(
             if {"uv_index", "predicted_uva_wm2", "tan_score_absolute_0_100"}.issubset(
                 out.columns
             ):
-                out.loc[is_native, "tan_score_absolute_0_100"] = absolute_tan_score(
-                    out.loc[is_native, "uv_index"],
-                    out.loc[is_native, "predicted_uva_wm2"],
-                )
+                sub = out.loc[is_native].copy()
+                sub = _recompute_v4_scores(sub)
+                for col in ("melanogenic_effective_irradiance_wm2",
+                            "tan_score_absolute_0_100", "erythemal_irradiance_wm2",
+                            "pigment_darkening_effective_irradiance",
+                            "legacy_absolute_tan_score_55_30_15",
+                            "tan_score_model_version"):
+                    if col in sub:
+                        out.loc[is_native, col] = sub[col].to_numpy()
 
     # Reapply merged opportunity after sub-hour corrections.
     out = apply_outdoor_feasibility(out)
+    # Trailing interval doses (TanDose/SED/UVA/UVB) via trapezoidal integration.
+    try:
+        from .doses import add_interval_doses as _add_doses
+
+        out = _add_doses(out)
+    except (ImportError, ValueError) as exc:
+        # Loud degradation: dose columns stay absent downstream (NaN-tolerant
+        # readers show unknown), but the cause is logged, never swallowed.
+        LOG.warning("30-min interval doses unavailable: %s", exc)
     return out
 
 
@@ -497,6 +685,40 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                 best_hour_score = avg
                 best_hour = s.loc[i, "dt"]
         window = _best_contiguous_window(daylight)
+        # Window ranking stays intensity/opportunity/confidence based (see
+        # _best_contiguous_window): TanDose is reported as a consequence of the
+        # chosen window length, never as the ranking objective. Formula
+        # versioned as window-rank-v1.
+        try:
+            from .doses import day_totals as _day_totals
+            from .doses import window_dose as _window_dose
+
+            _day_row = _day_totals(g)
+            _day_match = _day_row.loc[_day_row["date"] == day]
+            _day_doses = _day_match.iloc[0].to_dict() if len(_day_match) else {}
+            _win_doses = _window_dose(g, window[0], window[1]) if window else {}
+        except (ImportError, ValueError, KeyError, RuntimeError):
+            _day_doses, _win_doses = {}, {}
+        # Best-30m / best-hour interval doses from trailing columns when present.
+        # Trailing columns END at their row stamp: the dose for the forward
+        # interval [t, t+30m) selected as best_30m_start=t lives on the row at
+        # t+30m, so read there (searching the full day grid g, since t+30m can
+        # sit outside the daylight slice). Missing end stamp -> NaN, never a
+        # neighboring slot's dose relabeled.
+        def _col_at(col: str, stamp, _grid: pd.DataFrame = g) -> float:
+            try:
+                hit = _grid.loc[pd.to_datetime(_grid["dt"]) == pd.to_datetime(stamp), col]
+                return float(hit.iloc[0]) if len(hit) else float("nan")
+            except (KeyError, ValueError, IndexError, TypeError):
+                return float("nan")
+        _best_end = best["dt"] + pd.Timedelta(minutes=30)
+        best_hour_end = (best_hour + pd.Timedelta(minutes=60)) if best_hour is not None else None
+        try:
+            from .doses import window_dose as _wd2
+
+            _hour_doses = _wd2(g, best_hour, best_hour_end) if best_hour is not None else {}
+        except (ImportError, ValueError, KeyError, RuntimeError):
+            _hour_doses = {}
         rows.append(
             {
                 "date": day,
@@ -516,15 +738,41 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                     float(best.get("tan_forecast_confidence_0_100", np.nan)), 1
                 ),
                 "best_30m_start": best["dt"].isoformat(),
+                "best_30m_tan_dose_j_m2": _col_at("tan_dose_30m_j_m2", _best_end),
+                "best_30m_sed": _col_at("sed_30m", _best_end),
                 "best_hour_start": best_hour.isoformat()
                 if best_hour is not None
                 else None,
                 "best_hour_score_0_100": round(best_hour_score, 1)
                 if best_hour is not None
                 else np.nan,
+                "best_hour_tan_dose_j_m2": float(_hour_doses.get("tan_dose_best_window_j_m2", float("nan"))),
+                "best_hour_sed": float(_hour_doses.get("sed_best_window", float("nan"))),
+                "best_hour_tan_dose_complete": bool(_hour_doses.get("tan_dose_best_window_complete", False)),
+                "best_hour_tan_dose_coverage_fraction": float(_hour_doses.get("tan_dose_best_window_coverage_fraction", float("nan"))),
+                "best_hour_sed_complete": bool(_hour_doses.get("sed_best_window_complete", False)),
+                "best_hour_sed_coverage_fraction": float(_hour_doses.get("sed_best_window_coverage_fraction", float("nan"))),
                 "best_window_start": window[0].isoformat() if window else None,
                 "best_window_end": window[1].isoformat() if window else None,
                 "best_window_mean_0_100": round(window[2], 1) if window else np.nan,
+                "best_window_rank_formula": "window-rank-v1 (mean overall opportunity over contiguous eligible half-hours; dose reported, not ranked)",
+                "tan_dose_best_window_j_m2": float(_win_doses.get("tan_dose_best_window_j_m2", float("nan"))),
+                "tan_dose_best_window_complete": bool(_win_doses.get("tan_dose_best_window_complete", False)),
+                "tan_dose_best_window_coverage_fraction": float(_win_doses.get("tan_dose_best_window_coverage_fraction", float("nan"))),
+                "sed_best_window": float(_win_doses.get("sed_best_window", float("nan"))),
+                "sed_best_window_complete": bool(_win_doses.get("sed_best_window_complete", False)),
+                "sed_best_window_coverage_fraction": float(_win_doses.get("sed_best_window_coverage_fraction", float("nan"))),
+                "uva_dose_window_j_m2": float(_win_doses.get("uva_dose_window_j_m2", float("nan"))),
+                "uvb_dose_window_j_m2": float(_win_doses.get("uvb_dose_window_j_m2", float("nan"))),
+                "tan_dose_day_j_m2": float(_day_doses.get("tan_dose_day_j_m2", float("nan"))),
+                "tan_dose_day_reference_minutes": float(_day_doses.get("tan_dose_day_reference_minutes", float("nan"))),
+                "tan_dose_complete": bool(_day_doses.get("tan_dose_complete", False)),
+                "tan_dose_coverage_fraction": float(_day_doses.get("tan_dose_coverage_fraction", float("nan"))),
+                "sed_day_total": float(_day_doses.get("sed_day_total", float("nan"))),
+                "sed_complete": bool(_day_doses.get("sed_complete", False)),
+                "sed_coverage_fraction": float(_day_doses.get("sed_coverage_fraction", float("nan"))),
+                "uva_dose_day_j_m2": float(_day_doses.get("uva_dose_day_j_m2", float("nan"))),
+                "uvb_dose_day_j_m2": float(_day_doses.get("uvb_dose_day_j_m2", float("nan"))),
                 "peak_uv_index": round(float(best.get("uv_index", np.nan)), 2),
                 "peak_predicted_uva_wm2": round(
                     float(best.get("predicted_uva_wm2", np.nan)), 2

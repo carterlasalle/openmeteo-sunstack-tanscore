@@ -217,14 +217,36 @@ def train_uv_models(training: pd.DataFrame, calibration_dir: Path) -> dict:
     for feat in MODEL_FEATURES:
         if feat not in work:
             work[feat] = np.nan
-    X = work.loc[:, MODEL_FEATURES]
+    # Degraded-tier training (e.g. no CAMS EAC4 history) leaves whole feature
+    # columns constant/NaN, on which HistGradientBoosting's binning crashes
+    # instead of training the documented lower tier. Drop such columns loudly
+    # and record them: the bundle's feature list is the contract that
+    # prediction reindexes against.
+    dropped: list[str] = []
+    kept: list[str] = []
+    for feat in MODEL_FEATURES:
+        col = pd.to_numeric(work[feat], errors="coerce")
+        if int(col.dropna().nunique()) < 2:
+            dropped.append(feat)
+        else:
+            kept.append(feat)
+    if not kept:
+        raise RuntimeError("No usable training features: every column is constant/NaN")
+    if dropped:
+        import logging as _logging
+
+        _logging.getLogger("sunstack").warning(
+            "Calibration training without features %s; bundle tier reduced", dropped)
+    X = work.loc[:, kept]
     bundle: dict[str, object] = {
-        "features": MODEL_FEATURES,
+        "features": kept,
+        "dropped_constant_features": dropped,
         "source": "NASA POWER hourly UVA/UVB; optional CAMS EAC4 atmospheric columns",
         "reference_uvi": config.ABSOLUTE_UVI_REFERENCE,
         "reference_uva_wm2": config.ABSOLUTE_UVA_REFERENCE_WM2,
     }
-    report: dict[str, object] = {"rows": len(work), "validation_split_year": split_year}
+    report: dict[str, object] = {"rows": len(work), "validation_split_year": split_year,
+                                 "dropped_constant_features": dropped}
 
     for target in ("uva", "uvb"):
         model = HistGradientBoostingRegressor(
@@ -246,12 +268,49 @@ def train_uv_models(training: pd.DataFrame, calibration_dir: Path) -> dict:
 
 
 def build_local_reference(training: pd.DataFrame, calibration_dir: Path) -> pd.DataFrame:
+    """Historical local reference rebuilt with the v4 action-spectrum score.
+
+    Legacy 55/30/15 percentiles must NOT be retained: this builder always uses
+    melanogenic-effective irradiance mapped through the versioned global
+    reference. The legacy absolute is kept as a diagnostic column only.
+    """
     if training.empty:
         return pd.DataFrame()
     ref = training.loc[:, [c for c in ["time_utc", "uva", "uvb", "uvi", "sza", "ghi"] if c in training]].copy()
     ref = ref.dropna(subset="time_utc").dropna(subset="uva").dropna(subset="uvi")
+    if "uvb" in ref:
+        # Missing bands are dropped, never zeroed: a zeroed band would plant
+        # understated E_mel values in the climatology and inflate every local
+        # percentile computed against it.
+        ref = ref.dropna(subset="uvb")
     ref = ref.loc[(scol(ref, "ghi").fillna(0) > 10) & (scol(ref, "sza").fillna(180) < 90)]
-    ref["absolute_tan_score_0_100"] = absolute_tan_score(scol(ref, "uvi"), scol(ref, "uva"))
+    try:
+        from .spectral import melanogenic_from_broadband
+
+        if "uvb" in ref:
+            uvb = pd.to_numeric(scol(ref, "uvb"), errors="coerce").to_numpy(dtype=float)
+        else:
+            # No measured UVB band: rough fallback so E_mel stays defined.
+            uvb = pd.to_numeric(scol(ref, "uvi"), errors="coerce").to_numpy(dtype=float) * 0.15
+        e_mel = melanogenic_from_broadband(
+            pd.to_numeric(scol(ref, "uva"), errors="coerce").to_numpy(dtype=float),
+            uvb,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        raise RuntimeError(f"ERROR photobiology: {exc}") from exc
+    from .photobiology import absolute_tan_score_from_melanogenic_irradiance
+
+    ref["melanogenic_effective_irradiance_wm2"] = np.round(e_mel, 5)
+    ref["absolute_tan_score_0_100"] = np.round(
+        absolute_tan_score_from_melanogenic_irradiance(
+            e_mel, float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2)
+        ), 1,
+    )
+    ref["legacy_absolute_tan_score_55_30_15"] = np.round(
+        absolute_tan_score(scol(ref, "uvi"), scol(ref, "uva")), 1
+    )
+    ref["tan_score_model_version"] = config.TAN_SCORE_MODEL_VERSION
+    ref["global_reference_version"] = config.GLOBAL_MELANOGENIC_REFERENCE_VERSION
     tz = ZoneInfo(config.TIMEZONE)
     local = pd.to_datetime(scol(ref, "time_utc"), utc=True).dt.tz_convert(tz)
     ref["time_local"] = local.astype(str)
@@ -262,6 +321,14 @@ def build_local_reference(training: pd.DataFrame, calibration_dir: Path) -> pd.D
     calibration_dir.mkdir(parents=True, exist_ok=True)
     ref.to_parquet(calibration_dir / "local_reference.parquet", index=False)
     ref.to_csv(calibration_dir / "local_reference.csv", index=False)
+    (calibration_dir / "local_reference_version.json").write_text(
+        json.dumps({
+            "tan_score_model_version": config.TAN_SCORE_MODEL_VERSION,
+            "global_reference_version": config.GLOBAL_MELANOGENIC_REFERENCE_VERSION,
+            "global_reference_e_mel_wm2": config.GLOBAL_MELANOGENIC_REFERENCE_WM2,
+            "rows": len(ref),
+        }, indent=2), encoding="utf-8",
+    )
     return ref
 
 

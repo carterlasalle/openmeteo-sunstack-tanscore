@@ -1,0 +1,121 @@
+{
+  "resource": "parrish_delayed_melanogenesis.csv",
+  "source_title": "Erythema and melanogenesis action spectra of normal human skin",
+  "authors": "Parrish JA, Jaenicke KF, Anderson RR",
+  "year": 1982,
+  "identifier": "DOI 10.1111/j.1751-1097.1982.tb04362.x; PMID 7122713",
+  "biological_endpoint": "delayed tanning / delayed melanogenesis (new pigmentation, distinct from immediate pigment darkening)",
+  "subject_population": "normal human skin, Caucasian subjects (small-n monochromator study; see paper for details)",
+  "wavelengths_tested_nm": "290-400 nm monochromator bands (production table extrapolated to 280-289 nm at unity with explicit uncertainty)",
+  "assessment_time_after_exposure": "delayed pigmentation assessed ~7 days after exposure (visual grading of delayed tanning)",
+  "normalization_convention": "1.0 at 280-290 nm; log-linear interpolation through documented anchor points",
+  "original_units": "dimensionless relative effectiveness (reciprocal minimal melanogenesis dose)",
+  "digitization_method": "provisional anchor points approximating the published delayed-pigmentation curve shape; NOT a pixel digitization of a figure. Replace with exact digitization or licensed CIE table when available.",
+  "anchor_points": [
+    {
+      "wavelength_nm": 280.0,
+      "effectiveness": 1.0
+    },
+    {
+      "wavelength_nm": 290.0,
+      "effectiveness": 1.0
+    },
+    {
+      "wavelength_nm": 295.0,
+      "effectiveness": 0.72
+    },
+    {
+      "wavelength_nm": 300.0,
+      "effectiveness": 0.45
+    },
+    {
+      "wavelength_nm": 305.0,
+      "effectiveness": 0.24
+    },
+    {
+      "wavelength_nm": 310.0,
+      "effectiveness": 0.12
+    },
+    {
+      "wavelength_nm": 315.0,
+      "effectiveness": 0.055
+    },
+    {
+      "wavelength_nm": 320.0,
+      "effectiveness": 0.025
+    },
+    {
+      "wavelength_nm": 325.0,
+      "effectiveness": 0.014
+    },
+    {
+      "wavelength_nm": 330.0,
+      "effectiveness": 0.008
+    },
+    {
+      "wavelength_nm": 335.0,
+      "effectiveness": 0.0048
+    },
+    {
+      "wavelength_nm": 340.0,
+      "effectiveness": 0.003
+    },
+    {
+      "wavelength_nm": 345.0,
+      "effectiveness": 0.0021
+    },
+    {
+      "wavelength_nm": 350.0,
+      "effectiveness": 0.0015
+    },
+    {
+      "wavelength_nm": 355.0,
+      "effectiveness": 0.00105
+    },
+    {
+      "wavelength_nm": 360.0,
+      "effectiveness": 0.00078
+    },
+    {
+      "wavelength_nm": 365.0,
+      "effectiveness": 0.0006
+    },
+    {
+      "wavelength_nm": 370.0,
+      "effectiveness": 0.00045
+    },
+    {
+      "wavelength_nm": 375.0,
+      "effectiveness": 0.00035
+    },
+    {
+      "wavelength_nm": 380.0,
+      "effectiveness": 0.00028
+    },
+    {
+      "wavelength_nm": 385.0,
+      "effectiveness": 0.00023
+    },
+    {
+      "wavelength_nm": 390.0,
+      "effectiveness": 0.00018
+    },
+    {
+      "wavelength_nm": 395.0,
+      "effectiveness": 0.00014
+    },
+    {
+      "wavelength_nm": 400.0,
+      "effectiveness": 0.00012
+    }
+  ],
+  "wavelength_spacing_nm": 1,
+  "spectral_domain_nm": [
+    280,
+    400
+  ],
+  "interpolation_guidance": "log-space (log10 effectiveness) interpolation; linear interpolation in effectiveness is INVALID across orders of magnitude",
+  "checksum_sha256": "0eccdc6ff267038e90484b6c102cb7006c5ba10440b79607a49d88cadb7e0b3e",
+  "tier": "provisional",
+  "limitations": "Provisional shape. Small historical subject panel; Caucasian skin only; visual grading; 280-289 nm is an assumption of continued high effectiveness, not a measurement. Do not present as exact CIE 103/3 values."
+}

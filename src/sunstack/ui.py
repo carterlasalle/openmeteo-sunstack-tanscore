@@ -17,6 +17,7 @@ from .calibrate import scol
 from .opportunity import (
     apply_outdoor_feasibility,
     attach_fitzpatrick,
+    attach_personalization,
     build_daily_summary,
 )
 from .tanscore import fnum
@@ -133,6 +134,8 @@ def _filtered_payload(
     skin_type: int | None,
     min_temp: float | None,
     site: config.Site | None = None,
+    personal_mmd_j_m2: float | None = None,
+    personal_mmd_basis: str | None = None,
 ):
     run = _latest_dir(root, site)
     hourly = _read_table(run, "tan_forecast_hourly")
@@ -146,10 +149,50 @@ def _filtered_payload(
         half = apply_outdoor_feasibility(half, min_temp)
     hourly = attach_fitzpatrick(hourly, skin_type)
     half = attach_fitzpatrick(half, skin_type)
+    # Never clobber run-attached fractions with an unparameterized re-attach:
+    # export re-reads run tables that may already carry personal fractions.
+    if personal_mmd_j_m2 is not None or "personal_mmd_fraction" not in hourly.columns:
+        hourly = attach_personalization(
+            hourly, personal_mmd_j_m2=personal_mmd_j_m2, basis=personal_mmd_basis)
+    if personal_mmd_j_m2 is not None or "personal_mmd_fraction" not in half.columns:
+        half = attach_personalization(
+            half, personal_mmd_j_m2=personal_mmd_j_m2, basis=personal_mmd_basis,
+            dose_col="tan_dose_30m_j_m2")
     daily = build_daily_summary(half)
     summary_path = run / "summary.json"
     summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
     return run, hourly, half, daily, summary
+
+
+_PERSONAL_MMD_BASES = ("MEASURED", "OBJECTIVE_ESTIMATE", "COARSE_ESTIMATE")
+
+
+def _parse_personal_mmd(personal_mmd: object,
+                        basis: object) -> tuple[float | None, str | None]:
+    """Validate dashboard/API personal-MMD inputs. Loud on misuse.
+
+    Returns (mmd_j_m2_or_None, basis_or_None). An MMD without an explicit
+    basis is rejected: an unlabeled personal fraction would imply more
+    provenance than the user supplied.
+    """
+    mmd_text = str(personal_mmd or "").strip()
+    basis_text = str(basis or "").strip()
+    if not mmd_text:
+        return None, None
+    try:
+        value = float(mmd_text)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"personal_mmd must be a number in melanogenic-effective J/m^2, "
+            f"got {mmd_text!r}") from None
+    if not np.isfinite(value) or value <= 0:
+        raise ValueError(
+            f"personal_mmd must be a positive finite dose, got {mmd_text!r}")
+    if basis_text not in _PERSONAL_MMD_BASES:
+        raise ValueError(
+            f"personal_mmd_basis must be one of {list(_PERSONAL_MMD_BASES)} "
+            f"when personal_mmd is given, got {basis_text!r}")
+    return value, basis_text
 
 
 def _ics_text(value: object) -> str:
@@ -216,6 +259,96 @@ def _daily_uv_peaks(hourly: pd.DataFrame) -> dict[str, dict[str, str]]:
     return peaks
 
 
+def _fmt_opt(value: object, fmt: str = "g", suffix: str = "") -> str | None:
+    try:
+        f = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(f):
+        return None
+    return f"{f:{fmt}}{suffix}"
+
+
+def _partial_marker(row, flag_col: str | None) -> str:
+    """' (partial)' when a complete flag is explicitly false.
+
+    Pre-v4 rows lack the flag keys entirely and must render unchanged, so
+    only an explicit false (bool False / 0, never missing/NaN) marks.
+    """
+    if not flag_col:
+        return ""
+    fv = row.get(flag_col)
+    if fv is None:
+        return ""
+    try:
+        if bool(pd.isna(fv)):
+            return ""
+        return "" if bool(fv) else " (partial)"
+    except (TypeError, ValueError):
+        return ""
+
+
+def build_interval_ics(
+    half_hour: pd.DataFrame,
+    run_tag: str,
+    site_slug: str | None = None,
+    tz_name: str | None = None,
+) -> str:
+    """Optional per-30-minute VEVENTs with interval doses (native vs interpolated labeled)."""
+    digits = "".join(c for c in run_tag if c.isdigit())
+    sequence = int(digits) if digits else 0
+    now = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    events = []
+    for _, row in half_hour.iterrows():
+        start = row.get("time") or row.get("dt")
+        if start is None or (isinstance(start, float) and pd.isna(start)):
+            continue
+        try:
+            end = (pd.to_datetime(str(start)) + pd.Timedelta(minutes=30)).isoformat()
+        except (ValueError, TypeError):
+            continue
+        bits = []
+        for label, col, fmt, suf, flag in (
+            ("Abs", "tan_score_absolute_0_100", ".0f", "/100", None),
+            ("Overall", "overall_tan_opportunity_0_100", ".0f", "/100", None),
+            ("TanDose30", "tan_dose_30m_j_m2", "g", " J/m2 mel",
+             "tan_dose_30m_complete"),
+            ("SED30", "sed_30m", "g", "", "sed_30m_complete"),
+            ("UVA30", "uva_dose_30m_j_m2", "g", " J/m2", None),
+            ("UVB30", "uvb_dose_30m_j_m2", "g", " J/m2", None),
+            ("Conf", "tan_forecast_confidence_0_100", ".0f", "", None),
+        ):
+            v = _fmt_opt(row.get(col), fmt, suf)
+            if v is not None:
+                bits.append(f"{label} {v}{_partial_marker(row, flag)}")
+        src = str(row.get("subhour_source") or "")
+        if src:
+            bits.append("native HRRR" if src.startswith("native_HRRR") else "interpolated hourly")
+        tier = str(row.get("spectral_tier") or row.get("spectral_backend") or "")
+        if tier:
+            bits.append(f"tier {tier}")
+        feas = str(row.get("outdoor_block_reason") or row.get("outdoor_flags") or "")
+        if feas:
+            bits.append(feas)
+        uid_scope = site_slug or "sunstack"
+        stamp = str(start).replace("-", "").replace(":", "").replace("T", "T")[:15]
+        events.append("\r\n".join([
+            _ics_fold("BEGIN:VEVENT"),
+            _ics_fold(f"UID:sunstack-30m-{uid_scope}-{stamp}@{uid_scope}"),
+            _ics_fold(f"DTSTAMP:{now}"),
+            _ics_fold(f"SEQUENCE:{sequence}"),
+            _ics_fold(f"DTSTART:{_ics_stamp(str(start), tz_name)}"),
+            _ics_fold(f"DTEND:{_ics_stamp(end, tz_name)}"),
+            _ics_fold(f"SUMMARY:{_ics_text('Sun ' + str(start)[11:16] + ' (' + (bits[0] if bits else 'update') + ')')}"),
+            _ics_fold(f"DESCRIPTION:{_ics_text('. '.join(bits))}"),
+            _ics_fold("END:VEVENT"),
+        ]))
+    body = "\r\n".join(events)
+    head = ("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SunStack//TanScore//EN\r\n"
+            "CALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\nX-WR-CALNAME:SunStack 30-min doses")
+    return head + ("\r\n" + body if body else "") + "\r\nEND:VCALENDAR\r\n"
+
+
 def build_calendar_ics(
     daily: pd.DataFrame,
     run_tag: str,
@@ -227,7 +360,10 @@ def build_calendar_ics(
 
     UIDs are stable per date, so every rerun updates the same events in
     place instead of duplicating them in subscribed calendars. Pass the
-    hourly table for per-day UV peaks in the descriptions.
+    hourly table for per-day UV peaks in the descriptions. Descriptions carry
+    Absolute/Overall, window TanDose, daily TanDose/SED, UVA/UVB doses,
+    confidence, feasibility, and model tier (never an interpolated spectral
+    value presented as native resolution).
     """
     digits = "".join(c for c in run_tag if c.isdigit())
     sequence = int(digits) if digits else 0
@@ -242,6 +378,9 @@ def build_calendar_ics(
         peak = fnum(row, "day_overall_peak_0_100")
         peak_s = str(int(peak)) if pd.notna(peak) else "?"
         parts = [f"Overall {peak_s}/100"]
+        absp = _fmt_opt(row.get("day_absolute_peak_0_100"), ".0f", "/100")
+        if absp:
+            parts.append(f"Abs {absp}")
         uv = peaks.get(date, {})
         if uv.get("uvi"):
             when = f" at {uv['uvi_time']}" if uv.get("uvi_time") else ""
@@ -257,6 +396,21 @@ def build_calendar_ics(
             uva = fnum(row, "peak_predicted_uva_wm2")
             if pd.notna(uva):
                 parts.append(f"UVA {uva:g} W/m2")
+        for label, col, fmt, suf, flag in (
+            ("TanDose window", "tan_dose_best_window_j_m2", "g", " J/m2 mel",
+             "tan_dose_best_window_complete"),
+            ("TanDose day", "tan_dose_day_j_m2", "g", " J/m2 mel",
+             "tan_dose_complete"),
+            ("SED window", "sed_best_window", "g", "",
+             "sed_best_window_complete"),
+            ("SED day", "sed_day_total", "g", "", "sed_complete"),
+            ("UVA day", "uva_dose_day_j_m2", "g", " J/m2", None),
+            ("UVB day", "uvb_dose_day_j_m2", "g", " J/m2", None),
+            ("Confidence", "day_confidence_at_peak_0_100", ".0f", "", None),
+        ):
+            v = _fmt_opt(row.get(col), fmt, suf)
+            if v is not None:
+                parts.append(f"{label} {v}{_partial_marker(row, flag)}")
         status = str(row.get("day_status") or "").strip()
         if status and status.lower() != "nan":
             parts.append(status)
@@ -278,6 +432,7 @@ def build_calendar_ics(
                     _ics_fold(f"DTEND:{_ics_stamp(end, tz_name)}"),
                     _ics_fold(f"SUMMARY:{_ics_text(summary)}"),
                     _ics_fold(f"DESCRIPTION:{_ics_text(desc)}"),
+                    _ics_fold("END:VEVENT"),
                 ]
             )
         )
@@ -344,13 +499,15 @@ details.debug pre{background:#f3ecdb;padding:12px;border-radius:8px;overflow:aut
 @media(max-width:640px){h1{font-size:26px}.hero{font-size:21px}.wrap{padding:18px 12px 50px}}
 </style></head><body><div class="wrap">
 <div class="top"><div><h1>Sunlight hours</h1><div class="sub" id="runline">Loading forecast…</div></div>
-<div class="controls"><label>Location <select id="locsel"><option value="">Loading…</option></select></label><label>Skin <select id="skin"><option value="">None</option><option value="1">I</option><option value="2">II</option><option value="3">III</option><option value="4">IV</option><option value="5">V</option><option value="6">VI</option></select></label>
+<div class="controls"><label>Location <select id="locsel"><option value="">Loading…</option></select></label><label>Skin <select id="skin"><option value="">None</option><option value="1">I</option><option value="2">II</option><option value="3">III</option><option value="4">IV</option><option value="5">V</option><option value="6">VI</option></select></label><label>My MMD <input id="mmd" type="number" min="1" step="1" placeholder="J/m²" title="Measured/estimated personal MMD in melanogenic-effective J/m²" style="width:80px"></label><label>basis <select id="mmdbasis" title="Provenance of the MMD value"><option value="">—</option><option value="MEASURED">MEASURED</option><option value="OBJECTIVE_ESTIMATE">OBJECTIVE_ESTIMATE</option><option value="COARSE_ESTIMATE">COARSE_ESTIMATE</option></select></label>
 <label>Min °F <input id="mintemp" type="number" min="32" max="80" step="1" value="50" style="width:64px"></label>
 <button onclick="loadData()">Apply</button><button class="primary" onclick="refreshData()">Refresh forecast</button><a id="cal" class="btn" href="/api/calendar.ics" title="Subscribe to the best-window calendar">Calendar</a><button onclick="exportVisibleCsv()">Export CSV</button></div></div>
 <div id="msg" class="status"></div>
 <p class="hero" id="hero">Finding the best light…</p>
 <p class="legend">Overall blends four readings: absolute strength worldwide, how rare it is for this location, air clarity, and forecast confidence. UV is the raw index; clear is the cloud-free value.</p>
 <div class="strip" id="strip" role="tablist" aria-label="Days"></div>
+<div class="daydetail" id="doses"><h3>Doses — intensity vs accumulated exposure</h3><div id="doserow" class="note">Loading doses…</div><div id="provenance" class="note"></div></div>
+<div class="daydetail" id="charts"><h3>Day charts (separate panels — SED is exposure, never “good”)</h3><canvas id="chartScore" width="640" height="150" style="width:100%;border:1px solid var(--line);border-radius:8px;background:#fffdf7"></canvas><canvas id="chartDose" width="640" height="120" style="width:100%;border:1px solid var(--line);border-radius:8px;background:#fffdf7;margin-top:8px"></canvas><canvas id="chartSed" width="640" height="120" style="width:100%;border:1px solid var(--line);border-radius:8px;background:#fffdf7;margin-top:8px"></canvas><div class="note">Instantaneous TanScore (top), cumulative TanDose melanogenic J/m² (middle), cumulative SED (bottom). Optional pigment-darkening shown in tables, not merged into TanScore.</div></div>
 <div class="sunfig" id="sunfigwrap"><svg id="sunfig" width="300" height="190" role="img" aria-label="Sun position and recline figure"></svg><div class="cap"><div id="suncap">Pick a time to see the sun position and posture.</div><label>Time <select id="sunsel"></select></label><div class="note">Legs stay flat, parallel to the ground — only the torso lifts. Click any table row to inspect that time. Guidance is geometry context, not a score.</div></div></div><div class="daydetail" id="detail"></div>
 <details class="debug"><summary>Source data</summary><pre id="debugtext">Loading…</pre></details>
 </div><script>
@@ -369,10 +526,12 @@ function winStr(a,b){return a?`${hhmm(a)} – ${b?hhmm(b):'…'}`:'—';}
 let DATA=null,SEL=null,LOC="";
 async function loadLocs(){try{let j=null;for(const u of ['./locations.json','/api/locations']){try{const r=await fetch(u);if(r.ok){j=await r.json();break;}}catch(e){}}const dd=document.getElementById("locsel");if(!dd||!j)return;dd.innerHTML=(j.locations||[]).map(l=>`<option value="${esc(l.slug)}"${(l.current||(!l.url&&l.default))?" selected":""}${l.url?` data-url="${esc(l.url)}"`:''}>${esc(l.name)}</option>`).join("");LOC=dd.value;dd.addEventListener("change",()=>{const o=dd.selectedOptions[0];if(o&&o.dataset.url){location.href=o.dataset.url;return;}LOC=dd.value;SEL=null;loadData();});}catch(e){}}
 async function init(){await loadLocs();await loadData();}
-async function loadData(){show('Loading…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch(`/api/data?skin_type=${s}&min_temp=${m}&location=${encodeURIComponent(LOC)}`);const j=await r.json();if(!r.ok)throw new Error(j.detail||'Request failed');DATA=j;hide();render();}catch(e){show('Could not load forecast: '+e.message+'. Check the server log, then Refresh.','error');}}
-async function refreshData(){show('Calling live Open-Meteo and CAMS, rebuilding scores (takes minutes)…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch(`/api/refresh?skin_type=${s}&min_temp=${m}&location=${encodeURIComponent(LOC)}`,{method:'POST'});const j=await r.json();if(!r.ok)throw new Error(j.detail||'Refresh failed');show('Refresh complete.','info');await loadData();}catch(e){show('Refresh failed: '+e.message,'error');}}
-function exportVisibleCsv(){if(!DATA||!DATA.daily||!DATA.daily.length){show('No forecast data yet.','error');return;}const q=v=>(/[,"\n]/.test(String(v??''))?'"'+String(v??'').replace(/"/g,'""')+'"':String(v??''));const dl=(name,rows)=>{const csv=rows.map(r=>r.map(q).join(',')).join('\n');const b=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);};const hours=DATA.hourly||[],half=DATA.half_hour||[];const hHead=['time','uv_index','uv_index_clear_sky','predicted_uva_wm2','predicted_uvb_wm2','temperature_2m','apparent_temperature','wind_speed_10m','wind_gusts_10m','cloud_cover','precipitation_probability','direct_normal_irradiance_instant','overall_tan_opportunity_0_100','tan_score_absolute_0_100','local_tan_score_0_100','atmospheric_quality_percentile_0_100','tan_forecast_confidence_0_100','solar_elevation_deg','sun_compass','outdoor_block_reason'];dl(`sunstack-all-hourly.csv`,[hHead].concat(hours.map(x=>hHead.map(k=>x[k]))));const qHead=['time','uv_index','predicted_uva_wm2','overall_tan_opportunity_0_100','subhour_source'];dl(`sunstack-all-30min.csv`,[qHead].concat(half.map(x=>qHead.map(k=>x[k]))));const dall=DATA.daily;if(dall.length){const dHead=['date','day_status','day_overall_peak_0_100','peak_uv_index','peak_temperature_f','day_low_temperature_f','day_high_temperature_f','day_low_feels_like_f','day_high_feels_like_f','day_peak_wind_mph','day_peak_gust_mph','day_absolute_peak_0_100','day_local_peak_0_100','best_window_start','best_window_end','best_hour_start','best_hour_score_0_100','blocked_half_hours'];dl(`sunstack-all-days.csv`,[dHead].concat(dall.map(d=>dHead.map(k=>d[k]))));}show(`Exported all ${dall.length} days (${hours.length} hourly + ${half.length} 30-min rows).`,'info');}
+async function loadData(){show('Loading…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value,p=document.getElementById('mmd').value,b=document.getElementById('mmdbasis').value;const r=await fetch(`/api/data?skin_type=${s}&min_temp=${m}&personal_mmd=${p}&personal_mmd_basis=${b}&location=${encodeURIComponent(LOC)}`);const j=await r.json();if(!r.ok)throw new Error(j.detail||'Request failed');DATA=j;hide();render();}catch(e){show('Could not load forecast: '+e.message+'. Check the server log, then Refresh.','error');}}
+async function refreshData(){show('Calling live Open-Meteo and CAMS, rebuilding scores (takes minutes)…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value,p=document.getElementById('mmd').value,b=document.getElementById('mmdbasis').value;const r=await fetch(`/api/refresh?skin_type=${s}&min_temp=${m}&personal_mmd=${p}&personal_mmd_basis=${b}&location=${encodeURIComponent(LOC)}`,{method:'POST'});const j=await r.json();if(!r.ok)throw new Error(j.detail||'Refresh failed');show('Refresh complete.','info');await loadData();}catch(e){show('Refresh failed: '+e.message,'error');}}
+function exportVisibleCsv(){if(!DATA||!DATA.daily||!DATA.daily.length){show('No forecast data yet.','error');return;}const q=v=>(/[,"\n]/.test(String(v??''))?'"'+String(v??'').replace(/"/g,'""')+'"':String(v??''));const dl=(name,rows)=>{const csv=rows.map(r=>r.map(q).join(',')).join('\n');const b=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);};const hours=DATA.hourly||[],half=DATA.half_hour||[];const hHead=['time','uv_index','uv_index_clear_sky','predicted_uva_wm2','predicted_uvb_wm2','melanogenic_effective_irradiance_wm2','erythemal_irradiance_wm2','pigment_darkening_effective_irradiance','temperature_2m','apparent_temperature','wind_speed_10m','wind_gusts_10m','cloud_cover','precipitation_probability','direct_normal_irradiance_instant','overall_tan_opportunity_0_100','tan_score_absolute_0_100','legacy_absolute_tan_score_55_30_15','local_tan_score_0_100','atmospheric_quality_percentile_0_100','tan_forecast_confidence_0_100','tan_dose_1h_j_m2','tan_dose_1h_complete','tan_dose_1h_coverage_fraction','sed_1h','sed_1h_complete','sed_1h_coverage_fraction','uva_dose_1h_j_m2','uvb_dose_1h_j_m2','pigment_darkening_dose_1h_j_m2','uvi_openmeteo','uvi_cams','uvi_difference_percent','spectral_tier','tan_score_model_version','solar_elevation_deg','sun_compass','outdoor_block_reason'];dl(`sunstack-all-hourly.csv`,[hHead].concat(hours.map(x=>hHead.map(k=>x[k]))));const qHead=['time','uv_index','predicted_uva_wm2','melanogenic_effective_irradiance_wm2','tan_dose_30m_j_m2','tan_dose_30m_complete','tan_dose_30m_coverage_fraction','sed_30m','sed_30m_complete','sed_30m_coverage_fraction','pigment_darkening_dose_30m_j_m2','overall_tan_opportunity_0_100','subhour_source','spectral_tier'];dl(`sunstack-all-30min.csv`,[qHead].concat(half.map(x=>qHead.map(k=>x[k]))));const dall=DATA.daily;if(dall.length){const dHead=['date','day_status','day_overall_peak_0_100','peak_uv_index','peak_temperature_f','day_low_temperature_f','day_high_temperature_f','day_low_feels_like_f','day_high_feels_like_f','day_peak_wind_mph','day_peak_gust_mph','day_absolute_peak_0_100','day_local_peak_0_100','best_window_start','best_window_end','best_hour_start','best_hour_score_0_100','tan_dose_best_window_j_m2','tan_dose_best_window_complete','tan_dose_best_window_coverage_fraction','sed_best_window','sed_best_window_complete','sed_best_window_coverage_fraction','tan_dose_day_j_m2','sed_day_total','uva_dose_day_j_m2','uvb_dose_day_j_m2','blocked_half_hours'];dl(`sunstack-all-days.csv`,[dHead].concat(dall.map(d=>dHead.map(k=>d[k]))));}show(`Exported all ${dall.length} days (${hours.length} hourly + ${half.length} 30-min rows).`,'info');}
 function show(t,c){const m=document.getElementById('msg');m.textContent=t;m.className='status show '+c;}function hide(){document.getElementById('msg').className='status';}
+function renderDoses(){const d=DATA.daily.find(x=>x.date===SEL);const el=document.getElementById('doserow');if(!el||!d){return;}const pc=v=>v===false?' (partial)':'';const half=rowsFor(DATA.half_hour,SEL);const pkIpVals=half.map(x=>x.pigment_darkening_dose_30m_j_m2).filter(v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(+v)).map(Number);const pkIp=pkIpVals.length?Math.max.apply(null,pkIpVals):null;const myFVals=half.map(x=>x.personal_mmd_fraction).filter(v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(+v)).map(Number);const myBest=myFVals.length?Math.max.apply(null,myFVals):null;const myBasis=(half.map(x=>x.personalization_basis).find(v=>v&&v!=='not personalized'))||'';el.innerHTML=`TanDose peak 30 min <b>${f1(d.best_30m_tan_dose_j_m2)} J/m² mel</b> (${d.best_30m_start?hhmm(d.best_30m_start):'—'}) · best hour <b>${f1(d.best_hour_tan_dose_j_m2)} J/m²</b> (${d.best_hour_start?hhmm(d.best_hour_start):'—'})${pc(d.best_hour_tan_dose_complete)} · best window <b>${f1(d.tan_dose_best_window_j_m2)} J/m²</b>${pc(d.tan_dose_best_window_complete)} · today <b>${f1(d.tan_dose_day_j_m2)} J/m²</b> (${f1(d.tan_dose_day_reference_minutes)} ref-min)${pc(d.tan_dose_complete)} &nbsp;|&nbsp; SED peak 30m ${f2(d.best_30m_sed)} · window ${f2(d.sed_best_window)}${pc(d.sed_best_window_complete)} · today ${f2(d.sed_day_total)}${pc(d.sed_complete)} &nbsp;|&nbsp; UVA day ${f1(d.uva_dose_day_j_m2)} J/m² · UVB day ${f2(d.uvb_dose_day_j_m2)} J/m² &nbsp;|&nbsp; Visible-Darkening Potential (peak 30m) ${f1(pkIp)} J/m² existing-pigment (not new melanin)${myBest==null?'':' &nbsp;|&nbsp; My MMD fraction (day max) <b>'+myBest.toFixed(2)+'</b>'+(myBasis?' ('+esc(myBasis)+')':'')}`;const pv=document.getElementById('provenance');if(pv){const s=DATA.summary||{};pv.textContent=`Model ${s.tan_score_model_version||'legacy-55-30-15 (pre-v4 data)'} · spectrum tier ${s.photobiology_action_spectrum_tier||(DATA.hourly[0]||{}).photobiology_action_spectrum_tier||'pre-v4 legacy'} · spectral ${(DATA.hourly[0]||{}).spectral_backend||s.spectral_backend||'pre-v4 broadband'} (${(DATA.hourly[0]||{}).spectral_tier||'pre-v4'}) · global ref ${s.global_reference_version||'pre-v4'} (${s.global_reference_e_mel_wm2!=null?s.global_reference_e_mel_wm2+' W/m²':'n/a'}) · CAMS ${s.cams_cycle||'?'} · UVI agree ${f1((DATA.hourly[0]||{}).uvi_difference_percent)} · calib ${(DATA.hourly[0]||{}).tan_calibration_tier||s.calibration_tier||'?'}`;}}
+function drawCharts(){const hours=rowsFor(DATA.hourly,SEL);if(!hours.length)return;const line=(id,vals,color,fill)=>{const c=document.getElementById(id);if(!c)return;const x=c.getContext('2d');const W=c.width,H=c.height;x.clearRect(0,0,W,H);const v=vals.map(z=>+z);const m=Math.max(...v.filter(Number.isFinite),1e-9);x.strokeStyle='#e2d7bf';x.beginPath();x.moveTo(0,H-1);x.lineTo(W,H-1);x.stroke();x.strokeStyle=color;x.lineWidth=2;x.beginPath();v.forEach((z,i)=>{const px=i/(Math.max(v.length-1,1))*W,py=H-4-(Number.isFinite(z)?z/m:0)*(H-10);i?x.lineTo(px,py):x.moveTo(px,py);});x.stroke();if(fill){x.lineTo(W,H);x.lineTo(0,H);x.closePath();x.globalAlpha=0.15;x.fillStyle=color;x.fill();x.globalAlpha=1;}};line('chartScore',hours.map(z=>z.tan_score_absolute_0_100),'#b25e00',true);let acc=0;const cumDose=hours.map(z=>{const t=+z.tan_dose_1h_j_m2;acc+=Number.isFinite(t)?t:0;return acc;});line('chartDose',cumDose,'#2e7d46',true);let accS=0;const cumSed=hours.map(z=>{const t=+z.sed_1h;accS+=Number.isFinite(t)?t:0;return accS;});line('chartSed',cumSed,'#7b4bd6',true);}
 function bestDay(){const d=(DATA.daily||[]).filter(x=>+x.day_overall_peak_0_100>0);d.sort((a,b)=>b.day_overall_peak_0_100-a.day_overall_peak_0_100);return d[0]||DATA.daily[0];}
 function render(){if(!DATA||!DATA.daily||!DATA.daily.length){show('No forecast data yet. Press Refresh forecast.','error');return;}
 document.getElementById('runline').textContent='Updated '+fmtTime((DATA.summary||{}).created_at)+' · '+(DATA.hourly||[]).length+' hourly rows · build '+(DATA.build_sha||'?')+' · absolute is worldwide scale, local is this location\u0027s percentile';
@@ -383,7 +542,7 @@ const b=bestDay();
 document.getElementById('strip').innerHTML=DATA.daily.map(d=>{const pk=+d.day_overall_peak_0_100||0;const pp=+d.peak_precip_probability_pct||0;const wet=pp>=40;return `<button class="daycell" role="tab" aria-selected="${d.date===SEL}" data-date="${d.date}"${wet?' style="border-color:#c0392b"':''}><div class="dow">${esc(shortDay(d.date))}</div><div class="dt">${esc(d.day_status||'')}${wet?` · <b style="color:#c0392b">${f0(pp)}% rain</b>`:''}</div><div class="pk" style="color:${wet?'#c0392b':scoreColor(pk)}">${f0(pk)}</div><div class="uv">UV ${f1(d.peak_uv_index??peakOf(rowsFor(DATA.hourly,d.date),'uv_index'))} · ${f1(d.day_low_temperature_f??dayLo(rowsFor(DATA.hourly,d.date)))}–${f1(d.day_high_temperature_f??dayHi(rowsFor(DATA.hourly,d.date)))}\u00b0</div><div class="uv">Feels ${f1(d.day_low_feels_like_f??dayLo(rowsFor(DATA.hourly,d.date),'apparent_temperature'))}–${f1(d.day_high_feels_like_f??dayHi(rowsFor(DATA.hourly,d.date),'apparent_temperature'))}\u00b0</div><div class="uv">Gust ${f0(d.day_peak_gust_mph??dayHi(rowsFor(DATA.hourly,d.date),'wind_gusts_10m'))}${(+d.day_peak_gust_mph>=25||+dayHi(rowsFor(DATA.hourly,d.date),'wind_gusts_10m')>=25)?` <b style="color:#c0392b">windy</b>`:''}</div><div class="uv">Abs ${f0(d.day_absolute_peak_0_100)} · Loc ${f0(d.day_local_peak_0_100)}</div><div class="bar"><i style="width:${Math.max(3,Math.min(100,pk))}%;background:${wet?'#c0392b':scoreColor(pk)}"></i></div></button>`;}).join('');
 document.getElementById('hero').innerHTML=b?`Best light <b>${dayName(b.date)} ${winStr(b.best_window_start,b.best_window_end)}</b> — overall ${f0(b.day_overall_peak_0_100)}, UV ${f1(b.peak_uv_index??peakOf(rowsFor(DATA.hourly,b.date),'uv_index'))}.`:'No usable light in this run.';
 document.querySelectorAll('.daycell').forEach(el=>el.addEventListener('click',()=>{SEL=el.dataset.date;render();}));
-renderDay();{const rh=rowsFor(DATA.hourly,SEL),rq=rowsFor(DATA.half_hour,SEL);renderSunFig(rh,rq);}document.getElementById('debugtext').textContent=JSON.stringify(DATA.summary||{},null,2);}
+renderDay();{const rh=rowsFor(DATA.hourly,SEL),rq=rowsFor(DATA.half_hour,SEL);renderSunFig(rh,rq);}try{renderDoses();drawCharts();}catch(e){}document.getElementById('debugtext').textContent=JSON.stringify(DATA.summary||{},null,2);}
 function sunFigState(){return {sel:null};}
 function compassDeg(c){const pts={N:0,NNE:22.5,NE:45,ENE:67.5,E:90,ESE:112.5,SE:135,SSE:157.5,S:180,SSW:202.5,SW:225,WSW:247.5,W:270,WNW:292.5,NW:315,NNW:337.5};return pts[String(c||'').toUpperCase()]??null;}
 function figXY(cx,cy,r,degUp,degFromNorth){const a=(degFromNorth-90)*Math.PI/180;const el=degUp*Math.PI/180;const rr=r*Math.cos(el);return [cx+rr*Math.cos(a),cy-rr*Math.sin(a)];}
@@ -443,12 +602,18 @@ def create_app(root: Path) -> FastAPI:
         skin_type: str = Query(default=""),
         min_temp: float | None = Query(default=None),
         location: str = Query(default=""),
+        personal_mmd: str = Query(default=""),
+        personal_mmd_basis: str = Query(default=""),
     ):
+        try:
+            mmd, basis = _parse_personal_mmd(personal_mmd, personal_mmd_basis)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         try:
             st = int(skin_type) if skin_type else None
             site = _resolve_site(location or None)
             run, hourly, half, daily, summary = _filtered_payload(
-                root, st, min_temp, site
+                root, st, min_temp, site, mmd, basis
             )
             # Keep the UI useful: daylight-ish hours only, but source files retain everything.
             ht = pd.to_datetime(scol(hourly, "time"))
@@ -481,7 +646,13 @@ def create_app(root: Path) -> FastAPI:
         skin_type: str = Query(default=""),
         min_temp: float | None = Query(default=None),
         location: str = Query(default=""),
+        personal_mmd: str = Query(default=""),
+        personal_mmd_basis: str = Query(default=""),
     ):
+        try:
+            mmd, basis = _parse_personal_mmd(personal_mmd, personal_mmd_basis)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         try:
             from .cli import run_live
 
@@ -494,6 +665,8 @@ def create_app(root: Path) -> FastAPI:
                 strict=True,
                 skin_type=st,
                 min_temp_f=min_temp,
+                personal_mmd_j_m2=mmd,
+                personal_mmd_basis=basis,
                 fresh=True,
                 site=site,
             )

@@ -766,6 +766,51 @@ def test_30min_uses_clear_sky_index_not_linear_blend(monkeypatch):
     assert float(slot["predicted_uva_wm2"]) == 31.25
 
 
+def test_30min_broadband_corrections_recompute_pigment_channel():
+    # Broadband corrections (clear-sky-index / native-HRRR) rescale UVA/UVB
+    # after interpolation; the pigment-darkening channel must be recomputed
+    # from the corrected bands, or corrected rows would publish pigment doses
+    # inconsistent with their own radiation.
+    import sunstack.opportunity as opp
+    from sunstack.spectral import pigment_darkening_from_broadband
+
+    hourly = pd.DataFrame(
+        {
+            "time": ["2026-09-15T12:00", "2026-09-15T13:00", "2026-09-15T14:00"],
+            "temperature_2m": [80.0, 82.0, 83.0],
+            "shortwave_radiation_instant": [500.0, 520.0, 500.0],
+            "predicted_uva_wm2": [40.0, 42.0, 40.0],
+            "predicted_uvb_wm2": [0.5, 0.52, 0.5],
+            "uv_index": [5.0, 5.2, 5.0],
+            "overall_tan_opportunity_0_100": [40.0, 42.0, 40.0],
+            "tan_score_absolute_0_100": [38.0, 40.0, 38.0],
+        }
+    )
+    # Native HRRR sees much brighter broadband: bounded correction rescales
+    # the bands on native rows, so stale pigment would visibly mismatch.
+    hrrr15 = pd.DataFrame(
+        {
+            "time": ["2026-09-15T12:00", "2026-09-15T13:00", "2026-09-15T14:00"],
+            "shortwave_radiation_instant": [800.0, 830.0, 800.0],
+        }
+    )
+    out = opp.build_30min_forecast(hourly, hrrr15)
+    native = out.loc[
+        out["subhour_source"].str.startswith("native_HRRR", na=False)
+    ]
+    assert len(native) > 0
+    assert (native["predicted_uva_wm2"].to_numpy(dtype=float) != 40.0).any()
+    expected = np.round(
+        pigment_darkening_from_broadband(
+            native["predicted_uva_wm2"].to_numpy(dtype=float),
+            native["predicted_uvb_wm2"].to_numpy(dtype=float),
+        ),
+        5,
+    )
+    got = native["pigment_darkening_effective_irradiance"].to_numpy(dtype=float)
+    assert np.allclose(np.asarray(expected, dtype=float), got, rtol=0, atol=1e-9)
+
+
 def test_30min_survives_non_numeric_ghi_dtype():
     # Some feeds deliver radiation as strings/None (object dtype), which the
     # numeric-only resample silently drops. The kt block must coerce, never
@@ -1443,3 +1488,393 @@ def test_issue_forms_are_valid_and_secret_free():
     assert {"latitude", "longitude", "timezone", "slug", "location-name"} <= loc_ids, (
         "location form must capture registry fields explicitly"
     )
+
+
+def test_debug_photobiology_reports_full_stack(tmp_path, capsys):
+    # --photobiology debug must expose spectra, weights, reference, and the
+    # latest hourly v4 columns; a silent or partial dump would hide the
+    # internals the loud-failure contract relies on operators seeing.
+    from sunstack.cli import debug_photobiology
+
+    tables = tmp_path / "latest" / "tables"
+    tables.mkdir(parents=True)
+    pd.DataFrame({
+        "time": ["2026-09-15T12:00"],
+        "melanogenic_effective_irradiance_wm2": [0.5],
+        "uv_index": [5.0],
+        "uvi_openmeteo": [5.0],
+        "uvi_cams": [float("nan")],
+        "uvi_difference_percent": [float("nan")],
+        "tan_score_absolute_0_100": [30.0],
+        "legacy_absolute_tan_score_55_30_15": [28.0],
+        "erythemal_irradiance_wm2": [0.125],
+        "pigment_darkening_effective_irradiance": [0.08],
+        "tan_dose_1h_j_m2": [1800.0],
+        "sed_1h": [4.5],
+        "uva_dose_1h_j_m2": [100000.0],
+        "uvb_dose_1h_j_m2": [3000.0],
+        "pigment_darkening_dose_1h_j_m2": [290.0],
+        "spectral_backend": ["tierC-broadband-v1"],
+        "spectral_tier": ["C"],
+        "tan_score_model_version": ["action-spectrum-v1"],
+        "cams_cycle": ["none"],
+        "tan_calibration_tier": ["nasa_power_ml"],
+        "uv_input_disagree": [False],
+        "tan_forecast_confidence_0_100": [60.0],
+    }).to_parquet(tables / "tan_forecast_hourly.parquet", index=False)
+    debug_photobiology(tmp_path)
+    out = capsys.readouterr().out
+    for token in ("parrish_delayed_melanogenesis", "cie_erythema_reference",
+                  "ipd_action_spectrum", "Tier-C band weights",
+                  "global_reference: global-mel-ref-v1-provisional",
+                  "pigment_darkening_effective_irradiance",
+                  "pigment_darkening_dose_1h_j_m2",
+                  "latest hourly photobiology columns present"):
+        assert token in out, token
+    assert "MISSING columns" not in out
+
+
+def test_debug_photobiology_without_latest_is_graceful(tmp_path, capsys):
+    from sunstack.cli import debug_photobiology
+
+    debug_photobiology(tmp_path)
+    assert "no latest hourly table" in capsys.readouterr().out
+
+
+def test_env_example_documents_every_src_env_var():
+    # Operator-facing contract: every env var read in src (hand section or
+    # BUGHUNT block) must be documented in .env.example; an undocumented
+    # knob is an unusable knob.
+    import re
+    from pathlib import Path
+
+    env = (Path(".env.example")).read_text(encoding="utf-8")
+    seen = set()
+    for src in Path("src/sunstack").glob("*.py"):
+        seen |= set(re.findall(r'os\.getenv\("([A-Z0-9_]+)"', src.read_text()))
+    assert seen, "no env vars found — scanner broken"
+    missing = sorted(v for v in seen if v not in env)
+    assert not missing, missing
+
+
+def test_dose_row_marks_partial_window_and_day_doses():
+    # Cumulative doses can be partial (gap-split windows, incomplete days);
+    # the dashboard dose row must surface that via the complete flags with
+    # an explicit-false check, so pre-v4 rows without the keys render clean.
+    from sunstack.ui import HTML
+
+    assert "constpc=v=>v===false?'(partial)':''" in HTML.replace(" ", "")
+    for flag in ("tan_dose_best_window_complete", "tan_dose_complete",
+                 "best_hour_tan_dose_complete",
+                 "sed_best_window_complete", "sed_complete"):
+        assert "pc(d." + flag + ")" in HTML.replace(" ", ""), flag
+
+
+def test_show_config_exposes_photobiology_model(capsys):
+    # Operators must see which model/reference/tier scoring uses; a config
+    # dump without the v4 block hides the most consequential settings.
+    from sunstack.cli import _print_config
+
+    _print_config()
+    out = capsys.readouterr().out
+    for token in ("Photobiology model", "tan_score_model=action-spectrum-v1",
+                  "global-mel-ref-v1-provisional", "tierC-broadband-v1",
+                  "tandose_max_gap_s=", "skin_tilt_deg=",
+                  "uvi_disagree_warn/strong="):
+        assert token in out, token
+
+
+def test_swap_once_fails_loudly_on_anchor_drift():
+    # Static-export template replacement must fail loudly (not ship a subtly
+    # broken page) when an anchor is missing or ambiguous.
+    import pytest
+
+    from sunstack.output import _swap_once
+
+    assert _swap_once("ab", "b", "c") == "ac"
+    with pytest.raises(RuntimeError, match="anchor drifted"):
+        _swap_once("ab", "z", "c")
+    with pytest.raises(RuntimeError, match="anchor drifted"):
+        _swap_once("bb", "b", "c")
+
+
+def test_scol_rejects_duplicate_columns_loudly():
+    import pytest
+
+    from sunstack.calibrate import scol
+
+    dup = pd.DataFrame([[1.0, 2.0]], columns=["uva", "uva"])
+    with pytest.raises(TypeError, match="unique Series"):
+        scol(dup, "uva")
+    assert scol(pd.DataFrame({"uva": [1.0]}), "uva").tolist() == [1.0]
+
+
+def test_num_missing_column_is_nan_not_crash():
+    from sunstack.calibrate import num
+
+    frame = pd.DataFrame({"a": [1.0, 2.0]})
+    out = num(frame, "nope")
+    assert out.isna().all()
+    assert len(out) == 2
+
+
+def test_build_local_reference_empty_is_empty(tmp_path):
+    from sunstack.calibrate import build_local_reference
+
+    assert build_local_reference(pd.DataFrame(), tmp_path).empty
+
+
+def test_train_uv_models_empty_raises_loudly(tmp_path):
+    import pytest
+
+    from sunstack.calibrate import train_uv_models
+
+    with pytest.raises(RuntimeError, match="empty"):
+        train_uv_models(pd.DataFrame(), tmp_path)
+
+
+def test_build_local_reference_without_uvb_uses_uvi_fallback(tmp_path):
+    # No measured UVB band: the uvi*0.15 fallback keeps E_mel defined and
+    # version-stamped instead of failing the rebuild.
+    from sunstack.calibrate import build_local_reference
+
+    training = pd.DataFrame({
+        "time_utc": pd.date_range("2024-06-21 10:00", periods=6, freq="h", tz="UTC"),
+        "uva": [30.0] * 6,
+        "uvi": [5.0] * 6,
+        "sza": [40.0] * 6,
+        "ghi": [600.0] * 6,
+    })
+    ref = build_local_reference(training, tmp_path)
+    assert len(ref) == 6
+    assert ref["melanogenic_effective_irradiance_wm2"].notna().all()
+    assert (ref["tan_score_model_version"] == "action-spectrum-v1").all()
+
+
+def test_output_helpers_fail_loud_or_noop(tmp_path):
+    # Unknown locations and missing runs must fail with actionable errors
+    # (never the wrong site or a bare crash); empty frames are no-ops.
+    import importlib.util
+
+    import pytest
+
+    from sunstack.output import write_excel, write_frame
+    from sunstack.ui import _latest_dir, _resolve_site
+
+    assert _resolve_site(None).slug == "south-bend"  # old URLs keep working
+    with pytest.raises(FileNotFoundError, match="unknown location"):
+        _resolve_site("no-such-place")
+    with pytest.raises(FileNotFoundError, match="No SunStack run found"):
+        _latest_dir(tmp_path)
+    write_frame(pd.DataFrame(), tmp_path / "out", "x")
+    assert not (tmp_path / "out").exists()
+    write_excel({}, tmp_path / "empty.xlsx")
+    assert not (tmp_path / "empty.xlsx").exists()
+    if importlib.util.find_spec("openpyxl") is None:
+        write_excel({"a": pd.DataFrame({"x": [1.0]})}, tmp_path / "w.xlsx")
+        assert not (tmp_path / "w.xlsx").exists()
+
+
+def test_day_status_thresholds():
+    # User-facing day verdicts shown in the dashboard and day export; pin the
+    # boundaries so a threshold edit is deliberate, never incidental.
+    from sunstack.opportunity import _day_status
+
+    assert _day_status(float("nan")) == "UNKNOWN"
+    assert _day_status(95.0) == "EXCELLENT"
+    assert _day_status(80.0) == "EXCELLENT"
+    assert _day_status(79.9) == "VERY GOOD"
+    assert _day_status(65.0) == "VERY GOOD"
+    assert _day_status(50.0) == "GOOD"
+    assert _day_status(35.0) == "FAIR"
+    assert _day_status(34.9) == "POOR"
+    assert _day_status(0.0) == "NO OUTDOOR WINDOW"
+
+
+def test_30min_nearest_fills_discrete_weather_codes():
+    # WMO codes / day flags must never be numerically interpolated: 12:30
+    # between codes 61 and 3 must read nearest (61), not a 32.0 blend.
+    from sunstack.opportunity import build_30min_forecast
+
+    hourly = pd.DataFrame(
+        {
+            "time": ["2026-09-15T12:00", "2026-09-15T13:00", "2026-09-15T14:00"],
+            "temperature_2m": [80.0, 81.0, 82.0],
+            "shortwave_radiation_instant": [500.0, 510.0, 520.0],
+            "predicted_uva_wm2": [40.0, 41.0, 42.0],
+            "uv_index": [5.0, 5.1, 5.2],
+            "overall_tan_opportunity_0_100": [40.0, 41.0, 42.0],
+            "tan_score_absolute_0_100": [38.0, 39.0, 40.0],
+            "weather_code": [61, 3, 3],
+            "is_day": [1, 1, 1],
+        }
+    )
+    out = build_30min_forecast(hourly, None)
+    slot = out.loc[out["time"] == "2026-09-15T12:30"].iloc[0]
+    assert float(slot["weather_code"]) == 61.0
+
+
+def test_read_table_falls_back_to_csv(tmp_path):
+    from sunstack.ui import _latest_dir, _read_table
+
+    tables = tmp_path / "tables"
+    tables.mkdir(parents=True)
+    pd.DataFrame({"a": [1.0]}).to_csv(tables / "m.csv", index=False)
+    assert _read_table(tmp_path, "m")["a"].tolist() == [1.0]
+    assert _read_table(tmp_path, "missing").empty
+    target = tmp_path / "run1"
+    target.mkdir()
+    (tmp_path / "LATEST").write_text(str(target), encoding="utf-8")
+    assert _latest_dir(tmp_path) == target
+
+
+def test_site_nav_relative_urls_cover_both_pages():
+    # Static export picker: root page links down to sites, site pages link
+    # back up; the current page never links to itself.
+    from sunstack.ui import _site_nav
+
+    root = {e["slug"]: e for e in _site_nav(None)}
+    assert root["south-bend"]["url"] is None
+    assert root["pacific-palisades"]["url"] == "sites/pacific-palisades/"
+    site = {e["slug"]: e for e in _site_nav("pacific-palisades")}
+    assert site["pacific-palisades"]["url"] is None
+    assert site["south-bend"]["url"] == "../../"
+
+
+def test_build_sha_unknown_off_git(monkeypatch):
+    import subprocess
+
+    import sunstack.ui as _ui
+
+    def _boom(*a, **k):
+        raise OSError("no git here")
+
+    monkeypatch.setattr(_ui, "BUILD_SHA", None)
+    monkeypatch.setattr(subprocess, "run", _boom)
+    assert _ui.build_sha() == "unknown"
+
+
+def test_calendar_builders_skip_ragged_rows():
+    # Calendar builders must survive ragged frames: empty tables, missing
+    # time columns, and unparseable stamps degrade to fewer events, never
+    # a crash that blocks the whole export.
+    from sunstack.ui import _daily_uv_peaks, build_interval_ics
+
+    assert _daily_uv_peaks(pd.DataFrame()) == {}
+    assert _daily_uv_peaks(pd.DataFrame({"uv_index": [5.0]})) == {}
+    half = pd.DataFrame([
+        {"time": "2026-09-15T12:00", "tan_score_absolute_0_100": 40.0},
+        {"time": None, "tan_score_absolute_0_100": 42.0},
+        {"time": "not-a-time", "tan_score_absolute_0_100": 43.0},
+    ])
+    ics = build_interval_ics(half, "20260915_004803")
+    assert ics.count("BEGIN:VEVENT") == 1
+    assert ics.count("END:VEVENT") == 1
+
+
+def test_location_registry_rejects_malformed_shapes(tmp_path):
+    # Every malformed registry shape must fail loudly at load (never a
+    # half-parsed location silently scoring the wrong coordinates).
+    import pytest
+    import yaml
+
+    from sunstack.config import load_sites
+
+    def write(obj):
+        p = tmp_path / "loc.yaml"
+        p.write_text(yaml.safe_dump(obj), encoding="utf-8")
+        return p
+
+    def good(**kw):
+        base = {"slug": "a", "lat": 0, "lon": 0, "timezone": "UTC",
+                "default": True}
+        base.update(kw)
+        return base
+
+    with pytest.raises(TypeError, match="must be a list"):
+        load_sites(write({"slug": "a"}))
+    with pytest.raises(TypeError, match="must be a mapping"):
+        load_sites(write(["nope"]))
+    with pytest.raises(TypeError, match="keys must be strings"):
+        load_sites(write([{123: "x", "slug": "a", "lat": 0, "lon": 0,
+                           "timezone": "UTC"}]))
+    with pytest.raises(TypeError, match="missing slug"):
+        load_sites(write([{"lat": 0, "lon": 0, "timezone": "UTC"}]))
+    with pytest.raises(TypeError, match="must be a number"):
+        load_sites(write([good(lat="x")]))
+    with pytest.raises(TypeError, match="must be a number"):
+        load_sites(write([good(lat=True)]))
+    with pytest.raises(TypeError, match="must be a number"):
+        load_sites(write([good(lon="x")]))
+    with pytest.raises(TypeError, match="must be a number"):
+        load_sites(write([good(lon=False)]))
+    with pytest.raises(TypeError, match="must be a string"):
+        load_sites(write([good(timezone="")]))
+    with pytest.raises(ValueError, match="empty"):
+        load_sites(write([]))
+    assert load_sites(write(None)) == []
+    with pytest.raises(ValueError, match="default"):
+        load_sites(write([good(default=False)]))
+
+
+def test_render_static_html_falls_back_to_loaddata_anchor(monkeypatch):
+    # Template variants without the init() anchor must still get skin
+    # wiring via the legacy loadData() anchor, never a half-swapped page.
+    import sunstack.ui as _ui
+    from sunstack.output import render_static_html
+
+    variant = _ui.HTML.replace("init();\n</script>", "loadData();\n</script>")
+    assert "loadData();\n</script>" in variant
+    monkeypatch.setattr(_ui, "HTML", variant)
+    html = render_static_html("20260923_000000")
+    assert "loadData();initSkin();\n</script>" in html
+
+
+def test_percentile_helpers_reject_non_series_loudly():
+    import pytest
+
+    from sunstack.tanscore import _circular_doy_distance, _percentile, fnum
+
+    with pytest.raises(TypeError, match="must be a Series"):
+        _percentile([1.0, 2.0], 1.5)
+    with pytest.raises(TypeError, match="must be a Series"):
+        _circular_doy_distance([200, 210], 205)
+    row = pd.Series({"a": 5.0, "b": None, "c": "junk"})
+    assert fnum(row, "a") == 5.0
+    assert pd.isna(fnum(row, "missing"))
+    assert pd.isna(fnum(row, "b"))
+    assert pd.isna(fnum(row, "c"))
+    assert fnum(row, "c", default=-1.0) == -1.0
+
+
+def test_grade_ladders_cover_full_range():
+    from sunstack.tanscore import _grade_absolute, _grade_local
+
+    assert _grade_absolute(float("nan")) == "unknown"
+    assert _grade_absolute(85.0) == "extreme natural tanning intensity"
+    assert _grade_absolute(0.0) == "low"
+    assert _grade_local(float("nan")) == "unknown"
+    assert _grade_local(99.0) == "exceptional locally"
+    assert _grade_local(91.8) == "excellent locally"
+    assert _grade_local(0.0) == "poor locally"
+
+
+def test_local_scores_widen_on_thin_reference():
+    # A tiny climatology (< 250 seasonal / < 100 geometry rows) must widen
+    # to the full reference and still score, never NaN everything out.
+    from sunstack.tanscore import add_local_scores
+
+    forecast = pd.DataFrame({
+        "time_utc": pd.to_datetime(["2026-06-21T12:00Z"]),
+        "tan_score_absolute_0_100": [30.0],
+        "solar_elevation_deg": [60.0],
+    })
+    ref = pd.DataFrame({
+        "time_utc": pd.to_datetime(["2026-06-21T12:00Z"] * 3),
+        "day_of_year": [172, 172, 172],
+        "solar_elevation_deg": [60.0, 61.0, 59.0],
+        "absolute_tan_score_0_100": [10.0, 20.0, 30.0],
+    })
+    out = add_local_scores(forecast, ref)
+    assert out["local_tan_score_0_100"].notna().all()
+    assert out["atmospheric_quality_percentile_0_100"].notna().all()
