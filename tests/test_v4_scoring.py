@@ -1533,3 +1533,45 @@ def test_records_never_emit_browser_hostile_tokens():
     # Values survive structurally: inf/nan readings become JSON null.
     assert rows[0]["tan_dose_1h_j_m2"] is None
     assert rows[1]["tan_score_absolute_0_100"] is None
+
+
+def _valid_scored_frame(**overrides):
+    base = {
+        "uv_index": [5.0, 5.2, 5.1],
+        "predicted_uva_wm2": [40.0, 42.0, 41.0],
+        "tan_score_absolute_0_100": [30.0, 32.0, 31.0],
+        "local_tan_score_0_100": [80.0, 82.0, 81.0],
+        "tan_forecast_confidence_0_100": [70.0, 72.0, 71.0],
+        "melanogenic_effective_irradiance_wm2": [0.5, 0.52, 0.51],
+        "erythemal_irradiance_wm2": [0.125, 0.13, 0.128],
+        "tan_score_model_version": ["action-spectrum-v1"] * 3,
+        "spectral_backend": ["tierC-broadband-v1"] * 3,
+        "spectral_tier": ["C"] * 3,
+        "local_reference_stale": [False] * 3,
+    }
+    base.update(overrides)
+    return pd.DataFrame({k: v for k, v in base.items() if v is not None})
+
+
+def test_scored_hourly_validator_error_branches():
+    from sunstack.validation import validate_scored_hourly
+
+    def errors(df):
+        return [i for i in validate_scored_hourly(df) if i.severity == "ERROR"]
+
+    assert errors(_valid_scored_frame()) == []
+    # Each corruption below must produce at least one ERROR (never silence).
+    assert errors(_valid_scored_frame(
+        tan_score_absolute_0_100=[30.0, 101.0, 31.0]))
+    assert errors(_valid_scored_frame(
+        melanogenic_effective_irradiance_wm2=[0.5, -0.1, 0.51]))
+    assert errors(_valid_scored_frame(
+        melanogenic_effective_irradiance_wm2=[0.5, 5.5, 0.51]))
+    assert errors(_valid_scored_frame(
+        tan_score_model_version=["legacy-55-30-15"] * 3))
+    assert errors(_valid_scored_frame(spectral_tier=["Z"] * 3))
+    assert errors(_valid_scored_frame(uv_index=None))
+    assert errors(_valid_scored_frame(
+        melanogenic_effective_irradiance_wm2=None))
+    assert errors(_valid_scored_frame(
+        tan_score_absolute_0_100=[float("nan")] * 3))
