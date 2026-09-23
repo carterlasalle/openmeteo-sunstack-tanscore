@@ -1855,3 +1855,24 @@ def test_cams_features_convert_ozone_and_split_bands():
     assert _cams_features(du)["ozone_du"].tolist() == [300.0] * 3
     assert list(_cams_features(None).columns)[:5] == [
         "time_utc", "ozone_du", "aod340", "aod380", "cams_forecast_albedo"]
+
+
+def test_utc_parsing_handles_dst_fold_and_gap(monkeypatch):
+    # Wall-clock DST transitions must not shift or collapse the UTC grid:
+    # fall-back folds disambiguate by order, spring gaps shift forward.
+    from sunstack import config as _config
+    from sunstack.tanscore import _to_utc_from_openmeteo
+
+    monkeypatch.setattr(_config, "TIMEZONE", "America/Indiana/Indianapolis")
+    fold = _to_utc_from_openmeteo(pd.Series(
+        ["2026-11-01T01:00", "2026-11-01T01:30",
+         "2026-11-01T01:00", "2026-11-01T02:00"]))
+    assert fold.dt.tz is not None
+    assert fold.tolist() == list(pd.to_datetime(
+        ["2026-11-01 05:00", "2026-11-01 05:30",
+         "2026-11-01 06:00", "2026-11-01 07:00"], utc=True))
+    gap = _to_utc_from_openmeteo(pd.Series(["2026-03-08T02:30"]))
+    assert gap.tolist() == list(pd.to_datetime(["2026-03-08 07:00"], utc=True))
+    aware = _to_utc_from_openmeteo(pd.Series(["2026-06-21T12:00Z"]))
+    assert aware.tolist() == list(pd.to_datetime(["2026-06-21 12:00"], utc=True))
+    assert str(aware.dtype) == "datetime64[ns, UTC]"

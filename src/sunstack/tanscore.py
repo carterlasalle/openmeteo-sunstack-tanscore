@@ -29,10 +29,6 @@ def _to_utc_from_openmeteo(times: pd.Series) -> pd.Series:
     return parsed.dt.tz_convert("UTC").astype("datetime64[ns, UTC]")
 
 
-def _cams_col(cams: pd.DataFrame, tokens: tuple[str, ...], excludes: tuple[str, ...] = ()) -> str | None:
-    return _find_col(cams, tokens, excludes)
-
-
 def _cams_features(cams: pd.DataFrame | None) -> pd.DataFrame:
     """Propagate every direct CAMS UV/aerosol/column field (never fetch-and-drop).
 
