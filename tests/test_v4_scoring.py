@@ -923,6 +923,28 @@ def test_closure_requires_canonical_utc(tmp_path, monkeypatch):
     assert "calibration_sources archive tables not present" in text
 
 
+def test_committed_estimator_holdout_skill_floors(tmp_path, monkeypatch):
+    # The NASA POWER year-holdout skill of the committed UVA/UVB bundle is a
+    # release gate: an estimator or training-data regression must break the
+    # suite, not wait for a manual validation run.
+    import re
+    import sys
+
+    rb = _load_script("validate_external")
+    (tmp_path / "latest").mkdir()
+    out = tmp_path / "report.md"
+    monkeypatch.setattr(sys, "argv",
+                        ["validate", "--latest", str(tmp_path / "latest"),
+                         "--calibration", "data/calibration",
+                         "--out", str(out)])
+    rb.main()
+    text = out.read_text(encoding="utf-8")
+    r2 = [float(v) for v in re.findall(r'"r2": ([0-9.]+)', text)[:2]]
+    assert len(r2) == 2, text[:500]
+    assert r2[0] > 0.99, r2  # UVA estimator holdout floor
+    assert r2[1] > 0.98, r2  # UVB estimator holdout floor
+
+
 def test_csv_export_covers_all_days_with_v4_columns():
     # Merge-resolution pin: upstream's all-days export combined with the
     # v4-extended column sets. If either side regresses, this fails loudly
