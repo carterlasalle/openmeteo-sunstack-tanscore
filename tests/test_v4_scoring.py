@@ -910,8 +910,32 @@ def test_csv_export_covers_all_days_with_v4_columns():
     for col in ("melanogenic_effective_irradiance_wm2",
                 "tan_dose_30m_j_m2", "sed_30m",
                 "tan_dose_best_window_j_m2", "sed_day_total",
+                "tan_dose_best_window_complete",
+                "tan_dose_best_window_coverage_fraction",
+                "sed_best_window_complete",
+                "sed_best_window_coverage_fraction",
                 "legacy_absolute_tan_score_55_30_15"):
         assert col in HTML, col
+
+
+def test_all_days_csv_head_matches_daily_row_keys():
+    # The all-days CSV head is a fixed list inside the dashboard template;
+    # every key it reads must exist on the daily summary rows (a head/row
+    # drift would silently export `undefined` columns).
+    import re
+
+    from sunstack.doses import add_interval_doses
+    from sunstack.opportunity import build_daily_summary
+    from sunstack.ui import HTML
+
+    m = re.search(r"const dHead=\[(.*?)\]", HTML)
+    assert m, "dHead export head not found in dashboard template"
+    head = re.findall(r"'([^']+)'", m.group(1))
+    assert len(head) > 10, head
+    row_keys = set(build_daily_summary(
+        add_interval_doses(_half_hour_frame(1.0))).iloc[0].index)
+    missing = [k for k in head if k not in row_keys]
+    assert not missing, missing
 
 
 def test_cli_personal_mmd_flags_and_threading():
