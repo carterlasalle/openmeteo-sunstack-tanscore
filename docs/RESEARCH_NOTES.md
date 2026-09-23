@@ -698,3 +698,9 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   (`...but parrish_delayed_melanogenesis tier is 'provisional'`). Caution:
   `sunstack doctor ... | tail` always reports EXIT 0 — `$?` reads `tail`,
   not sunstack. Measure exits without pipes.
+
+- Addendum (personalization separation on live SB tables, offline):
+  `attach_personalization` with MEASURED MMD 2000 J/m² over the 336 live
+  hourly rows labels basis MEASURED throughout, yields 335 finite fractions
+  (0.0–1.35; >1 = over-threshold exposure, unclamped by design), and leaves
+  Absolute/E_mel columns bit-identical — environmental physics untouched.
