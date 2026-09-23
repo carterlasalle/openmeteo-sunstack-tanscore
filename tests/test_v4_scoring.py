@@ -1081,3 +1081,45 @@ def test_export_bakes_personal_mmd_when_asked(tmp_path):
     payload = _json.loads((tmp_path / "pers" / "data.json").read_text())
     assert [r["personal_mmd_fraction"] for r in payload["hourly"]] == [0.5, 1.0, 0.75]
     assert payload["half_hour"][0]["personalization_basis"] == "MEASURED"
+
+
+def test_rescore_gate_exits_on_validation_errors(tmp_path, monkeypatch):
+    import sys
+
+    rb = _load_script("rescore_latest_v4")
+    tdir = tmp_path / "sites" / "pacific-palisades" / "latest" / "tables"
+    tdir.mkdir(parents=True)
+    (tmp_path / "sites" / "pacific-palisades" / "calibration").mkdir(parents=True)
+    times = ["2026-09-22T12:00", "2026-09-22T13:00", "2026-09-22T14:00"]
+    pd.DataFrame({
+        "time": times,
+        "shortwave_radiation": [600.0, 700.0, 650.0],
+        "direct_normal_irradiance": [700.0, 750.0, 720.0],
+        "diffuse_radiation": [100.0, 110.0, 105.0],
+        "terrestrial_radiation": [1000.0, 1050.0, 1020.0],
+        "cloud_cover": [10.0, 15.0, 12.0],
+        "temperature_2m": [78.0, 80.0, 79.0],
+        "relative_humidity_2m": [50.0, 48.0, 49.0],
+        "surface_pressure": [10000.0] * 3,
+        "uv_index": [float("nan")] * 3,  # unknown UVI, not night
+        "uv_index_clear_sky": [6.0, 6.5, 6.2],
+        "is_day": [1, 1, 1],
+        "precipitation_probability": [0.0] * 3,
+    }).to_parquet(tdir / "best_match_enriched.parquet", index=False)
+    pd.DataFrame().to_parquet(tdir / "cams_direct_forecast.parquet", index=False)
+    pd.DataFrame({
+        "time": times,
+        "sun_window_confidence_0_100": [float("nan")] * 3,
+    }).to_parquet(tdir / "best_sun_windows.parquet", index=False)
+    pd.DataFrame().to_parquet(tdir / "hrrr_native_15min.parquet", index=False)
+    report = tmp_path / "report.md"
+    monkeypatch.setattr(sys, "argv",
+                        ["rescore", "--site", "pacific-palisades",
+                         "--root", str(tmp_path),
+                         "--out", str(tmp_path / "out"),
+                         "--report", str(report)])
+    import pytest
+
+    with pytest.raises(SystemExit, match="v4 validation errors"):
+        rb.main()
+    assert not report.exists()
