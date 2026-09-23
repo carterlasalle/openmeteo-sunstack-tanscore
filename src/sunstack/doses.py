@@ -273,8 +273,11 @@ def window_dose(frame: pd.DataFrame, start, end,
     mask = (sub["_t"] >= pd.to_datetime(start)) & (sub["_t"] <= pd.to_datetime(end))
     g = sub.loc[mask]
     if g.empty:
-        return {"tan_dose_best_window_j_m2": 0.0, "sed_best_window": 0.0,
-                "uva_dose_window_j_m2": 0.0, "uvb_dose_window_j_m2": 0.0}
+        # No samples inside the window: exposure is UNKNOWN (NaN), never
+        # zero — zero would claim a measured absence of sun.
+        nan = float("nan")
+        return {"tan_dose_best_window_j_m2": nan, "sed_best_window": nan,
+                "uva_dose_window_j_m2": nan, "uvb_dose_window_j_m2": nan}
     t = pd.to_datetime(g["dt"] if "dt" in g else g["time"], utc=True)
 
     def _gcol(name: str) -> pd.Series:

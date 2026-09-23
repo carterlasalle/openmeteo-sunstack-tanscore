@@ -261,6 +261,23 @@ def test_sub_grid_windows_are_nan_not_zero():
     assert bool(night_dosed.loc[1, "tan_dose_1h_complete"])
 
 
+def test_empty_window_dose_is_nan_not_zero():
+    # A window containing no samples is unknowable -> NaN on every channel
+    # (0.0 would claim a measured absence of sun).
+    frame = pd.DataFrame({
+        "dt": pd.to_datetime(["2026-06-21T12:00", "2026-06-21T13:00"]),
+        "melanogenic_effective_irradiance_wm2": [0.5, 0.6],
+        "erythemal_irradiance_wm2": [0.15, 0.16],
+        "predicted_uva_wm2": [35.0, 40.0],
+        "predicted_uvb_wm2": [1.0, 1.1],
+    })
+    win = window_dose(frame, "2026-06-22T12:00", "2026-06-22T13:00")
+    assert pd.isna(win["tan_dose_best_window_j_m2"])
+    assert pd.isna(win["sed_best_window"])
+    assert pd.isna(win["uva_dose_window_j_m2"])
+    assert pd.isna(win["uvb_dose_window_j_m2"])
+
+
 def test_absolute_ignores_location_while_local_uses_it():
     # §21: LocalTanScore changes with local climatology, Absolute does not.
     from sunstack.photobiology import absolute_tan_score_from_melanogenic_irradiance
