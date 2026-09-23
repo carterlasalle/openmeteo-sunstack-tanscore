@@ -1845,3 +1845,36 @@ def test_percentile_helpers_reject_non_series_loudly():
     assert pd.isna(fnum(row, "b"))
     assert pd.isna(fnum(row, "c"))
     assert fnum(row, "c", default=-1.0) == -1.0
+
+
+def test_grade_ladders_cover_full_range():
+    from sunstack.tanscore import _grade_absolute, _grade_local
+
+    assert _grade_absolute(float("nan")) == "unknown"
+    assert _grade_absolute(85.0) == "extreme natural tanning intensity"
+    assert _grade_absolute(0.0) == "low"
+    assert _grade_local(float("nan")) == "unknown"
+    assert _grade_local(99.0) == "exceptional locally"
+    assert _grade_local(91.8) == "excellent locally"
+    assert _grade_local(0.0) == "poor locally"
+
+
+def test_local_scores_widen_on_thin_reference():
+    # A tiny climatology (< 250 seasonal / < 100 geometry rows) must widen
+    # to the full reference and still score, never NaN everything out.
+    from sunstack.tanscore import add_local_scores
+
+    forecast = pd.DataFrame({
+        "time_utc": pd.to_datetime(["2026-06-21T12:00Z"]),
+        "tan_score_absolute_0_100": [30.0],
+        "solar_elevation_deg": [60.0],
+    })
+    ref = pd.DataFrame({
+        "time_utc": pd.to_datetime(["2026-06-21T12:00Z"] * 3),
+        "day_of_year": [172, 172, 172],
+        "solar_elevation_deg": [60.0, 61.0, 59.0],
+        "absolute_tan_score_0_100": [10.0, 20.0, 30.0],
+    })
+    out = add_local_scores(forecast, ref)
+    assert out["local_tan_score_0_100"].notna().all()
+    assert out["atmospheric_quality_percentile_0_100"].notna().all()
