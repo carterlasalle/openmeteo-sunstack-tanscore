@@ -766,6 +766,51 @@ def test_30min_uses_clear_sky_index_not_linear_blend(monkeypatch):
     assert float(slot["predicted_uva_wm2"]) == 31.25
 
 
+def test_30min_broadband_corrections_recompute_pigment_channel():
+    # Broadband corrections (clear-sky-index / native-HRRR) rescale UVA/UVB
+    # after interpolation; the pigment-darkening channel must be recomputed
+    # from the corrected bands, or corrected rows would publish pigment doses
+    # inconsistent with their own radiation.
+    import sunstack.opportunity as opp
+    from sunstack.spectral import pigment_darkening_from_broadband
+
+    hourly = pd.DataFrame(
+        {
+            "time": ["2026-09-15T12:00", "2026-09-15T13:00", "2026-09-15T14:00"],
+            "temperature_2m": [80.0, 82.0, 83.0],
+            "shortwave_radiation_instant": [500.0, 520.0, 500.0],
+            "predicted_uva_wm2": [40.0, 42.0, 40.0],
+            "predicted_uvb_wm2": [0.5, 0.52, 0.5],
+            "uv_index": [5.0, 5.2, 5.0],
+            "overall_tan_opportunity_0_100": [40.0, 42.0, 40.0],
+            "tan_score_absolute_0_100": [38.0, 40.0, 38.0],
+        }
+    )
+    # Native HRRR sees much brighter broadband: bounded correction rescales
+    # the bands on native rows, so stale pigment would visibly mismatch.
+    hrrr15 = pd.DataFrame(
+        {
+            "time": ["2026-09-15T12:00", "2026-09-15T13:00", "2026-09-15T14:00"],
+            "shortwave_radiation_instant": [800.0, 830.0, 800.0],
+        }
+    )
+    out = opp.build_30min_forecast(hourly, hrrr15)
+    native = out.loc[
+        out["subhour_source"].str.startswith("native_HRRR", na=False)
+    ]
+    assert len(native) > 0
+    assert (native["predicted_uva_wm2"].to_numpy(dtype=float) != 40.0).any()
+    expected = np.round(
+        pigment_darkening_from_broadband(
+            native["predicted_uva_wm2"].to_numpy(dtype=float),
+            native["predicted_uvb_wm2"].to_numpy(dtype=float),
+        ),
+        5,
+    )
+    got = native["pigment_darkening_effective_irradiance"].to_numpy(dtype=float)
+    assert np.allclose(np.asarray(expected, dtype=float), got, rtol=0, atol=1e-9)
+
+
 def test_30min_survives_non_numeric_ghi_dtype():
     # Some feeds deliver radiation as strings/None (object dtype), which the
     # numeric-only resample silently drops. The kt block must coerce, never

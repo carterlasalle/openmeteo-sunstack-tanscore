@@ -473,6 +473,7 @@ def build_30min_forecast(
                 sub = _recompute_v4_scores(sub)
                 for col in ("melanogenic_effective_irradiance_wm2",
                             "tan_score_absolute_0_100", "erythemal_irradiance_wm2",
+                            "pigment_darkening_effective_irradiance",
                             "legacy_absolute_tan_score_55_30_15",
                             "tan_score_model_version"):
                     if col in sub:
@@ -585,6 +586,7 @@ def build_30min_forecast(
                 sub = _recompute_v4_scores(sub)
                 for col in ("melanogenic_effective_irradiance_wm2",
                             "tan_score_absolute_0_100", "erythemal_irradiance_wm2",
+                            "pigment_darkening_effective_irradiance",
                             "legacy_absolute_tan_score_55_30_15",
                             "tan_score_model_version"):
                     if col in sub:
