@@ -358,3 +358,16 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   tier/version metadata (spectral_tier, model versions, cams_cycle, …) is
   carried forward instead — data we have, kept; observations we lack, never
   fabricated. Time-varying CAMS fields are explicitly excluded from carrying.
+
+## 2026-09-23 (follow-up 10) — no-extrapolation verified on real CAMS data
+
+- Re-ran the Palisades v4 re-score post-hardening: 30-min `uvi_cams` is valid
+  on exactly the hourly valid span (ends 06:00 local 9/27) with zero stamps
+  fabricated past the CAMS horizon, while `spectral_tier=C`,
+  `tan_score_model_version`, and `cams_cycle` carry through all 671 rows and
+  the new 30-min complete/coverage flags populate (mean coverage 0.999).
+- Near-miss documented: scratch analysis initially read a 7-hour discrepancy
+  into the tails by parsing tz-naive local `dt` strings as UTC. The pipeline
+  was correct; the notebook was wrong. Timezone-naive wall times must never
+  be compared against UTC stamps without localization — added here so the
+  next audit does not re-litigate it.
