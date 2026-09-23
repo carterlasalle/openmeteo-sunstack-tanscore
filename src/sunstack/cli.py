@@ -426,11 +426,6 @@ def _run_live_inner(
     tan_hourly = score_forecast(best_air, calibration_dir, cams_direct, sun_windows)
     tan_hourly = apply_outdoor_feasibility(tan_hourly, min_temp_f)
     tan_hourly = attach_fitzpatrick(tan_hourly, skin_type)
-    # Objective-first personalization columns (environmental physics untouched;
-    # fractions stay NaN until a measured/compatible MMD is supplied).
-    tan_hourly = attach_personalization(
-        tan_hourly, personal_mmd_j_m2=personal_mmd_j_m2,
-        basis=personal_mmd_basis)
     try:
         from .doses import add_interval_doses as _add_hourly_doses
 
@@ -439,6 +434,12 @@ def _run_live_inner(
         LOG.error("[doses] hourly interval-dose integration failed: %s", exc)
         if strict:
             raise
+    # Objective-first personalization columns (environmental physics untouched;
+    # fractions stay NaN until a measured/compatible MMD is supplied). Runs
+    # AFTER interval doses so the hourly fraction has a dose to divide.
+    tan_hourly = attach_personalization(
+        tan_hourly, personal_mmd_j_m2=personal_mmd_j_m2,
+        basis=personal_mmd_basis)
     # Strict photobiology gate: spectrum resource must evaluate.
     from .validation import validate_action_spectra
 

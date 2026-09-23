@@ -1682,3 +1682,26 @@ def test_invalid_skin_tilt_fails_loudly_in_scoring(tmp_path, monkeypatch, caplog
         score_forecast(_best_air(), Path(tmp_path), None, _confidence())
     assert any("Skin-plane configuration invalid" in r.message
                for r in caplog.records)
+
+
+def test_personalization_without_dose_column_is_nan_not_crash():
+    # attach_personalization must never crash when the dose column does not
+    # exist yet (e.g. attached before interval integration): UNKNOWN, not
+    # AttributeError on a bare NaN.
+    from sunstack.opportunity import attach_personalization
+
+    out = attach_personalization(
+        pd.DataFrame({"a": [1.0]}), 2000.0, "MEASURED")
+    assert out["personal_mmd_fraction"].isna().all()
+    assert out["personalization_basis"].unique().tolist() == ["MEASURED"]
+
+
+def test_cli_hourly_personalization_uses_interval_doses(tmp_path):
+    from sunstack.doses import add_interval_doses
+    from sunstack.opportunity import attach_personalization
+    from sunstack.tanscore import score_forecast
+
+    scored = score_forecast(_best_air(), Path(tmp_path), None, _confidence())
+    dosed = add_interval_doses(scored)
+    out = attach_personalization(dosed, 2000.0, "MEASURED")
+    assert out["personal_mmd_fraction"].notna().any()

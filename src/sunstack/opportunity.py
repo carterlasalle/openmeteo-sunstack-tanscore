@@ -307,8 +307,13 @@ def attach_personalization(
     out = df.copy()
     out["personalization_basis"] = basis or "not personalized"
     if personal_mmd_j_m2 is not None and np.isfinite(personal_mmd_j_m2) and personal_mmd_j_m2 > 0:
-        dose = pd.to_numeric(out[dose_col], errors="coerce") if dose_col in out else np.nan
-        out["personal_mmd_fraction"] = (dose / personal_mmd_j_m2).round(3)
+        if dose_col in out:
+            dose = pd.to_numeric(out[dose_col], errors="coerce")
+            out["personal_mmd_fraction"] = (dose / personal_mmd_j_m2).round(3)
+        else:
+            # Dose column not computed yet (e.g. personalization attached
+            # before interval integration): UNKNOWN, never a crash.
+            out["personal_mmd_fraction"] = np.nan
         out["personal_mmd_equivalent_dose_j_m2"] = personal_mmd_j_m2
     else:
         out["personal_mmd_fraction"] = np.nan
