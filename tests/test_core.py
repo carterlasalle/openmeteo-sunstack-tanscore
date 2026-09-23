@@ -1689,3 +1689,26 @@ def test_day_status_thresholds():
     assert _day_status(35.0) == "FAIR"
     assert _day_status(34.9) == "POOR"
     assert _day_status(0.0) == "NO OUTDOOR WINDOW"
+
+
+def test_30min_nearest_fills_discrete_weather_codes():
+    # WMO codes / day flags must never be numerically interpolated: 12:30
+    # between codes 61 and 3 must read nearest (61), not a 32.0 blend.
+    from sunstack.opportunity import build_30min_forecast
+
+    hourly = pd.DataFrame(
+        {
+            "time": ["2026-09-15T12:00", "2026-09-15T13:00", "2026-09-15T14:00"],
+            "temperature_2m": [80.0, 81.0, 82.0],
+            "shortwave_radiation_instant": [500.0, 510.0, 520.0],
+            "predicted_uva_wm2": [40.0, 41.0, 42.0],
+            "uv_index": [5.0, 5.1, 5.2],
+            "overall_tan_opportunity_0_100": [40.0, 41.0, 42.0],
+            "tan_score_absolute_0_100": [38.0, 39.0, 40.0],
+            "weather_code": [61, 3, 3],
+            "is_day": [1, 1, 1],
+        }
+    )
+    out = build_30min_forecast(hourly, None)
+    slot = out.loc[out["time"] == "2026-09-15T12:30"].iloc[0]
+    assert float(slot["weather_code"]) == 61.0
