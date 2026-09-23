@@ -50,7 +50,10 @@ Write a failing test for the observable contract first. Then make the
 smallest complete fix and show the test passing. Existing test layers live in
 `tests/test_core.py`: scoring invariants (global-vs-local, monotonicity),
 30-minute interpolation bounds, night-zero behavior, CAMS fallback, schedule
-wiring, export shape.
+wiring, export shape; `tests/test_photobiology.py`: E_mel/TanDose/SED math,
+action spectra, skin-plane physics, validator-adjacent proofs;
+`tests/test_v4_scoring.py`: v4 scoring audit trail, dose flags, contracts,
+serving; `tests/test_cams_time_decode.py`: CAMS time decoding.
 
 Do not add tests that pin incidental formatting, duplicate type checking, or
 assert implementation wiring. Configuration such as the scheduled workflow is
@@ -65,6 +68,24 @@ an observable contract and may be tested structurally.
   `docs/RESEARCH_NOTES.md`, not fitted constants without provenance.
 - `uv run sunstack run` must still fail loudly (exit 1) on missing critical
   sources — never silence a failure to make a run green.
+
+### Photobiology refresh chain
+
+Touching action spectra, the spectral layer, dose integration, or the global
+reference requires the full refresh, in order (each step is pinned in-suite,
+so a skipped step breaks loudly rather than drifting silently):
+
+1. `python3 scripts/build_action_spectra.py --out /tmp/spec` — output must
+   reproduce the committed `data/research/action_spectra/` files
+   byte-identically (spectra provenance test).
+2. `python3 scripts/rebuild_v4_references.py` (no `--adopt`) — committed
+   `local_reference.*` files must reproduce byte-identically; adopting a new
+   reference requires `--adopt-empirical-p999 --new-version` (never silent).
+3. `python3 scripts/rescore_latest_v4.py` — the SystemExit validation gate
+   must pass on real run tables.
+4. `python3 scripts/validate_external.py` (holdout skill floors live
+   in-suite) and `python3 scripts/check_literature.py` (6 gates in-suite).
+5. `uv run pytest tests/ -q` and `uv run ruff check src tests`.
 
 ### Docs and thresholds
 
