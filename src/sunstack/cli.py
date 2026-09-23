@@ -1060,6 +1060,11 @@ def main() -> None:
 
     parser = _build_parser()
     args: Namespace = parser.parse_args()
+    if args.personal_mmd is not None and not args.personal_mmd_basis:
+        # Same rule as the dashboard/API 400: an MMD without an explicit
+        # basis would publish fractions with implied-but-absent provenance.
+        parser.error("--personal-mmd requires --personal-mmd-basis "
+                     "(MEASURED, OBJECTIVE_ESTIMATE, or COARSE_ESTIMATE)")
     root = Path(args.out)
     _setup_logging(root, debug=args.verbose)
     strict = config.STRICT_DEFAULT and not args.allow_degraded

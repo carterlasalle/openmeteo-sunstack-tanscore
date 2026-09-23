@@ -1147,3 +1147,33 @@ def test_site_stack_corruption_raises_without_assert():
     finally:
         _config._SITE_STACK.clear()
     assert _config.LATITUDE == 41.703293  # globals restored despite the raise
+
+
+def test_cli_requires_basis_with_personal_mmd(tmp_path, monkeypatch):
+    import sys
+
+    from sunstack import cli as _cli
+
+    calls = {}
+
+    def _fake_run_all_sites(root, **kwargs):
+        calls.update(kwargs)
+
+    monkeypatch.setattr(_cli, "_run_all_sites", _fake_run_all_sites)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv",
+                        ["sunstack", "run", "--site", "south-bend",
+                         "--personal-mmd", "1000"])
+    import pytest
+
+    with pytest.raises(SystemExit) as exc:
+        _cli.main()
+    assert exc.value.code == 2
+    assert calls == {}
+    monkeypatch.setattr(sys, "argv",
+                        ["sunstack", "run", "--site", "south-bend",
+                         "--personal-mmd", "1000",
+                         "--personal-mmd-basis", "OBJECTIVE_ESTIMATE"])
+    _cli.main()
+    assert calls["personal_mmd_j_m2"] == 1000.0
+    assert calls["personal_mmd_basis"] == "OBJECTIVE_ESTIMATE"
