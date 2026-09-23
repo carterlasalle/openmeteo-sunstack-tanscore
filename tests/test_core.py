@@ -1649,3 +1649,27 @@ def test_build_local_reference_without_uvb_uses_uvi_fallback(tmp_path):
     assert len(ref) == 6
     assert ref["melanogenic_effective_irradiance_wm2"].notna().all()
     assert (ref["tan_score_model_version"] == "action-spectrum-v1").all()
+
+
+def test_output_helpers_fail_loud_or_noop(tmp_path):
+    # Unknown locations and missing runs must fail with actionable errors
+    # (never the wrong site or a bare crash); empty frames are no-ops.
+    import importlib.util
+
+    import pytest
+
+    from sunstack.output import write_excel, write_frame
+    from sunstack.ui import _latest_dir, _resolve_site
+
+    assert _resolve_site(None).slug == "south-bend"  # old URLs keep working
+    with pytest.raises(FileNotFoundError, match="unknown location"):
+        _resolve_site("no-such-place")
+    with pytest.raises(FileNotFoundError, match="No SunStack run found"):
+        _latest_dir(tmp_path)
+    write_frame(pd.DataFrame(), tmp_path / "out", "x")
+    assert not (tmp_path / "out").exists()
+    write_excel({}, tmp_path / "empty.xlsx")
+    assert not (tmp_path / "empty.xlsx").exists()
+    if importlib.util.find_spec("openpyxl") is None:
+        write_excel({"a": pd.DataFrame({"x": [1.0]})}, tmp_path / "w.xlsx")
+        assert not (tmp_path / "w.xlsx").exists()
