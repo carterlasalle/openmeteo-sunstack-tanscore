@@ -671,3 +671,13 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   66.1 / Local 91.5 — same healthy locally-excellent pattern at the sunnier
   site. Both runs' schedule-published generated docs reverted off the
   feature branch per standing rule.
+
+- Addendum (validation reproducibility on current tree): `check_literature`
+  6/6 PASS; `compare_legacy_v4` on the fresh SB live hourly reproduces the
+  documented signature (most-UVB-rich +3.2, most-UVA-rich -2.9);
+  `validate_external` reproduces the stratified POWER holdout (UVA R² 0.9989,
+  UVB R² 0.9894, full SZA/cloud/season/AOD/ozone strata). CAMS-closure
+  sections skip loudly — the run's tables contain no
+  `cams_direct_forecast.parquet` because this environment has no ADS
+  credentials (degraded mode by design), and the script says so instead of
+  passing silently.
