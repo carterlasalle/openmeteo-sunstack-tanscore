@@ -1783,3 +1783,46 @@ def test_action_spectra_missing_files_are_errors(tmp_path, monkeypatch):
     finally:
         pb._cache.update(saved)
     assert any(i.severity == "ERROR" for i in issues)
+
+
+def test_photobiology_gate_rejects_bad_reference_and_missing_spectrum(tmp_path, monkeypatch):
+    import pytest
+
+    import sunstack.photobiology as pb
+    from sunstack import config as _config
+    from sunstack.tanscore import _require_photobiology_or_fail
+
+    monkeypatch.setattr(_config, "GLOBAL_MELANOGENIC_REFERENCE_WM2", 0.0)
+    with pytest.raises(RuntimeError, match="reference invalid"):
+        _require_photobiology_or_fail()
+    monkeypatch.setattr(_config, "GLOBAL_MELANOGENIC_REFERENCE_WM2", 1.6)
+    monkeypatch.setattr(pb, "load_action_spectrum",
+                        lambda stem="x": (_ for _ in ()).throw(
+                            FileNotFoundError("ERROR photobiology: gone")))
+    with pytest.raises(RuntimeError, match="ERROR photobiology"):
+        _require_photobiology_or_fail()
+
+
+def test_score_forecast_canonical_gate_refuses_provisional(tmp_path, monkeypatch):
+    import pytest
+
+    from sunstack import config as _config
+    from sunstack.tanscore import score_forecast
+
+    monkeypatch.setattr(_config, "REQUIRE_CANONICAL_SPECTRUM", True)
+    with pytest.raises(RuntimeError, match="canonical"):
+        score_forecast(_best_air(), Path(tmp_path), None, _confidence())
+
+
+def test_best_tan_windows_fallback_blend_without_overall():
+    from sunstack.tanscore import best_tan_windows
+
+    assert best_tan_windows(pd.DataFrame()).empty
+    out = best_tan_windows(pd.DataFrame({
+        "is_day": [1, 1],
+        "tan_score_absolute_0_100": [40.0, 20.0],
+        "tan_forecast_confidence_0_100": [50.0, 50.0],
+    }))
+    # 90/10 absolute/confidence blend ranks the stronger physics first.
+    assert out["tan_window_rank_value"].tolist() == [41.0, 23.0]
+    assert out["tan_score_absolute_0_100"].tolist() == [40.0, 20.0]
