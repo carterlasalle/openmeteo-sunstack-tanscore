@@ -865,6 +865,33 @@ def test_corpus_builder_survives_empty_uvspec_output(tmp_path, monkeypatch):
     assert (tmp_path / "corpus" / "design.csv").exists()
 
 
+def test_offline_corpus_design_is_deterministic_but_not_tierB(tmp_path, monkeypatch):
+    # Without libRadtran the builder's artifact is the deterministic design +
+    # manifest (never fake spectra), and that manifest must NOT satisfy the
+    # Tier-B admission contract.
+    import json
+    import sys
+
+    import pytest
+
+    from sunstack.spectral import validate_tierB_manifest
+
+    rb = _load_script("build_spectral_corpus")
+    outs = []
+    for i in (1, 2):
+        out = tmp_path / f"corpus{i}"
+        monkeypatch.setattr(sys, "argv",
+                            ["build", "--samples", "16", "--seed", "7",
+                             "--out", str(out)])
+        rb.main()
+        outs.append(out)
+    assert (outs[0] / "design.csv").read_bytes() == (outs[1] / "design.csv").read_bytes()
+    manifest = json.loads((outs[0] / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["status"] == "spectra-pending"
+    with pytest.raises(ValueError, match="Tier-B manifest"):
+        validate_tierB_manifest(manifest)
+
+
 def test_closure_requires_canonical_utc(tmp_path, monkeypatch):
     import sys
 
