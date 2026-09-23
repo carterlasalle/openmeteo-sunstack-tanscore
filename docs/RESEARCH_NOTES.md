@@ -431,3 +431,14 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   second site page fails the reskin loudly (FileNotFoundError, non-zero
   exit) instead of publishing a half-reskinned site, which is the correct
   behavior.
+
+## 2026-09-23 (follow-up 17) — reproducibility battery, all stable
+
+- `build_action_spectra.py` rerun byte-stable (no drift in data files).
+- `check_literature.py`: 6/6 PASS. `validate_external.py` reruns clean
+  against SB calibration + live latest. `compare_legacy_v4.py` regenerates
+  the committed migration report byte-identically. `rescore_latest_v4.py`
+  reproduces its verification report byte-identically.
+- `SUNSTACK_TIERB_MANIFEST` documented in `.env.example` (was code-only).
+  (`rebuild_v4_references.py` intentionally not rerun: it date-stamps the
+  reference manifest and rewrites large calibration tables.)
