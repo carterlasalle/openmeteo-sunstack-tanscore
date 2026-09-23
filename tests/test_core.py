@@ -1551,3 +1551,15 @@ def test_env_example_documents_every_src_env_var():
     assert seen, "no env vars found — scanner broken"
     missing = sorted(v for v in seen if v not in env)
     assert not missing, missing
+
+
+def test_dose_row_marks_partial_window_and_day_doses():
+    # Cumulative doses can be partial (gap-split windows, incomplete days);
+    # the dashboard dose row must surface that via the complete flags with
+    # an explicit-false check, so pre-v4 rows without the keys render clean.
+    from sunstack.ui import HTML
+
+    assert "constpc=v=>v===false?'(partial)':''" in HTML.replace(" ", "")
+    for flag in ("tan_dose_best_window_complete", "tan_dose_complete",
+                 "sed_best_window_complete", "sed_complete"):
+        assert "pc(d." + flag + ")" in HTML.replace(" ", ""), flag
