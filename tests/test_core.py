@@ -1726,3 +1726,29 @@ def test_read_table_falls_back_to_csv(tmp_path):
     target.mkdir()
     (tmp_path / "LATEST").write_text(str(target), encoding="utf-8")
     assert _latest_dir(tmp_path) == target
+
+
+def test_site_nav_relative_urls_cover_both_pages():
+    # Static export picker: root page links down to sites, site pages link
+    # back up; the current page never links to itself.
+    from sunstack.ui import _site_nav
+
+    root = {e["slug"]: e for e in _site_nav(None)}
+    assert root["south-bend"]["url"] is None
+    assert root["pacific-palisades"]["url"] == "sites/pacific-palisades/"
+    site = {e["slug"]: e for e in _site_nav("pacific-palisades")}
+    assert site["pacific-palisades"]["url"] is None
+    assert site["south-bend"]["url"] == "../../"
+
+
+def test_build_sha_unknown_off_git(monkeypatch):
+    import subprocess
+
+    import sunstack.ui as _ui
+
+    def _boom(*a, **k):
+        raise OSError("no git here")
+
+    monkeypatch.setattr(_ui, "BUILD_SHA", None)
+    monkeypatch.setattr(subprocess, "run", _boom)
+    assert _ui.build_sha() == "unknown"
