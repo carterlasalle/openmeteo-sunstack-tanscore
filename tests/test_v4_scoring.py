@@ -1324,3 +1324,40 @@ def test_training_drops_constant_features_loudly(tmp_path, caplog):
     assert "aod340" not in bundle["features"]
     assert any("Calibration training without features" in r.message
                for r in caplog.records)
+
+
+def test_degraded_bundle_serves_predictions(tmp_path):
+    import joblib
+    import numpy as np
+    import pandas as pd
+
+    from sunstack.calibrate import MODEL_FEATURES, train_uv_models
+    from sunstack.tanscore import predict_uva_uvb
+
+    # Reuse the degraded-training fixture pattern: train tiny, drop CAMS.
+
+    n = 2500
+    rng = np.random.default_rng(11)
+    training = pd.DataFrame({
+        "time_utc": pd.date_range("2020-01-01", periods=n, freq="12h", tz="UTC"),
+        "ghi": rng.uniform(50, 900, n),
+        "sza": rng.uniform(20, 80, n),
+        "uva": rng.uniform(5, 45, n),
+        "uvb": rng.uniform(0.05, 1.2, n),
+    })
+    for feat in MODEL_FEATURES:
+        if feat not in training:
+            training[feat] = np.nan
+    caldir = tmp_path / "cal"
+    train_uv_models(training, caldir)
+    feats = pd.DataFrame([{
+        "ghi": 700.0, "dni": 750.0, "dhi": 110.0, "clear_ghi": 1000.0,
+        "kt": 0.7, "albedo": 0.2, "aod55": 0.1, "cloud": 10.0, "sza": 40.0,
+        "temp_c": 25.0, "rh": 50.0, "pressure_kpa": 100.0,
+        "ozone_du": np.nan, "aod340": np.nan, "aod380": np.nan,
+        "uv_index": 6.0, "is_day": 1,
+    }])
+    uva, uvb, tier = predict_uva_uvb(feats, caldir)
+    assert tier == "nasa_power_ml"
+    assert bool(np.isfinite(uva).all()) and bool(np.isfinite(uvb).all())
+    assert (uva > 0).all() and (uvb > 0).all()
