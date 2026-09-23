@@ -396,3 +396,14 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   the dose row honestly showed em-dashes. Fallbacks now read
   legacy-55-30-15 / pre-v4 legacy / pre-v4 broadband / pre-v4 / n/a, verified
   by re-execution on both payload shapes plus `node --check`.
+
+## 2026-09-23 (follow-up 13) — re-read + reskin proof
+
+- Re-read `doses.py` after three rewrites: removed the dead `uv_cm2` kind
+  branch (cm2 is computed inline) and sharpened the `_window_flags`
+  docstring. No semantic changes; suite green.
+- `sunstack reskin` proven against the real committed pre-v4 docs (both
+  sites, to scratch): run tags preserved, current build SHA stamped,
+  calendar.ics untouched at 13 events, and the reskinned page executed
+  headlessly shows legacy provenance with em-dash doses — the fallback fix
+  holds on the genuine reskin path, not just synthetic payloads.

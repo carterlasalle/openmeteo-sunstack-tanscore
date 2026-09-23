@@ -92,8 +92,6 @@ def _rolling_dose(
     dose, _, _ = _rolling_integral(vals, secs, window_s)
     if kind == "sed":
         dose = dose / 100.0
-    if kind == "uv_cm2":
-        dose = dose / 1e4
     return pd.Series(dose, index=frame.index, name=out_name)
 
 
@@ -101,10 +99,10 @@ def _window_flags(frame: pd.DataFrame, window_s: float,
                   value_col: str | None = None) -> tuple[pd.Series, pd.Series]:
     """Per-row (complete, coverage_fraction) for a trailing window.
 
-    Timestamp support is shared by every dose family on the same grid, but a
-    row whose own value is missing is never marked complete: an UNKNOWN dose
-    must not wear a complete flag. Pass value_col=None only for pure
-    timestamp grids.
+    Flags share the timestamp grid but respect the given family's own missing
+    values: a row whose own value is missing is never marked complete, so an
+    UNKNOWN dose never wears a complete flag. Pass value_col=None only for
+    pure timestamp grids.
     """
     secs = _utc_seconds(frame)
     if value_col is not None and value_col in frame:
