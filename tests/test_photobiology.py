@@ -512,3 +512,33 @@ def test_provenance_metadata_covers_dashboard_keys():
                 "photobiology_action_spectrum_tier", "spectral_backend"):
         assert key in meta, key
         assert meta[key], key
+
+
+def test_committed_spectra_rebuild_byte_identical(tmp_path, monkeypatch):
+    # The versioned action spectra must equal the builder script's
+    # deterministic output (no hand edits), and each committed metadata
+    # checksum must match its committed CSV (provenance chain integrity).
+    import hashlib
+    import json
+    import sys
+
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "build_action_spectra", "scripts/build_action_spectra.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(sys, "argv",
+                        ["build", "--out", str(tmp_path / "spectra")])
+    module.main()
+    src = Path("data/research/action_spectra")
+    stems = ("cie_erythema_reference", "parrish_delayed_melanogenesis",
+             "cie_pigmentation_reference", "ipd_action_spectrum")
+    for stem in stems:
+        rebuilt = (tmp_path / "spectra" / f"{stem}.csv").read_bytes()
+        assert rebuilt == (src / f"{stem}.csv").read_bytes(), stem
+    for stem in stems:
+        meta = json.loads((src / f"{stem}.meta.json").read_text())
+        actual = hashlib.sha256(
+            (src / f"{stem}.csv").read_bytes()).hexdigest()
+        assert meta["checksum_sha256"] == actual, stem

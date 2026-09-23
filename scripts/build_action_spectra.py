@@ -89,8 +89,8 @@ def sha256_of(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def write_csv(name: str, values: np.ndarray) -> Path:
-    p = OUT / name
+def write_csv(name: str, values: np.ndarray, out: Path = OUT) -> Path:
+    p = out / name
     lines = ["wavelength_nm,effectiveness"]
     for w, v in zip(WAVES, values):
         lines.append(f"{w:.0f},{v:.6e}")
@@ -98,25 +98,30 @@ def write_csv(name: str, values: np.ndarray) -> Path:
     return p
 
 
-def write_meta(name: str, meta: dict) -> Path:
-    p = OUT / name
+def write_meta(name: str, meta: dict, out: Path = OUT) -> Path:
+    p = out / name
     p.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     return p
 
 
-def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
+def main(argv=None) -> None:
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default=str(OUT))
+    out = Path(ap.parse_args(argv).out)
+    out.mkdir(parents=True, exist_ok=True)
     ery = cie_erythema(WAVES)
     mel = interp_log(MEL_ANCHORS, WAVES)
     ipd = ipd_spectrum(WAVES)
 
-    p_ery = write_csv("cie_erythema_reference.csv", ery)
-    p_par = write_csv("parrish_delayed_melanogenesis.csv", mel)
+    p_ery = write_csv("cie_erythema_reference.csv", ery, out)
+    p_par = write_csv("parrish_delayed_melanogenesis.csv", mel, out)
     # CIE 103/3 pigmentation table is not available in legally usable
     # machine-readable form; ship the provisional shape under the CIE filename
     # ONLY with explicit provisional labeling so strict mode can refuse it.
-    p_cie_pig = write_csv("cie_pigmentation_reference.csv", mel)
-    p_ipd = write_csv("ipd_action_spectrum.csv", ipd)
+    p_cie_pig = write_csv("cie_pigmentation_reference.csv", mel, out)
+    p_ipd = write_csv("ipd_action_spectrum.csv", ipd, out)
 
     common_mel_anchors = [{"wavelength_nm": float(w), "effectiveness": float(v)}
                           for w, v in MEL_ANCHORS]
@@ -206,8 +211,8 @@ def main() -> None:
         },
     }
     for name, meta in metas.items():
-        write_meta(name, meta)
-    print(f"Wrote {len(metas)} spectra + metadata to {OUT}")
+        write_meta(name, meta, out)
+    print(f"Wrote {len(metas)} spectra + metadata to {out}")
 
 
 if __name__ == "__main__":
