@@ -548,9 +548,8 @@ def test_literature_gates_pass_on_shipped_spectra(tmp_path, monkeypatch):
     # photoaddition, endpoint crossing, IPD separation, SED/TanDose
     # divergence) must hold on the shipped spectra; a spectra regression
     # must break the suite, not wait for a manual script run.
-    import sys
-
     import importlib.util
+    import sys
 
     spec = importlib.util.spec_from_file_location(
         "check_literature", "scripts/check_literature.py")
