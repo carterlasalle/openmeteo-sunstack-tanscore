@@ -1673,3 +1673,19 @@ def test_output_helpers_fail_loud_or_noop(tmp_path):
     if importlib.util.find_spec("openpyxl") is None:
         write_excel({"a": pd.DataFrame({"x": [1.0]})}, tmp_path / "w.xlsx")
         assert not (tmp_path / "w.xlsx").exists()
+
+
+def test_day_status_thresholds():
+    # User-facing day verdicts shown in the dashboard and day export; pin the
+    # boundaries so a threshold edit is deliberate, never incidental.
+    from sunstack.opportunity import _day_status
+
+    assert _day_status(float("nan")) == "UNKNOWN"
+    assert _day_status(95.0) == "EXCELLENT"
+    assert _day_status(80.0) == "EXCELLENT"
+    assert _day_status(79.9) == "VERY GOOD"
+    assert _day_status(65.0) == "VERY GOOD"
+    assert _day_status(50.0) == "GOOD"
+    assert _day_status(35.0) == "FAIR"
+    assert _day_status(34.9) == "POOR"
+    assert _day_status(0.0) == "NO OUTDOOR WINDOW"
