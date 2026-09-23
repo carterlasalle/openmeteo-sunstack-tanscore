@@ -560,3 +560,9 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
 - `doctor` exits 2 with CAMS setup guidance when credentials are absent.
 - `--personal-mmd` without `--personal-mmd-basis` exits 2 with usage at
   parse time, before any pipeline work.
+
+## 2026-09-23 (re-verify) — wheel packaging still proven from current tree
+
+- Rebuilt the wheel from the current tree and re-verified: 9 runtime data
+  files under `sunstack/_data/`, isolated install imports cleanly outside
+  the repo, spectrum checksum matches the released value (0eccdc6ff267).
