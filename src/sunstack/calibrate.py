@@ -287,10 +287,14 @@ def build_local_reference(training: pd.DataFrame, calibration_dir: Path) -> pd.D
     try:
         from .spectral import melanogenic_from_broadband
 
+        if "uvb" in ref:
+            uvb = pd.to_numeric(scol(ref, "uvb"), errors="coerce").to_numpy(dtype=float)
+        else:
+            # No measured UVB band: rough fallback so E_mel stays defined.
+            uvb = pd.to_numeric(scol(ref, "uvi"), errors="coerce").to_numpy(dtype=float) * 0.15
         e_mel = melanogenic_from_broadband(
             pd.to_numeric(scol(ref, "uva"), errors="coerce").to_numpy(dtype=float),
-            pd.to_numeric(scol(ref, "uvb" if "uvb" in ref else "uvi"), errors="coerce").to_numpy(dtype=float)
-            if "uvb" in ref else pd.to_numeric(scol(ref, "uvi"), errors="coerce").to_numpy(dtype=float) * 0.15,
+            uvb,
         )
     except (FileNotFoundError, ValueError) as exc:
         raise RuntimeError(f"ERROR photobiology: {exc}") from exc
