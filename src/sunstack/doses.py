@@ -277,7 +277,11 @@ def window_dose(frame: pd.DataFrame, start, end,
         # zero — zero would claim a measured absence of sun.
         nan = float("nan")
         return {"tan_dose_best_window_j_m2": nan, "sed_best_window": nan,
-                "uva_dose_window_j_m2": nan, "uvb_dose_window_j_m2": nan}
+                "uva_dose_window_j_m2": nan, "uvb_dose_window_j_m2": nan,
+                "tan_dose_best_window_complete": False,
+                "tan_dose_best_window_coverage_fraction": nan,
+                "sed_best_window_complete": False,
+                "sed_best_window_coverage_fraction": nan}
     t = pd.to_datetime(g["dt"] if "dt" in g else g["time"], utc=True)
 
     def _gcol(name: str) -> pd.Series:
@@ -292,7 +296,11 @@ def window_dose(frame: pd.DataFrame, start, end,
     uvb_d = integrate_band_dose(t, _gcol("predicted_uvb_wm2"), gap)
     return {
         "tan_dose_best_window_j_m2": round(float(td["tan_dose_melanogenic_j_m2"]), 1),
+        "tan_dose_best_window_complete": bool(td["tan_dose_complete"]),
+        "tan_dose_best_window_coverage_fraction": round(float(td["tan_dose_coverage_fraction"]), 3),
         "sed_best_window": round(float(sd["sed"]), 3),
+        "sed_best_window_complete": bool(sd["sed_complete"]),
+        "sed_best_window_coverage_fraction": round(float(sd["sed_coverage_fraction"]), 3),
         "uva_dose_window_j_m2": round(float(uva_d["dose_j_m2"]), 1),
         "uvb_dose_window_j_m2": round(float(uvb_d["dose_j_m2"]), 2),
     }

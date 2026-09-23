@@ -276,6 +276,10 @@ def test_empty_window_dose_is_nan_not_zero():
     assert pd.isna(win["sed_best_window"])
     assert pd.isna(win["uva_dose_window_j_m2"])
     assert pd.isna(win["uvb_dose_window_j_m2"])
+    assert win["tan_dose_best_window_complete"] is False
+    assert pd.isna(win["tan_dose_best_window_coverage_fraction"])
+    assert win["sed_best_window_complete"] is False
+    assert pd.isna(win["sed_best_window_coverage_fraction"])
 
 
 def test_absolute_ignores_location_while_local_uses_it():
@@ -573,6 +577,38 @@ def test_daily_summary_carries_sed_completeness():
     assert "sed_complete" in out.columns and "sed_coverage_fraction" in out.columns
     assert bool(row["sed_complete"])
     assert row["sed_coverage_fraction"] == 1.0
+
+
+def test_daily_summary_carries_window_completeness():
+    # Window/hour doses must expose the same complete/coverage contract as
+    # day/interval doses; a window with a missing endpoint is partial, and
+    # each channel reports independently.
+    from sunstack.doses import add_interval_doses, window_dose
+    from sunstack.opportunity import build_daily_summary
+
+    out = build_daily_summary(add_interval_doses(_half_hour_frame(1.0)))
+    row = out.iloc[0]
+    for col in ("tan_dose_best_window_complete",
+                "tan_dose_best_window_coverage_fraction",
+                "sed_best_window_complete",
+                "sed_best_window_coverage_fraction",
+                "best_hour_tan_dose_complete",
+                "best_hour_tan_dose_coverage_fraction",
+                "best_hour_sed_complete",
+                "best_hour_sed_coverage_fraction"):
+        assert col in out.columns, col
+    assert bool(row["tan_dose_best_window_complete"])
+    assert row["tan_dose_best_window_coverage_fraction"] == 1.0
+    assert bool(row["sed_best_window_complete"])
+    assert bool(row["best_hour_tan_dose_complete"])
+
+    gappy = _half_hour_frame(1.0)
+    gappy.loc[7, "melanogenic_effective_irradiance_wm2"] = np.nan
+    dts = pd.to_datetime(gappy["dt"])
+    win = window_dose(gappy, dts.iloc[0], dts.iloc[-1])
+    assert not win["tan_dose_best_window_complete"]
+    assert win["tan_dose_best_window_coverage_fraction"] < 1.0
+    assert win["sed_best_window_complete"]
 
 
 def test_day_dose_failure_defaults_to_incomplete(monkeypatch):

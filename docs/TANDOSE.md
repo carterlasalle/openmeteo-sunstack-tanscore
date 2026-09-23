@@ -39,7 +39,12 @@ quantity.
   only genuinely measured zeros — night rows carry real `0.0` — integrate as
   complete zeros. Row-level `tan_dose_{15m,30m,1h}_complete` and
   `tan_dose_{15m,30m,1h}_coverage_fraction` flags (plus SED pairs) expose this
-  per interval, not just per day/window.
+  per interval; day rows carry `tan_dose_complete` /
+  `tan_dose_coverage_fraction` (plus SED pairs); best-window and best-hour
+  doses carry `tan_dose_best_window_complete` /
+  `tan_dose_best_window_coverage_fraction` (plus SED pairs, hour variants
+  under `best_hour_*`). A sample-free window reports NaN doses with
+  `complete = false`, never zero.
 - Night integrates as zero.
 
 ## Presentation unit
