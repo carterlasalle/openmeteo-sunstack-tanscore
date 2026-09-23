@@ -661,3 +661,13 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   per channel, worst at low sun — architecture-consistent, not a defect.
   Headline unchanged: peak Absolute 47.8 / Local 91.8; stale flags false;
   spectral tier C throughout (no CAMS credentials in this environment).
+
+- Addendum: wheel re-proven on the post-fix tree (fresh `python -m build`,
+  isolated `--target` install, no repo `_data` fallback present): all 4
+  spectra + global reference resolve from the wheel payload, scoring and the
+  new window-flag keys work from the installed artifact. Palisades live run
+  (`--allow-degraded`, 336 hourly / 671 half-hour / 14 daily): window flags
+  present + complete, pigment exact on all 36 native rows, peak Absolute
+  66.1 / Local 91.5 — same healthy locally-excellent pattern at the sunnier
+  site. Both runs' schedule-published generated docs reverted off the
+  feature branch per standing rule.
