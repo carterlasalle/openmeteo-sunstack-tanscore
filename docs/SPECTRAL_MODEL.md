@@ -48,6 +48,21 @@ UI roadmap). Direct uses incidence angle; diffuse uses isotropic sky-view
 plus albedo ground bounce and is never discarded. Snow blocking stays an
 outdoor-feasibility rule; snow albedo still raises the radiation quantities.
 
+## Known Tier-C limitation: uniform intra-band shape
+
+Tier C distributes predicted broadband UVA/UVB uniformly within 315–400 /
+280–315 nm. Real solar spectra do not look like that — ozone removes almost
+all sub-300 nm photons, concentrating UVB energy toward 305–315 nm where
+melanogenesis effectiveness differs steeply from the band mean. On the live
+South Bend run, 68% of Tier-C E_mel comes from the UVB term at midday
+(measured UVA/UVB energy ratio ≈ 52:1), so the uniform-band shape is the
+dominant Tier-C uncertainty: it plausibly overstates E_mel where UVB is
+strong and matters less as the sun drops. A live-data symptom consistent
+with this (E_mel/E_ery falling 5.7 → 1.9 from SZA 30–95°) is recorded as an
+OPEN question in the research notes with its confounders — it is not used to
+retune the weights, which would be hand-tuning against a confounded signal.
+Tier B (libRadtran-trained spectral shape, held-out validation) resolves it.
+
 ## Sub-hour broadband corrections (not scoring weights)
 
 Two bounded broadband corrections touch UVB/UVI with a square-root factor,

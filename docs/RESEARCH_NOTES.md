@@ -575,3 +575,17 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   complete flags; daily rows carry SED completeness/coverage. Peak Absolute
   48.7 / Local 83.2 on 9/25 — still moderate globally. Auto-publish churn
   reverted as usual.
+
+## 2026-09-23 (follow-up 42) — OPEN: E_mel/E_ery falls with SZA on live data
+
+- Live SB run: Tier-C E_mel over Open-Meteo-erythemal irradiance runs 5.7 at
+  SZA 30-50 down to 1.9 at SZA 80-95 (Spearman -0.87, n=151 daylight rows).
+  Per-wavelength endpoint logic says the ratio should RISE as the spectrum
+  reddens (spectra cross near 300-320 nm; longer wavelengths favor
+  melanogenesis). Leading hypothesis: Tier-C uniform UVB weighting overstates
+  midday E_mel (68% of it comes from the UVB term while real solar UVB
+  concentrates at 305-315 nm), and the bias shrinks as UVB fades — matching
+  the observed fall. Confounders not ruled out: ML UVA/UVB SZA biases, OM
+  UVI low-sun floors, twilight noise (weak-sun E_mel spans 0.006-0.18).
+  Deliberately NOT used to retune weights. Resolution: Tier-B spectral shape
+  with held-out validation, which must reproduce the SZA-ratio curve.
