@@ -1804,9 +1804,14 @@ def test_location_registry_rejects_malformed_shapes(tmp_path):
         load_sites(write([good(lat="x")]))
     with pytest.raises(TypeError, match="must be a number"):
         load_sites(write([good(lat=True)]))
+    with pytest.raises(TypeError, match="must be a number"):
+        load_sites(write([good(lon="x")]))
+    with pytest.raises(TypeError, match="must be a number"):
+        load_sites(write([good(lon=False)]))
     with pytest.raises(TypeError, match="must be a string"):
         load_sites(write([good(timezone="")]))
     with pytest.raises(ValueError, match="empty"):
         load_sites(write([]))
+    assert load_sites(write(None)) == []
     with pytest.raises(ValueError, match="default"):
         load_sites(write([good(default=False)]))
