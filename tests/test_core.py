@@ -1712,3 +1712,17 @@ def test_30min_nearest_fills_discrete_weather_codes():
     out = build_30min_forecast(hourly, None)
     slot = out.loc[out["time"] == "2026-09-15T12:30"].iloc[0]
     assert float(slot["weather_code"]) == 61.0
+
+
+def test_read_table_falls_back_to_csv(tmp_path):
+    from sunstack.ui import _latest_dir, _read_table
+
+    tables = tmp_path / "tables"
+    tables.mkdir(parents=True)
+    pd.DataFrame({"a": [1.0]}).to_csv(tables / "m.csv", index=False)
+    assert _read_table(tmp_path, "m")["a"].tolist() == [1.0]
+    assert _read_table(tmp_path, "missing").empty
+    target = tmp_path / "run1"
+    target.mkdir()
+    (tmp_path / "LATEST").write_text(str(target), encoding="utf-8")
+    assert _latest_dir(tmp_path) == target
