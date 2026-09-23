@@ -298,3 +298,23 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   refresh of committed `latest/` tables, raw-CAMS phase-anchor trace,
   equatorial/high-altitude corpus + Tier-B training, TanResponse fitting
   (spec-gated), South-Bend-specific run inspection (no SB latest locally).
+
+## 2026-09-23 (follow-up 6) — first live v4 South Bend run (Open-Meteo live, CAMS absent)
+
+- Ran `sunstack run --site south-bend --allow-degraded` (no ADS credentials
+  in this environment, so direct CAMS was empty and the tier system behaved
+  as designed: `tan_calibration_tier=nasa_power_ml`, spectral tier C,
+  UVI-agreement confidence path idle). 336 hourly -> full 30-min/daily chain
+  with all v4 columns, `local_reference_stale=false`, local scores 100%
+  against the rebuilt reference, daily TanDose complete coverage.
+- Headline SB question answered on live late-September data: peak hour
+  Absolute 47.8 / Local 91.8 (UVI 5.35, UVA 43.7) — excellent locally without
+  becoming globally near-100. v4 mean/max 8.8/47.8 vs legacy 9.3/43.2,
+  Spearman 0.989; divergence bins on live data repeat the climatology result
+  (most UVB-rich +3.1, most UVA-rich -2.9).
+- Export pipeline verified end-to-end on the live run: `docs/data.json`
+  payload carries v4 columns + full §20 summary keys, `calendar.ics` 13
+  daily events, new `calendar-30min.ics` 671 interval events.
+- The run's auto-publish commit was reverted to keep generated docs out of
+  the feature PR (publishing belongs to the scheduled workflow); run tables
+  remain locally under data/ (gitignored) for inspection.
