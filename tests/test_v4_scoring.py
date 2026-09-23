@@ -968,23 +968,48 @@ def test_csv_export_covers_all_days_with_v4_columns():
 
 
 def test_all_days_csv_head_matches_daily_row_keys():
-    # The all-days CSV head is a fixed list inside the dashboard template;
-    # every key it reads must exist on the daily summary rows (a head/row
-    # drift would silently export `undefined` columns).
+    # Every CSV export head (hourly/half-hour/daily) is a fixed list inside
+    # the dashboard template; every key it reads must exist on the rows it
+    # maps over (a head/row drift would silently export `undefined` columns).
     import re
 
     from sunstack.doses import add_interval_doses
     from sunstack.opportunity import build_daily_summary
     from sunstack.ui import HTML
 
-    m = re.search(r"const dHead=\[(.*?)\]", HTML)
-    assert m, "dHead export head not found in dashboard template"
-    head = re.findall(r"'([^']+)'", m.group(1))
-    assert len(head) > 10, head
-    row_keys = set(build_daily_summary(
-        add_interval_doses(_half_hour_frame(1.0))).iloc[0].index)
-    missing = [k for k in head if k not in row_keys]
-    assert not missing, missing
+    hourly = add_interval_doses(pd.DataFrame({
+        "time": ["2026-06-21T12:00", "2026-06-21T13:00", "2026-06-21T14:00"],
+        "melanogenic_effective_irradiance_wm2": [0.5, 0.6, 0.55],
+        "erythemal_irradiance_wm2": [0.15, 0.16, 0.155],
+        "predicted_uva_wm2": [35.0, 40.0, 38.0],
+        "predicted_uvb_wm2": [1.0, 1.1, 1.05],
+    }))
+    half = add_interval_doses(_half_hour_frame(1.0))
+    daily = build_daily_summary(half)
+    frames = {"dHead": set(daily.iloc[0].index)}
+    for head_name, row_keys in frames.items():
+        m = re.search(r"const " + head_name + r"=\[(.*?)\]", HTML)
+        assert m, f"{head_name} export head not found in template"
+        head = re.findall(r"'([^']+)'", m.group(1))
+        assert len(head) > 10, (head_name, head)
+        missing = [k for k in head if k not in row_keys]
+        assert not missing, (head_name, missing)
+    # Interval dose + completeness flags flow from the dose primitive into
+    # both interval export heads (full pipeline rows carry the remaining
+    # keys; add_interval_doses is the producer of exactly these columns).
+    interval_keys = ("tan_dose_1h_j_m2", "tan_dose_1h_complete",
+                     "tan_dose_1h_coverage_fraction", "sed_1h",
+                     "sed_1h_complete", "sed_1h_coverage_fraction",
+                     "tan_dose_30m_j_m2", "tan_dose_30m_complete",
+                     "tan_dose_30m_coverage_fraction", "sed_30m",
+                     "sed_30m_complete", "sed_30m_coverage_fraction")
+    for key in interval_keys:
+        assert key in hourly.columns and key in half.columns, key
+    heads = {name: re.findall(
+        r"'([^']+)'", re.search(r"const " + name + r"=\[(.*?)\]", HTML).group(1))
+        for name in ("hHead", "qHead")}
+    assert set(interval_keys[:6]) <= set(heads["hHead"])
+    assert set(interval_keys[6:]) <= set(heads["qHead"])
 
 
 def test_cli_personal_mmd_flags_and_threading():
