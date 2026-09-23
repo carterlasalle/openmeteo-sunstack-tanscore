@@ -387,3 +387,12 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   peak-30m (with timestamp), best-hour (with timestamp), best-window, and
   day values, with Visible-Darkening Potential computed as the day's max
   30-min IPD dose.
+
+## 2026-09-23 (follow-up 12) — provenance fallback mislabel fixed
+
+- Executing the dashboard against a simulated pre-v4 payload showed the
+  provenance line claiming action-spectrum-v1/Tier-C/global-ref-1.6 for
+  legacy-55/30/15 data (missing-key fallbacks defaulted to v4 names), while
+  the dose row honestly showed em-dashes. Fallbacks now read
+  legacy-55-30-15 / pre-v4 legacy / pre-v4 broadband / pre-v4 / n/a, verified
+  by re-execution on both payload shapes plus `node --check`.
