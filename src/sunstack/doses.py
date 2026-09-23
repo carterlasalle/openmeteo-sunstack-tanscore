@@ -26,7 +26,10 @@ def _utc_seconds(frame: pd.DataFrame) -> np.ndarray:
         t = pd.to_datetime(frame["time_utc"], utc=True)
     else:
         t = pd.to_datetime(frame["time"], utc=True, errors="coerce")
-    return t.map(lambda x: x.timestamp()).to_numpy(dtype=float)
+    # Unparseable stamps become NaN (absent samples), never an exception that
+    # would nuke the whole frame's doses: _rolling_integral skips them loudly
+    # via NaN doses + incomplete flags.
+    return t.map(lambda x: x.timestamp() if pd.notna(x) else float("nan")).to_numpy(dtype=float)
 
 
 def _rolling_integral(
@@ -49,25 +52,34 @@ def _rolling_integral(
     coverage = np.zeros(n, dtype=float)
     max_gap = float(config.TANDOSE_MAX_INTERP_GAP_S)
     finite = np.isfinite(vals) & np.isfinite(secs)
-    for i in range(n):
-        if not finite[i]:
+    # Chronological order is required for the backward walk; input frames are
+    # chronological in production, but sorting here (stable) makes shuffled
+    # or DST-reordered inputs integrate identically instead of silently
+    # producing garbage. Results map back to original row positions.
+    order = np.argsort(secs, kind="stable")
+    s_vals = vals[order]
+    s_secs = secs[order]
+    s_finite = finite[order]
+    for pos in range(n):
+        i = order[pos]
+        if not s_finite[pos]:
             continue
-        lo = secs[i] - window_s
+        lo = s_secs[pos] - window_s
         acc, covered, split, count = 0.0, 0.0, False, 0
-        prev, k = i, i - 1
+        prev, k = pos, pos - 1
         while k >= 0:
-            if not finite[k]:
+            if not s_finite[k]:
                 k -= 1
                 continue
-            if secs[k] < lo - 1e-9:
+            if s_secs[k] < lo - 1e-9:
                 break
-            dt = float(secs[prev] - secs[k])
+            dt = float(s_secs[prev] - s_secs[k])
             if dt < 0:
                 break
             if dt > max_gap:
                 split = True
                 break
-            acc += 0.5 * (vals[prev] + vals[k]) * dt
+            acc += 0.5 * (s_vals[prev] + s_vals[k]) * dt
             covered += dt
             count += 1
             prev, k = k, k - 1

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -10,6 +11,8 @@ import pvlib.location
 
 from . import config
 from .calibrate import absolute_tan_score, num, scol
+
+LOG = logging.getLogger("sunstack")
 
 
 def _recompute_v4_scores(frame: pd.DataFrame) -> pd.DataFrame:
@@ -594,8 +597,10 @@ def build_30min_forecast(
         from .doses import add_interval_doses as _add_doses
 
         out = _add_doses(out)
-    except (ImportError, ValueError):
-        pass
+    except (ImportError, ValueError) as exc:
+        # Loud degradation: dose columns stay absent downstream (NaN-tolerant
+        # readers show unknown), but the cause is logged, never swallowed.
+        LOG.warning("30-min interval doses unavailable: %s", exc)
     return out
 
 

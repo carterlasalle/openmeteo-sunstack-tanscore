@@ -1228,3 +1228,56 @@ def test_reference_builder_drops_missing_bands(tmp_path):
     ref = build_local_reference(training, tmp_path)
     assert len(ref) == 5  # NaN-UVB row excluded, not zero-scored
     assert ref["melanogenic_effective_irradiance_wm2"].notna().all()
+
+
+def test_rolling_integration_is_order_invariant():
+    from sunstack.doses import add_interval_doses
+
+    dts = pd.date_range("2026-06-21 11:00", periods=6, freq="30min")
+    frame = pd.DataFrame({
+        "time": dts.strftime("%Y-%m-%dT%H:%M"),
+        "melanogenic_effective_irradiance_wm2": [0.2, 0.5, 0.4, 0.6, 0.3, 0.1],
+        "erythemal_irradiance_wm2": [0.1] * 6,
+        "predicted_uva_wm2": [30.0] * 6,
+        "predicted_uvb_wm2": [0.5] * 6,
+    })
+    straight = add_interval_doses(frame).set_index("time")
+    shuffled = add_interval_doses(
+        frame.sample(frac=1.0, random_state=7)).set_index("time")
+    for col in ("tan_dose_30m_j_m2", "tan_dose_1h_j_m2", "sed_1h",
+                "tan_dose_30m_coverage_fraction"):
+        a = straight[col].to_numpy(dtype=float)
+        b = shuffled.loc[straight.index, col].to_numpy(dtype=float)
+        assert np.allclose(a, b, equal_nan=True), col
+
+
+def test_garbage_timestamp_isolates_to_its_row():
+    from sunstack.doses import add_interval_doses
+
+    frame = pd.DataFrame({
+        "time": ["2026-06-21T12:00", "not-a-time",
+                 "2026-06-21T13:00", "2026-06-21T14:00"],
+        "melanogenic_effective_irradiance_wm2": [0.5, 0.6, 0.55, 0.5],
+        "erythemal_irradiance_wm2": [0.15, 0.16, 0.155, 0.15],
+        "predicted_uva_wm2": [35.0] * 4,
+        "predicted_uvb_wm2": [1.0] * 4,
+    })
+    out = add_interval_doses(frame)
+    bad = out.loc[out["time"] == "not-a-time"].iloc[0]
+    assert pd.isna(bad["tan_dose_1h_j_m2"])
+    assert not bool(bad["tan_dose_1h_complete"])
+    good = out.loc[out["time"] == "2026-06-21T14:00"].iloc[0]
+    assert good["tan_dose_1h_j_m2"] > 0
+
+
+def test_all_missing_bands_score_nan_loudly(tmp_path):
+    from sunstack.tanscore import score_forecast
+    from sunstack.validation import validate_scored_hourly
+
+    broke = _best_air().copy()
+    broke["shortwave_radiation"] = float("nan")
+    broke["uv_index"] = float("nan")
+    out = score_forecast(broke, Path(tmp_path), None, _confidence())
+    assert out["tan_score_absolute_0_100"].isna().all()
+    assert out["erythemal_irradiance_wm2"].isna().all()
+    assert any(i.severity == "ERROR" for i in validate_scored_hourly(out))
