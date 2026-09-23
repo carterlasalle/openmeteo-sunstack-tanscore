@@ -426,8 +426,6 @@ def test_doctor_checks_photobiology_resources(tmp_path, capsys):
 def test_doctor_flags_stale_local_reference(tmp_path, capsys):
     import json
 
-    from sunstack.cli import doctor
-
     (Path(tmp_path) / "local_reference_version.json").write_text(json.dumps(
         {"tan_score_model_version": "legacy-55-30-15"}))
     # doctor() resolves the *default-site* calibration dir for the tmp root;
