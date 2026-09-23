@@ -355,3 +355,37 @@ def test_run_manifest_metadata_contract():
     for key in ("spectral_backend", "spectral_emulator_version",
                 "spectral_training_manifest_sha256", "tierB_reserved_inputs"):
         assert key in em, key
+
+
+def test_strict_canonical_gate_refuses_provisional():
+    import pytest
+
+    from sunstack.photobiology import require_canonical_spectrum
+
+    # Shipped melanogenesis basis is provisional: strict canonical mode must
+    # refuse it loudly rather than silently score with it.
+    with pytest.raises(RuntimeError, match="canonical spectrum"):
+        require_canonical_spectrum("parrish_delayed_melanogenesis")
+    # The erythema reference IS canonical and passes the same gate.
+    assert require_canonical_spectrum("cie_erythema_reference").tier == "canonical"
+
+
+def test_absolute_has_no_uva_uvb_interaction():
+    # Photoaddition (§4): the score's response to extra UVA must not depend
+    # on the UVB level (and vice versa). Any sqrt-style interaction term
+    # would make these differ.
+    from sunstack import config as _config
+    from sunstack.photobiology import absolute_tan_score_from_melanogenic_irradiance
+    from sunstack.spectral import melanogenic_from_broadband
+
+    def score(uva, uvb):
+        return float(absolute_tan_score_from_melanogenic_irradiance(
+            melanogenic_from_broadband(uva, uvb),
+            _config.GLOBAL_MELANOGENIC_REFERENCE_WM2))
+
+    d_uva_low_uvb = score(40.0, 0.2) - score(30.0, 0.2)
+    d_uva_high_uvb = score(40.0, 1.5) - score(30.0, 1.5)
+    assert abs(d_uva_low_uvb - d_uva_high_uvb) < 1e-9
+    d_uvb_low_uva = score(35.0, 1.2) - score(35.0, 0.4)
+    d_uvb_high_uva = score(55.0, 1.2) - score(55.0, 0.4)
+    assert abs(d_uvb_low_uva - d_uvb_high_uva) < 1e-9
