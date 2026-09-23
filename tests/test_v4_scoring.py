@@ -1190,3 +1190,24 @@ def test_attach_rejects_unlabeled_mmd():
         attach_personalization(df, personal_mmd_j_m2=2000.0)
     ok = attach_personalization(df, personal_mmd_j_m2=2000.0, basis="MEASURED")
     assert ok.loc[0, "personal_mmd_fraction"] == 0.5
+
+
+def test_export_preserves_run_attached_fractions(tmp_path):
+    import json as _json
+
+    import pandas as pd
+    import pytest
+
+    from sunstack.output import export_static_site
+
+    root = _api_fixture(tmp_path)
+    half_path = root / "latest" / "tables" / "tan_forecast_30min.parquet"
+    half = pd.read_parquet(half_path)
+    half["personal_mmd_fraction"] = 0.25
+    half["personalization_basis"] = "MEASURED"
+    half.to_parquet(half_path, index=False)
+    export_static_site(root, tmp_path / "kept")
+    payload = _json.loads((tmp_path / "kept" / "data.json").read_text())
+    assert {r["personal_mmd_fraction"] for r in payload["half_hour"]} == {0.25}
+    with pytest.raises(ValueError, match="explicit basis"):
+        export_static_site(root, tmp_path / "bad", personal_mmd_j_m2=2000.0)

@@ -149,11 +149,15 @@ def _filtered_payload(
         half = apply_outdoor_feasibility(half, min_temp)
     hourly = attach_fitzpatrick(hourly, skin_type)
     half = attach_fitzpatrick(half, skin_type)
-    hourly = attach_personalization(
-        hourly, personal_mmd_j_m2=personal_mmd_j_m2, basis=personal_mmd_basis)
-    half = attach_personalization(
-        half, personal_mmd_j_m2=personal_mmd_j_m2, basis=personal_mmd_basis,
-        dose_col="tan_dose_30m_j_m2")
+    # Never clobber run-attached fractions with an unparameterized re-attach:
+    # export re-reads run tables that may already carry personal fractions.
+    if personal_mmd_j_m2 is not None or "personal_mmd_fraction" not in hourly.columns:
+        hourly = attach_personalization(
+            hourly, personal_mmd_j_m2=personal_mmd_j_m2, basis=personal_mmd_basis)
+    if personal_mmd_j_m2 is not None or "personal_mmd_fraction" not in half.columns:
+        half = attach_personalization(
+            half, personal_mmd_j_m2=personal_mmd_j_m2, basis=personal_mmd_basis,
+            dose_col="tan_dose_30m_j_m2")
     daily = build_daily_summary(half)
     summary_path = run / "summary.json"
     summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}

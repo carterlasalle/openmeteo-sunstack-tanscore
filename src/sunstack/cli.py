@@ -1126,6 +1126,8 @@ def main() -> None:
                     skin_type=args.skin_type,
                     min_temp_f=args.min_temp or 50.0,
                     site_slug=site.slug,
+                    personal_mmd_j_m2=args.personal_mmd,
+                    personal_mmd_basis=args.personal_mmd_basis,
                 )
                 print(
                     f"Static site {site.slug}: {info['out_dir']} ({info['hourly_rows']} hourly, {info['half_rows']} half-hour, {info['days']} days, {info['events']} events)"
