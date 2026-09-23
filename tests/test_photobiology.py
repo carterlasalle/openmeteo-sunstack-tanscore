@@ -541,3 +541,25 @@ def test_committed_spectra_rebuild_byte_identical(tmp_path, monkeypatch):
         actual = hashlib.sha256(
             (src / f"{stem}.csv").read_bytes()).hexdigest()
         assert meta["checksum_sha256"] == actual, stem
+
+
+def test_literature_gates_pass_on_shipped_spectra(tmp_path, monkeypatch):
+    # The 6 literature-anchored numeric gates (Parrish ratio, Keong
+    # photoaddition, endpoint crossing, IPD separation, SED/TanDose
+    # divergence) must hold on the shipped spectra; a spectra regression
+    # must break the suite, not wait for a manual script run.
+    import sys
+
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "check_literature", "scripts/check_literature.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    report = tmp_path / "literature_sanity.md"
+    monkeypatch.setattr(sys, "argv",
+                        ["check", "--out", str(report)])
+    module.main()  # raises SystemExit on any failed gate
+    text = report.read_text(encoding="utf-8")
+    assert text.count("[PASS]") == 6
+    assert "[FAIL]" not in text

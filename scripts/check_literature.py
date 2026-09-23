@@ -31,7 +31,13 @@ def check(name: str, ok: bool, detail: str) -> None:
         raise SystemExit(f"LITERATURE SANITY FAILED: {name}: {detail}")
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default="docs/validation/literature_sanity.md")
+    out = Path(ap.parse_args(argv).out)
+    LINES.clear()
     studies = json.loads(
         (Path("data/research/exposure_studies.json")).read_text(encoding="utf-8"))
     LINES.append("# Literature sanity checks (aggregate observations only)")
@@ -103,7 +109,6 @@ def main() -> None:
     LINES.append("- [INFO] MITF-timer (PMID 30401431): mechanistic prior only; "
                  "no interval optimum is hard-coded anywhere in the pipeline.")
 
-    out = Path("docs/validation/literature_sanity.md")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(LINES) + "\n", encoding="utf-8")
     print("\n".join(LINES))
