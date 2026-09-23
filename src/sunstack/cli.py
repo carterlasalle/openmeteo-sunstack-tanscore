@@ -629,7 +629,13 @@ def _publish_site(site: config.Site) -> None:
         subprocess.run(["git", "add", "docs", "-f", "data/calibration"], check=False)
     else:
         subprocess.run(
-            ["git", "add", f"docs/sites/{slug}", "-f", f"data/sites/{slug}"],
+            [
+                "git",
+                "add",
+                f"docs/sites/{slug}",
+                "-f",
+                f"data/sites/{slug}/calibration",
+            ],
             check=False,
         )
     subprocess.run(["git", "checkout", "--", "uv.lock"], check=False)

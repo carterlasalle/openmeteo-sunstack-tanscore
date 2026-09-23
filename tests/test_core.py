@@ -1104,12 +1104,11 @@ def test_run_alternates_publish_per_site(tmp_path):
     assert "run_live" in src and "export_static_site" in src and "_publish_site" in src
     # Cold sites skip without failing: calibrate workflow owns bootstrap.
     assert "_SiteSkipped" in inspect.getsource(cli._run_all_sites)
-    # Publish step must be gone from the workflow: publishing moved into the CLI.
-    import yaml
-
-    wf = yaml.safe_load(Path(".github/workflows/run.yml").read_text(encoding="utf-8"))
-    names = [st.get("name") for st in wf["jobs"]["run"]["steps"]]
-    assert "Publish results" not in names, "per-site publish lives in run_one_site now"
+    # Run dirs are ephemeral CI state (artifact carries them); only docs +
+    # calibration outputs commit, so git never grows 40MB/run.
+    pub = inspect.getsource(cli._publish_site)
+    assert "calibration" in pub, "calibration models still publish for fresh clones"
+    assert "/latest" not in pub and "/runs" not in pub, "run dirs must not commit"
 
 
 def test_uv_ghi_disagreement_flags_only_strong_daytime_mismatch():
