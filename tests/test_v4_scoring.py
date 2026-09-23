@@ -840,3 +840,21 @@ def test_closure_requires_canonical_utc(tmp_path, monkeypatch):
     rb.main()
     text = out.read_text(encoding="utf-8")
     assert "never parsed as UTC" in text
+
+
+def test_csv_export_covers_all_days_with_v4_columns():
+    # Merge-resolution pin: upstream's all-days export combined with the
+    # v4-extended column sets. If either side regresses, this fails loudly
+    # instead of silently shipping a narrowed or de-columned export.
+    from sunstack.ui import HTML
+
+    assert "sunstack-all-hourly.csv" in HTML
+    assert "sunstack-all-30min.csv" in HTML
+    assert "sunstack-all-days.csv" in HTML
+    assert "DATA.hourly||[]" in HTML.replace(" ", "")
+    assert "DATA.half_hour||[]" in HTML.replace(" ", "")
+    for col in ("melanogenic_effective_irradiance_wm2",
+                "tan_dose_30m_j_m2", "sed_30m",
+                "tan_dose_best_window_j_m2", "sed_day_total",
+                "legacy_absolute_tan_score_55_30_15"):
+        assert col in HTML, col
