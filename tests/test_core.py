@@ -1596,3 +1596,56 @@ def test_swap_once_fails_loudly_on_anchor_drift():
         _swap_once("ab", "z", "c")
     with pytest.raises(RuntimeError, match="anchor drifted"):
         _swap_once("bb", "b", "c")
+
+
+def test_scol_rejects_duplicate_columns_loudly():
+    import pytest
+
+    from sunstack.calibrate import scol
+
+    dup = pd.DataFrame([[1.0, 2.0]], columns=["uva", "uva"])
+    with pytest.raises(TypeError, match="unique Series"):
+        scol(dup, "uva")
+    assert scol(pd.DataFrame({"uva": [1.0]}), "uva").tolist() == [1.0]
+
+
+def test_num_missing_column_is_nan_not_crash():
+    from sunstack.calibrate import num
+
+    frame = pd.DataFrame({"a": [1.0, 2.0]})
+    out = num(frame, "nope")
+    assert out.isna().all()
+    assert len(out) == 2
+
+
+def test_build_local_reference_empty_is_empty(tmp_path):
+    from sunstack.calibrate import build_local_reference
+
+    assert build_local_reference(pd.DataFrame(), tmp_path).empty
+
+
+def test_train_uv_models_empty_raises_loudly(tmp_path):
+    import pytest
+
+    from sunstack.calibrate import train_uv_models
+
+    with pytest.raises(RuntimeError, match="empty"):
+        train_uv_models(pd.DataFrame(), tmp_path)
+
+
+def test_build_local_reference_without_uvb_uses_uvi_fallback(tmp_path):
+    # No measured UVB band: the uvi*0.15 fallback keeps E_mel defined and
+    # version-stamped instead of failing the rebuild.
+    from sunstack.calibrate import build_local_reference
+
+    training = pd.DataFrame({
+        "time_utc": pd.date_range("2024-06-21 10:00", periods=6, freq="h", tz="UTC"),
+        "uva": [30.0] * 6,
+        "uvi": [5.0] * 6,
+        "sza": [40.0] * 6,
+        "ghi": [600.0] * 6,
+    })
+    ref = build_local_reference(training, tmp_path)
+    assert len(ref) == 6
+    assert ref["melanogenic_effective_irradiance_wm2"].notna().all()
+    assert (ref["tan_score_model_version"] == "action-spectrum-v1").all()
