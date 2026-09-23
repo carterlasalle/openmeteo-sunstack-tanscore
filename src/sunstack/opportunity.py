@@ -291,7 +291,16 @@ def attach_personalization(
     basis: str | None = None,
     dose_col: str = "tan_dose_1h_j_m2",
 ) -> pd.DataFrame:
-    """Add personal_mmd_fraction without touching environmental columns."""
+    """Add personal_mmd_fraction without touching environmental columns.
+
+    An MMD without an explicit basis is rejected: fractions with implied-but-
+    absent provenance are worse than no fractions. Callers that only forward
+    user input (CLI/API/export) enforce the same rule at their boundary.
+    """
+    if personal_mmd_j_m2 is not None and basis is None:
+        raise ValueError(
+            "personal_mmd_j_m2 requires an explicit basis (MEASURED, "
+            "OBJECTIVE_ESTIMATE, or COARSE_ESTIMATE)")
     out = df.copy()
     out["personalization_basis"] = basis or "not personalized"
     if personal_mmd_j_m2 is not None and np.isfinite(personal_mmd_j_m2) and personal_mmd_j_m2 > 0:

@@ -1177,3 +1177,16 @@ def test_cli_requires_basis_with_personal_mmd(tmp_path, monkeypatch):
     _cli.main()
     assert calls["personal_mmd_j_m2"] == 1000.0
     assert calls["personal_mmd_basis"] == "OBJECTIVE_ESTIMATE"
+
+
+def test_attach_rejects_unlabeled_mmd():
+    import pandas as pd
+    import pytest
+
+    from sunstack.opportunity import attach_personalization
+
+    df = pd.DataFrame({"tan_dose_1h_j_m2": [1000.0]})
+    with pytest.raises(ValueError, match="explicit basis"):
+        attach_personalization(df, personal_mmd_j_m2=2000.0)
+    ok = attach_personalization(df, personal_mmd_j_m2=2000.0, basis="MEASURED")
+    assert ok.loc[0, "personal_mmd_fraction"] == 0.5
