@@ -538,3 +538,16 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   local_reference.parquet/.csv and local_reference_version.json) are
   byte-identical to the committed files. The rebuild path is deterministic;
   the committed climatology provably comes from current code.
+
+## 2026-09-23 (follow-up 34) — cloudy-day ratio divergence confirmed
+
+- A second live South Bend run under real overcast (day cloud mean 74,
+  UVI max 2.35) confirms the mechanism at low absolute levels: same-day
+  UVA/UVB-ratio quintiles run +2.77 → +2.30 → -0.20 → -0.90 → -1.07
+  (n=12 daylight hours), monotonic in the predicted direction, while the
+  crude cloud_cover split stays uninformative (n=1 clear row). The
+  migration report's live section now cites this run; its verdicts
+  (CONFIRMED peak scaling, CONFIRMED confidence separation, INCONCLUSIVE
+  cloud proxy) are unchanged.
+- Auto-published docs churn reverted again (publishing belongs to the
+  scheduled workflow); run tables retained locally.
