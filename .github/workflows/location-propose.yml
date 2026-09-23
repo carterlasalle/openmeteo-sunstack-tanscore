@@ -1,19 +1,29 @@
 name: location-propose
 
-# Issue -> PR: a `[Location]:` issue opens a one-entry registry PR automatically.
-# Secret-free by design: parses the issue-form body, validates via
-# scripts/issue_location_to_pr.py (same config.load_sites rules as intake),
-# and opens a PR. That PR is what location-intake validates and the owner
-# merges; location-calibrate only ever runs post-merge on main.
+# Issue -> branch (+PR when allowed): a `[Location]:` issue stages a one-entry
+# registry branch automatically. Secret-free by design: parses the issue-form
+# body, validates via scripts/issue_location_to_pr.py (same config.load_sites
+# rules as intake). That branch is what location-intake validates and the owner
+# merges; location-calibrate only ever runs post-merge on main. This repo
+# blocks Actions-created PRs, so the workflow stages the branch and comments
+# the handoff by default, and opens the PR itself when allow-PR is enabled.
 #
 # Every outcome comments back on the issue and labels it:
-#   ready     -> PR opened (`Closes #N`), stale duplicate/invalid labels cleared
-#   duplicate -> slug already registered, `duplicate` label, no PR
-#   invalid   -> broken fields/coords/timezone, `invalid` label, no PR
+#   ready     -> branch staged (`ready` label; `Closes #N` PR when allow-PR is on)
 "on":
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Issue number to propose (maintainer re-run)"
+        required: false
+        type: number
+      allow_pr:
+        description: "Actually open the PR (repo blocks Actions-created PRs by default)"
+        required: false
+        default: false
+        type: boolean
   issues:
     types: [opened, edited]
-
 permissions:
   contents: write
   pull-requests: write
@@ -114,18 +124,27 @@ jobs:
               content: Buffer.from(proposed).toString('base64'),
               sha: (await github.rest.repos.getContent({ ...context.repo, path: 'locations.yaml', ref: branch }).catch(() => ({ data: {} }))).data.sha || baseSha,
             });
-            const prs = await github.rest.pulls.list({ ...context.repo, head: `${context.repo.owner}:${branch}`, base: default_branch, state: 'open' });
-            const pr = prs.data[0] || (await github.rest.pulls.create({
-              ...context.repo, head: branch, base: default_branch,
-              title: `Propose location from #${issueNo}`,
-              body: `Closes #${issueNo}.\n\n${plan}\n\nReview: \`location-intake\` validates this PR; merge to calibrate.`,
-            })).data;
+            const openPrs = await github.rest.pulls.list({ ...context.repo, head: `${context.repo.owner}:${branch}`, base: default_branch, state: 'open' });
+            let pr = openPrs.data[0] || null;
+            const allowPr = (process.env.ALLOW_PR || '').toLowerCase() === 'true';
+            if (!pr && allowPr) {
+              pr = (await github.rest.pulls.create({
+                ...context.repo, head: branch, base: default_branch,
+                title: `Propose location from #${issueNo}`,
+                body: `Closes #${issueNo}.\n\n${plan}\n\nReview: \`location-intake\` validates this PR; merge to calibrate.`,
+              })).data;
+            }
             for (const l of ['duplicate', 'invalid']) {
               try {
                 await github.rest.issues.removeLabel({ ...context.repo, issue_number: issueNo, name: l });
               } catch (e) {}
             }
+            await github.rest.issues.addLabels({
+              ...context.repo, issue_number: issueNo, labels: ['ready'],
+            });
             await github.rest.issues.createComment({
               ...context.repo, issue_number: issueNo,
-              body: `### Location proposal: PR open\n\n${plan}\n\nOpened #${pr.number} — review and merge to calibrate.`,
+              body: pr
+                ? `### Location proposal: ready\n\n${plan}\n\nOpened #${pr.number} — review and merge to calibrate.`
+                : `### Location proposal: ready\n\n${plan}\n\nBranch \`${branch}\` is staged with the one-entry append (Actions is blocked from opening PRs in this repo's settings: \`Settings → Actions → General → Allow GitHub Actions to create and approve pull requests\`). A maintainer opens the PR from that branch, or flips the setting and re-runs this workflow with allow-PR on.`,
             });

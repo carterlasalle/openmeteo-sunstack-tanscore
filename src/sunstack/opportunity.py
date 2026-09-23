@@ -397,7 +397,8 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
             "peak_predicted_uva_wm2": round(float(best.get("predicted_uva_wm2", np.nan)), 2),
             "peak_temperature_f": round(float(best.get("temperature_2m", np.nan)), 1),
             "peak_precip_probability_pct": round(float(best.get("precipitation_probability", np.nan)), 1),
-            "blocked_half_hours": int(scol(daylight, "outdoor_blocked").fillna(False).sum()),
+            "day_high_temperature_f": round(float(_num(s, "temperature_2m").max()), 1),
+            "day_low_temperature_f": round(float(_num(s, "temperature_2m").min()), 1),
             "day_status": _day_status(float(best["overall_tan_opportunity_0_100"])),
         })
     return pd.DataFrame(rows)

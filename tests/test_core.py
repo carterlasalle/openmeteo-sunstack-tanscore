@@ -746,6 +746,14 @@ def test_location_propose_workflow_is_issue_triggered_and_secret_free():
     assert "removeLabel" in text, "ready must clear stale duplicate/invalid labels"
     assert text.count("createComment") >= 2, "duplicate/invalid and ready both comment on the issue"
     assert "Closes #" in text, "opened PR must mention the issue so it closes on merge"
+    assert "is staged with the one-entry append" in text, "blocked PRs still hand off a staged branch"
+    assert "Allow GitHub Actions to create and approve pull requests" in text
+    assert "allow_pr" in text, "maintainer can re-run with PR creation enabled"
+    ui = Path("src/sunstack/ui.py").read_text(encoding="utf-8")
+    assert "peak_precip_probability_pct" in ui and "c0392b" in ui, "rainy days/cells highlight red"
+    assert "day_low_temperature_f" in ui and "day_high_temperature_f" in ui, "day cards show temp range"
+    assert "day_absolute_peak_0_100" in ui and "day_local_peak_0_100" in ui, "day cards show abs + local"
+    assert "getFullYear" in ui, "default day is today, not best day"
 
 
 def test_issue_location_parser_round_trips_registry_append(tmp_path):
