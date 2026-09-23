@@ -614,3 +614,16 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   block + deprecated-labeled legacy block in the calibration summary, fresh
   local reference + version file. Proven with a synthetic degraded-training
   test and the full scratch run; committed calibration untouched.
+
+## 2026-09-23 (follow-up 45) — full render re-proven; harness korsakoff caught
+
+- Re-established the full-render headless proof on the current template
+  (post-MMD-controls, dose segment, export merge): all seven render targets
+  populate on live-v4 and simulated pre-v4 payloads with no throws.
+- Debugging detour worth recording: the run first failed inside drawSunFig
+  with `appendChild` resolving to an empty-bodied stub. Systematic
+  elimination (chain semantics OK in isolation, method identity checks,
+  source inspection) proved the dashboard code innocent — the scratch
+  harness itself had regressed (`()=>{}` instead of `()=>mkEl()`), dropping
+  chainability. The rig gets the same suspicion as the product: verify the
+  test setup independently before "fixing" passing code.
