@@ -429,4 +429,5 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   scratch (run tag preserved, build SHA restamped to current commit) and
   executed the page — v4 provenance plus real dose values render. A missing
   second site page fails the reskin loudly (FileNotFoundError, non-zero
-  exit), which is correct: reskin Fukushima-folds nothing.
+  exit) instead of publishing a half-reskinned site, which is the correct
+  behavior.
