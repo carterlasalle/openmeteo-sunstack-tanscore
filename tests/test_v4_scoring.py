@@ -1638,4 +1638,4 @@ def test_calendar_marks_partial_doses_and_leaves_legacy_clean():
     ics30 = build_interval_ics(half, "20260926_000000")
     flat = ics30.replace("\r\n ", "")
     assert "TanDose30 900 J/m2 mel (partial)" in flat
-    assert "SED30 2.5." in flat or "SED30 2.5 " in flat
+    assert "SED30 2.5" in flat and "SED30 2.5 (partial)" not in flat
