@@ -1906,3 +1906,55 @@ def test_feature_frame_empty_and_fallbacks():
     out = build_live_feature_frame(base, None)
     assert out["aod55"].tolist() == [0.15, 0.16]
     assert out["cams_cycle"].isna().all()
+
+
+def test_score_forecast_empty_input_is_empty(tmp_path):
+    from sunstack.tanscore import score_forecast
+
+    assert score_forecast(pd.DataFrame(), Path(tmp_path), None, None).empty
+
+
+def test_tierB_manifest_present_but_invalid_fails(tmp_path, monkeypatch):
+    import pytest
+
+    import sunstack.spectral as _spectral
+    from sunstack import config as _config
+    from sunstack.tanscore import score_forecast
+
+    monkeypatch.setattr(_spectral, "spectral_tier_for_row",
+                        lambda *a, **k: "B")
+    bad = tmp_path / "manifest.json"
+    bad.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(_config, "TIERB_MANIFEST_PATH", str(bad))
+    with pytest.raises(ValueError, match="Tier-B manifest"):
+        score_forecast(_best_air(), Path(tmp_path), None, _confidence())
+
+
+def test_pigment_channel_failure_is_loud(tmp_path, monkeypatch):
+    import pytest
+
+    import sunstack.spectral as _spectral
+    from sunstack.tanscore import score_forecast
+
+    def _boom(*a, **k):
+        raise ValueError("ERROR photobiology: no spectra")
+
+    monkeypatch.setattr(_spectral, "pigment_darkening_from_broadband", _boom)
+    with pytest.raises(RuntimeError, match="ERROR photobiology"):
+        score_forecast(_best_air(), Path(tmp_path), None, _confidence())
+
+
+def test_corrupt_version_file_stays_stale(tmp_path):
+    from sunstack.tanscore import score_forecast
+
+    (tmp_path / "local_reference_version.json").write_text(
+        "not json{{", encoding="utf-8")
+    out = score_forecast(_best_air(), Path(tmp_path), None, _confidence())
+    assert out["local_reference_stale"].all()
+
+
+def test_no_confidence_input_is_nan(tmp_path):
+    from sunstack.tanscore import score_forecast
+
+    out = score_forecast(_best_air(), Path(tmp_path), None, None)
+    assert out["tan_forecast_confidence_0_100"].isna().all()
