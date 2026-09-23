@@ -1752,3 +1752,21 @@ def test_build_sha_unknown_off_git(monkeypatch):
     monkeypatch.setattr(_ui, "BUILD_SHA", None)
     monkeypatch.setattr(subprocess, "run", _boom)
     assert _ui.build_sha() == "unknown"
+
+
+def test_calendar_builders_skip_ragged_rows():
+    # Calendar builders must survive ragged frames: empty tables, missing
+    # time columns, and unparseable stamps degrade to fewer events, never
+    # a crash that blocks the whole export.
+    from sunstack.ui import _daily_uv_peaks, build_interval_ics
+
+    assert _daily_uv_peaks(pd.DataFrame()) == {}
+    assert _daily_uv_peaks(pd.DataFrame({"uv_index": [5.0]})) == {}
+    half = pd.DataFrame([
+        {"time": "2026-09-15T12:00", "tan_score_absolute_0_100": 40.0},
+        {"time": None, "tan_score_absolute_0_100": 42.0},
+        {"time": "not-a-time", "tan_score_absolute_0_100": 43.0},
+    ])
+    ics = build_interval_ics(half, "20260915_004803")
+    assert ics.count("BEGIN:VEVENT") == 1
+    assert ics.count("END:VEVENT") == 1
