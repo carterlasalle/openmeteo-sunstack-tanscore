@@ -974,3 +974,71 @@ def test_filtered_payload_personal_mmd(tmp_path):
     assert plain_hourly["personal_mmd_fraction"].isna().all()
     assert (plain_hourly["tan_dose_1h_j_m2"].to_numpy() ==
             hourly["tan_dose_1h_j_m2"].to_numpy()).all()
+
+
+def _api_fixture(tmp_path):
+    import pandas as pd
+
+    latest = tmp_path / "latest"
+    (latest / "tables").mkdir(parents=True)
+    dts = pd.date_range("2026-09-15 11:00", periods=6, freq="30min")
+    pd.DataFrame({
+        "time": ["2026-09-15T11:00", "2026-09-15T12:00", "2026-09-15T13:00"],
+        "temperature_2m": [80.0, 82.0, 81.0],
+        "overall_tan_opportunity_0_100": [40.0, 60.0, 50.0],
+        "tan_score_absolute_0_100": [35.0, 45.0, 40.0],
+        "local_tan_score_0_100": [80.0, 85.0, 82.0],
+        "atmospheric_quality_percentile_0_100": [60.0, 65.0, 62.0],
+        "tan_forecast_confidence_0_100": [50.0, 55.0, 52.0],
+        "tan_dose_1h_j_m2": [1000.0, 2000.0, 1500.0],
+        "melanogenic_effective_irradiance_wm2": [0.4, 0.5, 0.45],
+    }).to_parquet(latest / "tables" / "tan_forecast_hourly.parquet", index=False)
+    pd.DataFrame({
+        "dt": dts,
+        "time": dts.strftime("%Y-%m-%dT%H:%M"),
+        "temperature_2m": [80.0] * 6,
+        "overall_tan_opportunity_0_100": [40.0, 45.0, 60.0, 58.0, 50.0, 48.0],
+        "tan_score_absolute_0_100": [35.0, 38.0, 45.0, 44.0, 40.0, 39.0],
+        "local_tan_score_0_100": [80.0] * 6,
+        "atmospheric_quality_percentile_0_100": [60.0] * 6,
+        "tan_forecast_confidence_0_100": [50.0] * 6,
+        "tan_dose_30m_j_m2": [500.0, 800.0, 1000.0, 900.0, 700.0, 600.0],
+        "melanogenic_effective_irradiance_wm2": [0.4] * 6,
+        "apparent_temperature": [80.0] * 6,
+        "wind_speed_10m": [5.0] * 6,
+        "wind_gusts_10m": [6.0] * 6,
+        "outdoor_blocked": [False] * 6,
+    }).to_parquet(latest / "tables" / "tan_forecast_30min.parquet", index=False)
+    (latest / "summary.json").write_text(
+        '{"run": "apitest", "created_at": "2026-09-15T00:00:00-04:00"}')
+    return tmp_path
+
+
+def test_api_data_personal_mmd(tmp_path):
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient",
+        reason="httpx/TestClient not installed").TestClient
+
+    from sunstack.ui import create_app
+
+    client = TestClient(create_app(_api_fixture(tmp_path)))
+    plain = client.get("/api/data", params={"location": "south-bend"})
+    assert plain.status_code == 200, plain.text
+    assert plain.json()["hourly"][0]["personal_mmd_fraction"] is None
+    mmd = client.get("/api/data", params={
+        "location": "south-bend", "personal_mmd": "2000",
+        "personal_mmd_basis": "MEASURED"})
+    assert mmd.status_code == 200, mmd.text
+    rows = mmd.json()["hourly"]
+    assert [r["personal_mmd_fraction"] for r in rows] == [0.5, 1.0, 0.75]
+    assert {r["personalization_basis"] for r in rows} == {"MEASURED"}
+    bad = client.get("/api/data", params={
+        "location": "south-bend", "personal_mmd": "2000",
+        "personal_mmd_basis": "FOLKLORE"})
+    assert bad.status_code == 400
+    assert "one of" in bad.json()["detail"]
+    unlabeled = client.get("/api/data", params={
+        "location": "south-bend", "personal_mmd": "2000"})
+    assert unlabeled.status_code == 400
