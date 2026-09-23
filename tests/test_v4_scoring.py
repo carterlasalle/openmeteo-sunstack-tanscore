@@ -858,3 +858,46 @@ def test_csv_export_covers_all_days_with_v4_columns():
                 "tan_dose_best_window_j_m2", "sed_day_total",
                 "legacy_absolute_tan_score_55_30_15"):
         assert col in HTML, col
+
+
+def test_cli_personal_mmd_flags_and_threading():
+    import inspect
+
+    from sunstack import cli as _cli
+
+    for fn in (_cli.run_live, _cli._run_live_inner, _cli.run_one_site,
+               _cli._run_all_sites):
+        params = inspect.signature(fn).parameters
+        assert "personal_mmd_j_m2" in params, fn.__name__
+        assert "personal_mmd_basis" in params, fn.__name__
+    ns = _cli._build_parser().parse_args(
+        ["run", "--personal-mmd", "2500", "--personal-mmd-basis", "MEASURED"])
+    assert ns.personal_mmd == 2500.0
+    assert ns.personal_mmd_basis == "MEASURED"
+    plain = _cli._build_parser().parse_args(["run"])
+    assert plain.personal_mmd is None and plain.personal_mmd_basis is None
+    import pytest
+
+    with pytest.raises(SystemExit):
+        _cli._build_parser().parse_args(
+            ["run", "--personal-mmd-basis", "FOLKLORE"])
+
+
+def test_personal_mmd_fraction_on_live_shaped_frame():
+    import pandas as pd
+    import pytest
+
+    from sunstack.opportunity import attach_personalization
+
+    src = Path("data/latest/tables/tan_forecast_hourly.parquet")
+    if not src.exists():
+        pytest.skip("needs a local live run (gitignored data/)")
+    h = pd.read_parquet(src)
+    out = attach_personalization(h, personal_mmd_j_m2=12000.0, basis="MEASURED")
+    frac = pd.to_numeric(out["personal_mmd_fraction"], errors="coerce")
+    assert float(frac.notna().mean()) > 0.9
+    for col in ("tan_score_absolute_0_100", "tan_dose_1h_j_m2",
+                "melanogenic_effective_irradiance_wm2"):
+        a = out[col].to_numpy()
+        b = h[col].to_numpy()
+        assert bool(((a == b) | (pd.isna(a) & pd.isna(b))).all()), col

@@ -301,6 +301,8 @@ def run_live(
     strict: bool = True,
     skin_type: int | None = None,
     min_temp_f: float | None = None,
+    personal_mmd_j_m2: float | None = None,
+    personal_mmd_basis: str | None = None,
     fresh: bool = True,
     site: config.Site | None = None,
 ) -> Path:
@@ -315,6 +317,8 @@ def run_live(
                 min_temp_f=min_temp_f,
                 fresh=fresh,
                 site=site,
+                personal_mmd_j_m2=personal_mmd_j_m2,
+                personal_mmd_basis=personal_mmd_basis,
             )
     return _run_live_inner(
         root,
@@ -324,6 +328,8 @@ def run_live(
         skin_type=skin_type,
         min_temp_f=min_temp_f,
         fresh=fresh,
+        personal_mmd_j_m2=personal_mmd_j_m2,
+        personal_mmd_basis=personal_mmd_basis,
     )
 
 
@@ -334,6 +340,8 @@ def _run_live_inner(
     strict: bool = True,
     skin_type: int | None = None,
     min_temp_f: float | None = None,
+    personal_mmd_j_m2: float | None = None,
+    personal_mmd_basis: str | None = None,
     fresh: bool = True,
     site: config.Site | None = None,
 ) -> Path:
@@ -420,7 +428,9 @@ def _run_live_inner(
     tan_hourly = attach_fitzpatrick(tan_hourly, skin_type)
     # Objective-first personalization columns (environmental physics untouched;
     # fractions stay NaN until a measured/compatible MMD is supplied).
-    tan_hourly = attach_personalization(tan_hourly)
+    tan_hourly = attach_personalization(
+        tan_hourly, personal_mmd_j_m2=personal_mmd_j_m2,
+        basis=personal_mmd_basis)
     try:
         from .doses import add_interval_doses as _add_hourly_doses
 
@@ -449,7 +459,9 @@ def _run_live_inner(
 
     tan_30 = build_30min_forecast(tan_hourly, hrrr15)
     tan_30 = attach_fitzpatrick(tan_30, skin_type)
-    tan_30 = attach_personalization(tan_30, dose_col="tan_dose_30m_j_m2")
+    tan_30 = attach_personalization(
+        tan_30, personal_mmd_j_m2=personal_mmd_j_m2,
+        basis=personal_mmd_basis, dose_col="tan_dose_30m_j_m2")
     daily_tan = build_daily_summary(tan_30)
     tan_windows = best_tan_windows(tan_hourly)
 
@@ -511,6 +523,8 @@ def _run_live_inner(
         "site_name": site.name if site else config.default_site().name,
         "strict": strict,
         "skin_type": skin_type,
+        "personal_mmd_j_m2": personal_mmd_j_m2,
+        "personalization_basis": personal_mmd_basis,
         "min_tan_temperature_f": float(
             config.MIN_TAN_TEMP_F if min_temp_f is None else min_temp_f
         ),
@@ -848,6 +862,8 @@ def run_one_site(
     strict: bool = True,
     skin_type: int | None = None,
     min_temp_f: float | None = None,
+    personal_mmd_j_m2: float | None = None,
+    personal_mmd_basis: str | None = None,
     fresh: bool = True,
     force_cams: bool = False,
     auto_calibrate: bool = True,
@@ -885,6 +901,8 @@ def run_one_site(
         strict=strict,
         skin_type=skin_type,
         min_temp_f=min_temp_f,
+        personal_mmd_j_m2=personal_mmd_j_m2,
+        personal_mmd_basis=personal_mmd_basis,
         fresh=fresh,
         site=site,
     )
@@ -911,6 +929,8 @@ def _run_all_sites(
     strict: bool = True,
     skin_type: int | None = None,
     min_temp: float | None = None,
+    personal_mmd_j_m2: float | None = None,
+    personal_mmd_basis: str | None = None,
     fresh: bool = True,
     force_cams: bool = False,
     auto_calibrate: bool = True,
@@ -929,6 +949,8 @@ def _run_all_sites(
                 strict=strict,
                 skin_type=skin_type,
                 min_temp_f=min_temp,
+                personal_mmd_j_m2=personal_mmd_j_m2,
+                personal_mmd_basis=personal_mmd_basis,
                 fresh=fresh,
                 force_cams=force_cams,
                 auto_calibrate=auto_calibrate,
@@ -941,9 +963,7 @@ class _SiteSkipped(RuntimeError):
     """A site was deliberately skipped (cold calibration); not a failure."""
 
 
-def main() -> None:
-    from argparse import Namespace
-
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="SunStack: calibrated absolute/local TanScore + outdoor opportunity UI"
     )
@@ -985,6 +1005,21 @@ def main() -> None:
         help="Optional Fitzpatrick I-VI context",
     )
     parser.add_argument(
+        "--personal-mmd",
+        type=float,
+        default=None,
+        help="Optional measured/estimated personal MMD in melanogenic-effective "
+             "J/m^2 (compatible action-weighted system only); enables "
+             "personal_mmd_fraction without touching environmental physics",
+    )
+    parser.add_argument(
+        "--personal-mmd-basis",
+        default=None,
+        choices=["MEASURED", "OBJECTIVE_ESTIMATE", "COARSE_ESTIMATE"],
+        help="Provenance label for --personal-mmd (Fitzpatrick-only estimates "
+             "stay COARSE_ESTIMATE with wide uncertainty)",
+    )
+    parser.add_argument(
         "--min-temp",
         type=float,
         default=None,
@@ -1017,6 +1052,13 @@ def main() -> None:
         default="docs",
         help="Static site output dir for the export command",
     )
+    return parser
+
+
+def main() -> None:
+    from argparse import Namespace
+
+    parser = _build_parser()
     args: Namespace = parser.parse_args()
     root = Path(args.out)
     _setup_logging(root, debug=args.verbose)
@@ -1054,6 +1096,8 @@ def main() -> None:
                         min_temp_f=args.min_temp,
                         fresh=True,
                         site=site,
+                        personal_mmd_j_m2=args.personal_mmd,
+                        personal_mmd_basis=args.personal_mmd_basis,
                     )
                 print("\nSetup complete. Launch the dashboard with: uv run sunstack ui")
         elif args.command == "ui":
@@ -1100,6 +1144,8 @@ def main() -> None:
                 strict=strict,
                 skin_type=args.skin_type,
                 min_temp=args.min_temp,
+                personal_mmd_j_m2=args.personal_mmd,
+                personal_mmd_basis=args.personal_mmd_basis,
                 fresh=not args.cached_live,
                 force_cams=args.force_cams,
                 auto_calibrate=not args.no_auto_calibrate,

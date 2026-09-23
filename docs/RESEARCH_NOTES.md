@@ -488,3 +488,13 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   CSVs (196 hourly + 392 half-hour + 14 day rows), v4 headers present, and
   missing keys render as blanks (never "undefined"). No new bot comments
   since the review round; branch mergeable clean.
+
+## 2026-09-23 (follow-up 22) — personal MMD inputs reach the CLI
+
+- `sunstack run/setup` accept `--personal-mmd` (melanogenic-effective J/m²)
+  plus `--personal-mmd-basis MEASURED|OBJECTIVE_ESTIMATE|COARSE_ESTIMATE`,
+  threaded run stafette→run→summary so `personal_mmd_fraction` and its basis
+  land in hourly/30-min tables and the run manifest. Proven on the live SB
+  hourly table (99.7% finite fractions at 12 kJ, physics byte-identical) and
+  pinned with parser-threading tests; README documents scope (CLI today,
+  dashboard/API inputs follow-up).
