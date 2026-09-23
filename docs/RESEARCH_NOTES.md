@@ -511,3 +511,12 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   read as 0.00 instead of absent. Max-filters now exclude null/undefined/""
   before numeric coercion (also applied to the IPD peak), verified on
   MMD-bearing, MMD-absent, and pre-v4 payloads.
+
+## 2026-09-23 (follow-up 27) — wheel packaging proven installed
+
+- Built the wheel with hatchling: all 9 runtime data files land under
+  `sunstack/_data/` (4 spectra + 4 metadata + global reference manifest).
+  Installed with `--target` into an isolated dir and imported from outside
+  the repo: the melanogenesis spectrum loads with the released checksum
+  (0eccdc6ff267) and evaluates E_mel. The P1 install failure is closed, not
+  just addressed.
