@@ -1666,3 +1666,19 @@ def test_calendar_marks_partial_doses_and_leaves_legacy_clean():
     flat = ics30.replace("\r\n ", "")
     assert "TanDose30 900 J/m2 mel (partial)" in flat
     assert "SED30 2.5" in flat and "SED30 2.5 (partial)" not in flat
+
+
+def test_invalid_skin_tilt_fails_loudly_in_scoring(tmp_path, monkeypatch, caplog):
+    # Reviewer-flagged path: an impossible skin-plane configuration must log
+    # the offending values and propagate (never silently score horizontal).
+    import pytest
+
+    from sunstack import config as _config
+    from sunstack.tanscore import score_forecast
+
+    monkeypatch.setattr(_config, "SKIN_TILT_DEG", 200.0)
+    with (caplog.at_level("ERROR", logger="sunstack"),
+          pytest.raises(ValueError, match="skin-plane")):
+        score_forecast(_best_air(), Path(tmp_path), None, _confidence())
+    assert any("Skin-plane configuration invalid" in r.message
+               for r in caplog.records)
