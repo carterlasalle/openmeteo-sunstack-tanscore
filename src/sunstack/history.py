@@ -304,6 +304,102 @@ def fetch_openmeteo_previous_runs(
 
 
 # ---------------------------------------------------------------------------
+# EPA/NWS operational UVI (US ZIP sites only; opportunistic third UVI source)
+# ---------------------------------------------------------------------------
+
+EPA_UV_HOURLY_URL = "https://enviro.epa.gov/enviro/efservice/getEnvirofactsUVHOURLY/ZIP/{zip}/JSON"
+EPA_UV_DAILY_URL = "https://enviro.epa.gov/enviro/efservice/getEnvirofactsUVDAILY/ZIP/{zip}/JSON"
+
+
+def normalize_epa_hourly(payload: object) -> pd.DataFrame:
+    """EPA hourly UVI rows to a site-local hourly frame (time, uvi_epa).
+
+    DATE_TIME looks like "Sep/23/2026 06 AM" in the ZIP's local time, which
+    matches the site-local wall clock the forecast tables use. Unparseable
+    rows are dropped; an empty frame means degrade, never fabricate.
+    """
+    if not isinstance(payload, list) or not payload:
+        return pd.DataFrame()
+    recs = []
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        try:
+            # Wall-clock parse is intentional: EPA DATE_TIME is already the
+            # ZIP's local time, matching the site-local wall clock join key.
+            dt = datetime.strptime(  # noqa: DTZ007
+                str(row.get("DATE_TIME", "")).strip(), "%b/%d/%Y %I %p")
+            val = float(row.get("UV_VALUE"))  # type: ignore[arg-type]
+        except (ValueError, TypeError):
+            continue
+        if not np.isfinite(val):
+            continue
+        recs.append({"time": dt.strftime("%Y-%m-%dT%H:%M"), "uvi_epa": val})
+    if not recs:
+        return pd.DataFrame()
+    out = pd.DataFrame(recs).sort_values("time").drop_duplicates("time")
+    out["source"] = "epa_nws_operational_hourly"
+    return out
+
+
+def normalize_epa_daily(payload: object) -> pd.DataFrame:
+    """EPA daily UVI peaks to (date, uvi_epa_daily_peak). Display reference only."""
+    if not isinstance(payload, list) or not payload:
+        return pd.DataFrame()
+    recs = []
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        try:
+            # Date-only parse is intentional: EPA DATE is a calendar-day label.
+            day = datetime.strptime(  # noqa: DTZ007
+                str(row.get("DATE", "")).strip(), "%b/%d/%Y").date().isoformat()
+            val = float(row.get("UV_INDEX"))  # type: ignore[arg-type]
+        except (ValueError, TypeError):
+            continue
+        if not np.isfinite(val):
+            continue
+        recs.append({"date": day, "uvi_epa_daily_peak": val})
+    if not recs:
+        return pd.DataFrame()
+    out = pd.DataFrame(recs).sort_values("date").drop_duplicates("date")
+    out["source"] = "epa_nws_operational_daily"
+    return out
+
+
+def fetch_epa_uv_forecast(out_dir: Path, zip_code: str, timeout: int = 30) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Live EPA/NWS operational UVI for a US ZIP. Degrades to empty frames.
+
+    Writes raw JSON + tables for provenance when non-empty. Never raises on
+    upstream failure: EPA is an opportunistic third UVI source, not a gate.
+    """
+    hourly = pd.DataFrame()
+    daily = pd.DataFrame()
+    raw_dir = out_dir / "raw" / "epa_uv"
+    table_dir = out_dir / "tables"
+    try:
+        resp = requests.get(EPA_UV_HOURLY_URL.format(zip=zip_code), timeout=timeout)
+        resp.raise_for_status()
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        raw_dir.joinpath(f"epa_hourly_{zip_code}.json").write_text(resp.text, encoding="utf-8")
+        hourly = normalize_epa_hourly(resp.json())
+    except (requests.RequestException, ValueError) as exc:
+        print(f"WARN EPA hourly UVI {zip_code}: {exc}")
+    try:
+        resp = requests.get(EPA_UV_DAILY_URL.format(zip=zip_code), timeout=timeout)
+        resp.raise_for_status()
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        raw_dir.joinpath(f"epa_daily_{zip_code}.json").write_text(resp.text, encoding="utf-8")
+        daily = normalize_epa_daily(resp.json())
+    except (requests.RequestException, ValueError) as exc:
+        print(f"WARN EPA daily UVI {zip_code}: {exc}")
+    if not hourly.empty:
+        _write_table(hourly, table_dir / "epa_uv_hourly")
+    if not daily.empty:
+        _write_table(daily, table_dir / "epa_uv_daily")
+    return hourly, daily
+
+# ---------------------------------------------------------------------------
 # Direct CAMS via Copernicus ADS
 # ---------------------------------------------------------------------------
 

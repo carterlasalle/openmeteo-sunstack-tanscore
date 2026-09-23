@@ -53,10 +53,11 @@ def _recompute_v4_scores(frame: pd.DataFrame) -> pd.DataFrame:
         # it would publish doses inconsistent with the corrected radiation.
         out["pigment_darkening_effective_irradiance"] = np.round(
             _pig_broadband(uva_arr, uvb_arr), 5)
-    if "uv_index" in out:
+    ery_source = "uvi_consensus" if "uvi_consensus" in out else "uv_index"
+    if ery_source in out:
         out["erythemal_irradiance_wm2"] = np.round(
             erythemal_irradiance_from_uvi(
-                pd.to_numeric(out["uv_index"], errors="coerce").to_numpy(dtype=float)
+                pd.to_numeric(out[ery_source], errors="coerce").to_numpy(dtype=float)
             ), 5,
         )
     if {"uv_index", "predicted_uva_wm2"}.issubset(out.columns):
@@ -382,6 +383,11 @@ def build_30min_forecast(
     # product for those cells). Coerce the display-critical ones explicitly.
     for _col in (
         "uv_index",
+        "uvi_consensus",
+        "uvi_epa",
+        "uvi_cams",
+        "uvi_source_spread",
+        "uvi_consensus_sources",
         "predicted_uva_wm2",
         "predicted_uvb_wm2",
         "shortwave_radiation_instant",
@@ -584,6 +590,8 @@ def build_30min_forecast(
                 out.loc[is_native, "predicted_uvb_wm2"] *= np.sqrt(ratio[is_native])
             if "uv_index" in out:
                 out.loc[is_native, "uv_index"] *= np.sqrt(ratio[is_native])
+            if "uvi_consensus" in out:
+                out.loc[is_native, "uvi_consensus"] *= np.sqrt(ratio[is_native])
             if {"uv_index", "predicted_uva_wm2", "tan_score_absolute_0_100"}.issubset(
                 out.columns
             ):
@@ -773,7 +781,7 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                 "sed_coverage_fraction": float(_day_doses.get("sed_coverage_fraction", float("nan"))),
                 "uva_dose_day_j_m2": float(_day_doses.get("uva_dose_day_j_m2", float("nan"))),
                 "uvb_dose_day_j_m2": float(_day_doses.get("uvb_dose_day_j_m2", float("nan"))),
-                "peak_uv_index": round(float(best.get("uv_index", np.nan)), 2),
+                "peak_uv_index": round(float(best.get("uvi_consensus", best.get("uv_index", np.nan))), 2),
                 "peak_predicted_uva_wm2": round(
                     float(best.get("predicted_uva_wm2", np.nan)), 2
                 ),

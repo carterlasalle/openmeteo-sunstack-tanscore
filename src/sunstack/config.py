@@ -20,6 +20,7 @@ class Site:
     lat: float
     lon: float
     timezone: str
+    zip: str | None = None
     enabled: bool = True
     default: bool = False
 
@@ -77,8 +78,14 @@ def _parse_site(item: object) -> Site:
     name: object = mapping.get("name", slug)
     enabled: object = mapping.get("enabled", True)
     default: object = mapping.get("default", False)
+    zip_raw: object = mapping.get("zip")
+    zip_code: str | None = None
+    if zip_raw is not None:
+        zip_code = str(zip_raw).strip() or None
+        if zip_code is not None and not zip_code.isdigit():
+            raise TypeError(f"{slug}: zip must be a US ZIP code")
     return Site(slug=slug, name=name if isinstance(name, str) else slug,
-                lat=float(lat), lon=float(lon), timezone=tz_name,
+                lat=float(lat), lon=float(lon), timezone=tz_name, zip=zip_code,
                 enabled=bool(enabled), default=bool(default))
 
 

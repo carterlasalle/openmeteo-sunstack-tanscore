@@ -32,6 +32,7 @@ from .history import (
     cds_credentials_present,
     fetch_cams_eac4_history,
     fetch_cams_forecast,
+    fetch_epa_uv_forecast,
     fetch_nasa_power_history,
     fetch_openmeteo_historical_forecast,
     fetch_openmeteo_previous_runs,
@@ -436,7 +437,14 @@ def _run_live_inner(
         )
     if strict and config.REQUIRE_DIRECT_CAMS:
         raise_on_errors(cams_issues, "Direct CAMS spectral validation failed")
-
+    # EPA/NWS operational UVI: opportunistic third UVI source (US ZIP sites).
+    # Never gates the run; absence degrades to two-source consensus downstream.
+    epa_zip = site.zip if site is not None else config.default_site().zip
+    epa_hourly = pd.DataFrame()
+    if epa_zip:
+        LOG.info("Fetching EPA/NWS operational UVI for %s", epa_zip)
+        epa_hourly, _ = fetch_epa_uv_forecast(run_dir, epa_zip)
+        best_air = best_air.merge(epa_hourly.loc[:, ["time", "uvi_epa"]], on="time", how="left") if not epa_hourly.empty else best_air
     tan_hourly = score_forecast(best_air, calibration_dir, cams_direct, sun_windows)
     tan_hourly = apply_outdoor_feasibility(tan_hourly, min_temp_f)
     tan_hourly = attach_fitzpatrick(tan_hourly, skin_type)

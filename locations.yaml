@@ -4,6 +4,7 @@
   lat: 41.703293
   lon: -86.238292
   timezone: America/Indiana/Indianapolis
+  zip: '46556'
   enabled: true
   default: true
 - slug: pacific-palisades
@@ -11,5 +12,6 @@
   lat: 34.04
   lon: -118.53
   timezone: America/Los_Angeles
+  zip: '90272'
   enabled: true
   default: false

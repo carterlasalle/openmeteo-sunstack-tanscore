@@ -18,6 +18,7 @@ import yaml
 from sunstack.config import load_sites
 
 FIELD_IDS = ("location-name", "slug", "latitude", "longitude", "timezone")
+OPTIONAL_IDS = ("zip-code",)
 
 
 def parse_issue_body(body: str) -> dict[str, str]:
@@ -38,6 +39,7 @@ def parse_issue_body(body: str) -> dict[str, str]:
             ("latitude", "latitude"),
             ("longitude", "longitude"),
             ("timezone", "timezone"),
+            ("zip-code", "zip code"),
         ):
             if label == label_match:
                 found[fid] = value.strip()
@@ -60,7 +62,7 @@ def build_entry(fields: dict[str, str]) -> dict[str, object]:
     slug = (fields.get("slug") or "").strip() or slugify(fields["location-name"])
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", slug):
         raise ValueError(f"bad slug: {slug!r}")
-    return {
+    entry: dict[str, object] = {
         "slug": slug,
         "name": fields["location-name"].strip(),
         "lat": lat,
@@ -69,6 +71,12 @@ def build_entry(fields: dict[str, str]) -> dict[str, object]:
         "enabled": True,
         "default": False,
     }
+    zip_code = (fields.get("zip-code") or "").strip()
+    if zip_code:
+        if not zip_code.isdigit():
+            raise ValueError(f"bad ZIP code: {zip_code!r}")
+        entry["zip"] = zip_code
+    return entry
 
 
 def main() -> int:

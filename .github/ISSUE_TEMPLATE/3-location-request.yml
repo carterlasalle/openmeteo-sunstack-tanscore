@@ -46,6 +46,12 @@ body:
       placeholder: America/Santo_Domingo
     validations:
       required: true
+  - type: input
+    id: zip-code
+    attributes:
+      label: ZIP code
+      description: US ZIP code for the EPA/NWS operational UV feed (optional; US sites only).
+      placeholder: "46556"
   - type: textarea
     id: why-site
     attributes:

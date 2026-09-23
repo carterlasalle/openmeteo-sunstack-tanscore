@@ -474,12 +474,35 @@ def score_forecast(
         _grade_absolute(float(x)) for x in num(out, "tan_score_absolute_0_100").fillna(np.nan)
     ]
 
-    # Independent erythemal channel (SED input). NEVER added to TanScore.
-    # Missing UVI stays missing: only confirmed night rows read as zero via
-    # their present 0.0 UVI, so the SED integrator can mark true gaps instead
-    # of trapezoids through invented zeros.
+    # UVI source fusion: EPA/NWS operational (US public product) + CAMS
+    # spectral + Open-Meteo/GFS. Median of available sources resists a single
+    # bad feed (e.g. OM best-match GFS/cloud mixing vs clear-sky + DNI).
+    # Not a blind average: spread/confidence derive from the same sources.
+    out["uvi_openmeteo"] = num(out, "uv_index")
+    if "cams_uv_index" in out:
+        out["uvi_cams"] = num(out, "cams_uv_index")
+    else:
+        out["uvi_cams"] = np.nan
+    if "uvi_epa" in out:
+        out["uvi_epa"] = num(out, "uvi_epa")
+    else:
+        out["uvi_epa"] = np.nan
+    with np.errstate(divide="ignore", invalid="ignore"):
+        stacked = np.vstack([
+            out["uvi_openmeteo"].to_numpy(dtype=float),
+            out["uvi_cams"].to_numpy(dtype=float),
+            out["uvi_epa"].to_numpy(dtype=float),
+        ])
+        out["uvi_consensus"] = np.round(np.nanmedian(stacked, axis=0), 3)
+        out["uvi_consensus_sources"] = np.sum(np.isfinite(stacked), axis=0).astype(int)
+        out["uvi_source_spread"] = np.round(np.nanmax(stacked, axis=0) - np.nanmin(stacked, axis=0), 3)
+    # Independent erythemal channel (SED input) from the consensus UVI. NEVER
+    # added to TanScore. Consensus resists one bad source; raw OM UVI kept as
+    # uvi_openmeteo for display/debug. Missing consensus stays missing: only
+    # confirmed night rows read as zero, so the SED integrator marks true gaps
+    # instead of trapezoids through invented zeros.
     out["erythemal_irradiance_wm2"] = np.round(
-        erythemal_irradiance_from_uvi(num(out, "uv_index").to_numpy(dtype=float)), 5
+        erythemal_irradiance_from_uvi(out["uvi_consensus"].to_numpy(dtype=float)), 5
     )
     # Separate UVA-dominant pigment-darkening channel (existing pigment only).
     try:
@@ -494,13 +517,9 @@ def score_forecast(
         "existing-pigment oxidation/redistribution / persistent darkening"
     )
 
-    # UVI source fusion: keep sources independent; agreement modulates
-    # confidence only, never the action-spectrum weighting or E_mel.
-    out["uvi_openmeteo"] = num(out, "uv_index")
-    if "cams_uv_index" in out:
-        out["uvi_cams"] = num(out, "cams_uv_index")
-    else:
-        out["uvi_cams"] = np.nan
+    # Agreement modulates confidence only, never the action-spectrum
+    # weighting or E_mel. Pairwise OM/CAMS difference kept for back-compat;
+    # uvi_source_spread covers all available sources including EPA.
     with np.errstate(divide="ignore", invalid="ignore"):
         denom = np.maximum(
             np.maximum(out["uvi_openmeteo"].to_numpy(dtype=float),

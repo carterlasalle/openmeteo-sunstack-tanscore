@@ -957,6 +957,7 @@ def test_csv_export_covers_all_days_with_v4_columns():
     assert "DATA.hourly||[]" in HTML.replace(" ", "")
     assert "DATA.half_hour||[]" in HTML.replace(" ", "")
     for col in ("melanogenic_effective_irradiance_wm2",
+                "uvi_consensus", "uvi_epa", "uvi_source_spread",
                 "tan_dose_30m_j_m2", "sed_30m",
                 "tan_dose_best_window_j_m2", "sed_day_total",
                 "tan_dose_best_window_complete",
@@ -1969,3 +1970,93 @@ def test_best_tan_windows_ranks_by_overall_when_present():
         "tan_score_absolute_0_100": [5.0, 50.0, 25.0],
     }))
     assert out["tan_window_rank_value"].tolist() == [60.0, 30.0, 10.0]
+
+def _split_frame() -> pd.DataFrame:
+    """Thursday-style UVI split: OM/GFS low vs CAMS high vs EPA mid."""
+    frame = _best_air().iloc[:2].copy()
+    frame["uv_index"] = [2.6, 2.1]
+    frame["cams_uv_index"] = [5.6, 5.56]
+    frame["uvi_epa"] = [5.0, 5.0]
+    return frame
+
+
+def test_uvi_consensus_resists_single_bad_source(tmp_path):
+    # Median of OM/CAMS/EPA follows the two agreeing sources, never the
+    # outlier; spread names the disagreement width; source count is exact.
+    out = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
+    assert np.allclose(out["uvi_consensus"].to_numpy(), [5.0, 5.0])
+    assert (out["uvi_consensus_sources"].to_numpy() == 3).all()
+    assert np.allclose(out["uvi_source_spread"].to_numpy(), [3.0, 3.46])
+
+
+def test_sed_integrates_consensus_not_raw_om(tmp_path):
+    # SED's erythemal input is consensus-derived: a bad OM UVI must not drag
+    # the erythemal channel down while the other sources agree.
+    out = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
+    assert np.allclose(out["erythemal_irradiance_wm2"].to_numpy(), [0.125, 0.125])
+
+
+def test_consensus_degrades_with_missing_sources(tmp_path):
+    # EPA-less rows (non-US site / failed fetch) degrade to the OM/CAMS
+    # median; a lone OM row degrades to OM itself. NaN never becomes zero.
+    two = _split_frame().drop(columns=["uvi_epa"])
+    out = score_forecast(two, Path(tmp_path), None, _confidence())
+    assert np.allclose(out["uvi_consensus"].to_numpy(), [4.1, 3.83], atol=0.01)
+    assert (out["uvi_consensus_sources"].to_numpy() == 2).all()
+    one = _best_air().iloc[:1].copy()
+    solo = score_forecast(one, Path(tmp_path), None, _confidence())
+    assert np.allclose(solo["uvi_consensus"].to_numpy(), solo["uv_index"].to_numpy())
+
+
+def test_daily_peak_uv_uses_consensus(tmp_path):
+    # Day-card peak UVI follows the consensus column when present, so a
+    # split-source day never publishes the outlier as the headline.
+    from sunstack.opportunity import build_30min_forecast, build_daily_summary
+
+    scored = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
+    half = build_30min_forecast(scored, None)
+    daily = build_daily_summary(half)
+    assert np.allclose(daily["peak_uv_index"].to_numpy(), half["uvi_consensus"].max())
+
+
+def test_epa_normalizers_parse_live_shape():
+    # EPA Envirofacts hourly/daily payloads parse to join-ready frames;
+    # garbage rows drop, garbage payloads degrade to empty frames.
+    from sunstack.history import normalize_epa_daily, normalize_epa_hourly
+
+    hourly = normalize_epa_hourly([
+        {"DATE_TIME": "Sep/23/2026 01 PM", "UV_VALUE": 2},
+        {"DATE_TIME": "junk", "UV_VALUE": "x"},
+    ])
+    assert hourly["uvi_epa"].tolist() == [2.0]
+    assert hourly["time"].tolist() == ["2026-09-23T13:00"]
+    daily = normalize_epa_daily([
+        {"DATE": "Sep/24/2026", "UV_INDEX": "2", "ZIP_CODE": "46556"},
+        {"DATE": "junk", "UV_INDEX": "x"},
+    ])
+    assert daily["uvi_epa_daily_peak"].tolist() == [2.0]
+    assert normalize_epa_hourly("nope").empty
+    assert normalize_epa_daily(None).empty
+
+
+def test_registry_zip_parses_and_intake_accepts_zip(tmp_path):
+    # ZIP is optional registry metadata for the EPA feed; the intake parser
+    # threads it through only when the issue supplies it.
+    import sys
+
+    sys.path.insert(0, "scripts")
+    from sunstack.config import load_sites
+
+    sites = {s.slug: s for s in load_sites()}
+    assert sites["south-bend"].zip == "46556"
+    assert sites["pacific-palisades"].zip == "90272"
+    from issue_location_to_pr import build_entry
+
+    assert "zip" not in build_entry({
+        "location-name": "X", "slug": "x", "latitude": "0",
+        "longitude": "0", "timezone": "UTC",
+    })
+    assert build_entry({
+        "location-name": "X", "slug": "x", "latitude": "0",
+        "longitude": "0", "timezone": "UTC", "zip-code": "12345",
+    })["zip"] == "12345"
