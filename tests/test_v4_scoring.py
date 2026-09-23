@@ -1017,9 +1017,12 @@ def _api_fixture(tmp_path):
 def test_api_data_personal_mmd(tmp_path):
     import pytest
 
-    TestClient = pytest.importorskip(
-        "fastapi.testclient",
-        reason="httpx/TestClient not installed").TestClient
+    try:
+        from fastapi.testclient import TestClient
+    except (ImportError, RuntimeError):
+        # RuntimeError: starlette raises (not ImportError) when httpx is
+        # absent, so importorskip alone cannot guard this import.
+        pytest.skip("httpx/TestClient not installed")
 
     from sunstack.ui import create_app
 
@@ -1047,9 +1050,12 @@ def test_api_data_personal_mmd(tmp_path):
 def test_api_refresh_rejects_bad_mmd_without_running(tmp_path):
     import pytest
 
-    TestClient = pytest.importorskip(
-        "fastapi.testclient",
-        reason="httpx/TestClient not installed").TestClient
+    try:
+        from fastapi.testclient import TestClient
+    except (ImportError, RuntimeError):
+        # RuntimeError: starlette raises (not ImportError) when httpx is
+        # absent, so importorskip alone cannot guard this import.
+        pytest.skip("httpx/TestClient not installed")
 
     from sunstack.ui import create_app
 
