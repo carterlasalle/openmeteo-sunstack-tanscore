@@ -1,0 +1,23 @@
+{
+  "resource": "cie_erythema_reference.csv",
+  "source_title": "Erythema reference action spectrum and standard erythema dose",
+  "authors": "McKinlay AF, Diffey BL",
+  "year": 1987,
+  "identifier": "CIE S 007/E-1998 (CIE erythema action spectrum; originally CIE 1987)",
+  "biological_endpoint": "erythema (sunburn reddening), human skin",
+  "subject_population": "human reference action spectrum (population-averaged, not per-subject)",
+  "wavelengths_tested_nm": "250-400 (production domain 280-400)",
+  "assessment_time_after_exposure": "erythema assessed ~24 h (reference weighting, not a tanning endpoint)",
+  "normalization_convention": "1.0 at 250-298 nm; 10^(0.094*(298-lambda)) 298-328 nm; 10^(0.015*(139-lambda)) 328-400 nm",
+  "original_units": "dimensionless relative effectiveness",
+  "digitization_method": "closed-form CIE equation evaluated at 1 nm, not digitized from a figure",
+  "wavelength_spacing_nm": 1,
+  "spectral_domain_nm": [
+    280,
+    400
+  ],
+  "interpolation_guidance": "log-space (log10 effectiveness) interpolation between tabulated points",
+  "checksum_sha256": "625f71007ee14a33df7cb2dec8953924f05a0e824933960de2f429863933d66f",
+  "tier": "canonical",
+  "limitations": "Erythema endpoint only. Must NEVER be used as a melanogenesis weighting. Population reference, not individual prediction."
+}

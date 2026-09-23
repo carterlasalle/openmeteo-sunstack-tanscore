@@ -246,12 +246,40 @@ def train_uv_models(training: pd.DataFrame, calibration_dir: Path) -> dict:
 
 
 def build_local_reference(training: pd.DataFrame, calibration_dir: Path) -> pd.DataFrame:
+    """Historical local reference rebuilt with the v4 action-spectrum score.
+
+    Legacy 55/30/15 percentiles must NOT be retained: this builder always uses
+    melanogenic-effective irradiance mapped through the versioned global
+    reference. The legacy absolute is kept as a diagnostic column only.
+    """
     if training.empty:
         return pd.DataFrame()
     ref = training.loc[:, [c for c in ["time_utc", "uva", "uvb", "uvi", "sza", "ghi"] if c in training]].copy()
     ref = ref.dropna(subset="time_utc").dropna(subset="uva").dropna(subset="uvi")
     ref = ref.loc[(scol(ref, "ghi").fillna(0) > 10) & (scol(ref, "sza").fillna(180) < 90)]
-    ref["absolute_tan_score_0_100"] = absolute_tan_score(scol(ref, "uvi"), scol(ref, "uva"))
+    try:
+        from .spectral import melanogenic_from_broadband
+
+        e_mel = melanogenic_from_broadband(
+            pd.to_numeric(scol(ref, "uva"), errors="coerce").fillna(0).to_numpy(),
+            pd.to_numeric(scol(ref, "uvb" if "uvb" in ref else "uvi"), errors="coerce").fillna(0).to_numpy()
+            if "uvb" in ref else pd.to_numeric(scol(ref, "uvi"), errors="coerce").fillna(0).to_numpy() * 0.15,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        raise RuntimeError(f"ERROR photobiology: {exc}") from exc
+    from .photobiology import absolute_tan_score_from_melanogenic_irradiance
+
+    ref["melanogenic_effective_irradiance_wm2"] = np.round(e_mel, 5)
+    ref["absolute_tan_score_0_100"] = np.round(
+        absolute_tan_score_from_melanogenic_irradiance(
+            e_mel, float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2)
+        ), 1,
+    )
+    ref["legacy_absolute_tan_score_55_30_15"] = np.round(
+        absolute_tan_score(scol(ref, "uvi"), scol(ref, "uva")), 1
+    )
+    ref["tan_score_model_version"] = config.TAN_SCORE_MODEL_VERSION
+    ref["global_reference_version"] = config.GLOBAL_MELANOGENIC_REFERENCE_VERSION
     tz = ZoneInfo(config.TIMEZONE)
     local = pd.to_datetime(scol(ref, "time_utc"), utc=True).dt.tz_convert(tz)
     ref["time_local"] = local.astype(str)
@@ -262,6 +290,14 @@ def build_local_reference(training: pd.DataFrame, calibration_dir: Path) -> pd.D
     calibration_dir.mkdir(parents=True, exist_ok=True)
     ref.to_parquet(calibration_dir / "local_reference.parquet", index=False)
     ref.to_csv(calibration_dir / "local_reference.csv", index=False)
+    (calibration_dir / "local_reference_version.json").write_text(
+        json.dumps({
+            "tan_score_model_version": config.TAN_SCORE_MODEL_VERSION,
+            "global_reference_version": config.GLOBAL_MELANOGENIC_REFERENCE_VERSION,
+            "global_reference_e_mel_wm2": config.GLOBAL_MELANOGENIC_REFERENCE_WM2,
+            "rows": len(ref),
+        }, indent=2), encoding="utf-8",
+    )
     return ref
 
 

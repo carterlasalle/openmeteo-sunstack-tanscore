@@ -64,6 +64,25 @@ def validate_scored_hourly(df: pd.DataFrame) -> list[ValidationIssue]:
         x = num(df, "tan_score_absolute_0_100")
         if bool(((x < 0) | (x > 100)).any()):
             issues.append(ValidationIssue("ERROR", "tan_forecast_hourly", "absolute TanScore outside 0-100"))
+    # v4 photobiology gates: fail loudly, never silently use legacy.
+    for col in ["melanogenic_effective_irradiance_wm2", "erythemal_irradiance_wm2",
+                "tan_score_model_version", "spectral_backend"]:
+        if col not in df:
+            issues.append(ValidationIssue("ERROR", "photobiology", f"required v4 column missing: {col}"))
+    if "melanogenic_effective_irradiance_wm2" in df:
+        e = num(df, "melanogenic_effective_irradiance_wm2")
+        if bool((e < -1e-9).any()):
+            issues.append(ValidationIssue("ERROR", "photobiology", "E_mel has physically impossible negative values"))
+        if bool((e > 5).any()):
+            issues.append(ValidationIssue("ERROR", "photobiology", "E_mel exceeds 5 W/m^2 (unphysical for natural sun)"))
+    if "tan_score_model_version" in df:
+        versions = set(pd.Series(df["tan_score_model_version"]).dropna().astype(str).unique().tolist())
+        if versions and versions != {"action-spectrum-v1"}:
+            issues.append(ValidationIssue("ERROR", "photobiology", f"unexpected tan_score_model_version: {sorted(versions)}"))
+    if "spectral_tier" in df:
+        tiers = set(pd.Series(df["spectral_tier"]).dropna().astype(str).unique().tolist())
+        if tiers - {"A", "B", "C"}:
+            issues.append(ValidationIssue("ERROR", "photobiology", f"invalid spectral tier: {sorted(tiers)}"))
     return issues
 
 
@@ -88,4 +107,41 @@ def validate_cams_direct(df: pd.DataFrame) -> list[ValidationIssue]:
         if not present(tokens): issues.append(ValidationIssue("ERROR", "cams_direct_ads", f"required spectral field missing: {name}"))
     if not (present(("uv","biologically","effective")) or present(("downward","uv"))):
         issues.append(ValidationIssue("WARN", "cams_direct_ads", "CAMS UV diagnostic field missing; scoring can still use spectral AOD + ozone"))
+    # v4: full UV/aerosol propagation is required, not fetch-and-drop.
+    for name, tokens in [
+        ("UVBED clear-sky", ("biologically","effective","clear")),
+        ("downward surface UV", ("downward","uv")),
+        ("AOD355", ("aerosol","optical","355")),
+        ("AOD400", ("aerosol","optical","400")),
+        ("absorption AOD340", ("absorption","340")),
+        ("SSA340", ("single","scattering","340")),
+        ("asymmetry340", ("asymmetry","340")),
+        ("water vapour", ("water","vapour")),
+        ("cloud liquid water", ("cloud","liquid","water")),
+        ("cloud ice water", ("cloud","ice","water")),
+        ("forecast albedo", ("forecast","albedo")),
+    ]:
+        if not present(tokens):
+            issues.append(ValidationIssue("WARN", "cams_direct_ads", f"expected CAMS field not propagated: {name}"))
+    return issues
+
+
+def validate_action_spectra(strict_canonical: bool = False) -> list[ValidationIssue]:
+    """Fail loudly when the photobiology model cannot be evaluated."""
+    issues: list[ValidationIssue] = []
+    try:
+        from .photobiology import load_action_spectrum
+    except ImportError as exc:
+        return [ValidationIssue("ERROR", "photobiology", f"photobiology module unavailable: {exc}")]
+    for stem in ("parrish_delayed_melanogenesis", "cie_erythema_reference", "ipd_action_spectrum"):
+        try:
+            spec = load_action_spectrum(stem)
+        except (FileNotFoundError, ValueError) as exc:
+            issues.append(ValidationIssue("ERROR", "photobiology", str(exc)))
+            continue
+        if spec.tier == "provisional" and strict_canonical and stem == "parrish_delayed_melanogenesis":
+            issues.append(ValidationIssue(
+                "ERROR", "photobiology",
+                f"strict mode requires the canonical spectrum but {stem} tier is provisional",
+            ))
     return issues

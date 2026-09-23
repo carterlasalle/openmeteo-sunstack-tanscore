@@ -1,0 +1,24 @@
+{
+  "resource": "cie_pigmentation_reference.csv",
+  "source_title": "Reference Action Spectra for Ultraviolet Induced Erythema and Pigmentation of Different Human Skin Types",
+  "authors": "Commission Internationale de l'Eclairage (CIE)",
+  "year": 1993,
+  "identifier": "CIE 103/3 (exact machine-readable table NOT obtained)",
+  "biological_endpoint": "delayed pigmentation (intended canonical basis)",
+  "subject_population": "unavailable - exact CIE table not legally/technically obtained",
+  "wavelengths_tested_nm": "unavailable",
+  "assessment_time_after_exposure": "unavailable",
+  "normalization_convention": "CSV currently holds the provisional Parrish-approximated shape as a PLACEHOLDER, normalized 1.0 at 280-290 nm",
+  "original_units": "dimensionless relative effectiveness (placeholder)",
+  "digitization_method": "none - placeholder copy of provisional shape pending licensed CIE 103/3 acquisition",
+  "wavelength_spacing_nm": 1,
+  "spectral_domain_nm": [
+    280,
+    400
+  ],
+  "interpolation_guidance": "log-space; strict production mode MUST refuse this resource until tier is canonical",
+  "checksum_sha256": "0eccdc6ff267038e90484b6c102cb7006c5ba10440b79607a49d88cadb7e0b3e",
+  "tier": "provisional",
+  "status": "PLACEHOLDER - exact CIE 103/3 values NOT included. Do not cite as CIE data. Strict mode must require the canonical spectrum.",
+  "limitations": "NOT CIE DATA. Placeholder only. Any use must be labeled provisional and versioned as action-spectrum-v1-provisional."
+}

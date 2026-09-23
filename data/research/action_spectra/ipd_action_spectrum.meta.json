@@ -1,0 +1,23 @@
+{
+  "resource": "ipd_action_spectrum.csv",
+  "source_title": "Immediate/persistent pigment darkening (IPD/PPD) action spectrum literature synthesis",
+  "authors": "Multiple (provisional synthesis; see PHOTOBIOLOGY_MODEL.md for primary references)",
+  "year": 2008,
+  "identifier": "provisional synthesis - no single canonical IPD standard",
+  "biological_endpoint": "existing-pigment oxidation/redistribution / persistent darkening (NOT new melanogenesis)",
+  "subject_population": "human skin with existing pigment; endpoint requires pigment to darken",
+  "wavelengths_tested_nm": "320-400 nm effective domain (values below 300 nm set to 0)",
+  "assessment_time_after_exposure": "minutes to hours after exposure (transient to persistent darkening, fades without new melanin)",
+  "normalization_convention": "1.0 at 340 nm peak; Gaussian sigma 28 nm",
+  "original_units": "dimensionless relative effectiveness",
+  "digitization_method": "analytic Gaussian model of the broad 320-400 nm IPD peak near 340 nm, not a digitization",
+  "wavelength_spacing_nm": 1,
+  "spectral_domain_nm": [
+    280,
+    400
+  ],
+  "interpolation_guidance": "linear interpolation acceptable (dynamic range < 2 orders); keep separate from melanogenesis channel",
+  "checksum_sha256": "ea1c05df061672d991fb4808db62889cdacbd1e5b6c8542e0b0fb0039a343ecf",
+  "tier": "provisional",
+  "limitations": "Optional second channel only. Must never merge into production TanScore without a justified response model. Broad literature shape, not a fitted standard."
+}

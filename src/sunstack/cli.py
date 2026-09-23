@@ -409,13 +409,29 @@ def _run_live_inner(
     tan_hourly = score_forecast(best_air, calibration_dir, cams_direct, sun_windows)
     tan_hourly = apply_outdoor_feasibility(tan_hourly, min_temp_f)
     tan_hourly = attach_fitzpatrick(tan_hourly, skin_type)
+    try:
+        from .doses import add_interval_doses as _add_hourly_doses
+
+        tan_hourly = _add_hourly_doses(tan_hourly)
+    except (ImportError, ValueError):
+        pass
+    # Strict photobiology gate: spectrum resource must evaluate.
+    from .validation import validate_action_spectra
+
+    photo_issues = validate_action_spectra(
+        strict_canonical=config.REQUIRE_CANONICAL_SPECTRUM and strict
+    )
+    for issue in photo_issues:
+        getattr(LOG, "error" if issue.severity == "ERROR" else "warning")(
+            "[%s] %s", issue.source, issue.message
+        )
     score_issues = validate_scored_hourly(tan_hourly)
     for issue in score_issues:
         getattr(LOG, "error" if issue.severity == "ERROR" else "warning")(
             "[%s] %s", issue.source, issue.message
         )
     if strict:
-        raise_on_errors(score_issues, "TanScore output validation failed")
+        raise_on_errors(photo_issues + score_issues, "TanScore output validation failed")
 
     tan_30 = build_30min_forecast(tan_hourly, hrrr15)
     tan_30 = attach_fitzpatrick(tan_30, skin_type)
@@ -481,16 +497,26 @@ def _run_live_inner(
         "successful_openmeteo_feeds": len(successes),
         "total_openmeteo_feeds": len(results),
         "direct_cams_used": not cams_direct.empty,
+        "cams_cycle": str(cams_direct["cams_cycle"].iloc[0]) if "cams_cycle" in cams_direct and len(cams_direct) else None,
         "calibration_available": (calibration_dir / "uva_uvb_models.joblib").exists(),
+        "calibration_tier": str(tan_hourly["tan_calibration_tier"].iloc[0]) if "tan_calibration_tier" in tan_hourly and len(tan_hourly) else None,
         "source_health": source_health,
-        "validation_issues": _issue_dicts(source_issues + cams_issues + score_issues),
+        "validation_issues": _issue_dicts(source_issues + cams_issues + photo_issues + score_issues),
+        "photobiology_model_version": "action-spectrum-v1",
+        "tan_score_model_version": config.TAN_SCORE_MODEL_VERSION,
+        "tan_dose_model_version": "action-spectrum-v1",
+        "global_reference_version": config.GLOBAL_MELANOGENIC_REFERENCE_VERSION,
+        "global_reference_e_mel_wm2": config.GLOBAL_MELANOGENIC_REFERENCE_WM2,
         "score_semantics": {
-            "absolute": "global physical melanogenic intensity; not locally normalized",
-            "local": "historical local seasonal percentile",
+            "absolute": "global physical melanogenic intensity (100*E_mel/E_mel_global_ref); not locally normalized",
+            "local": "historical local seasonal percentile (rebuilt with v4 scores)",
             "atmospheric": "local percentile at similar season and solar elevation",
-            "confidence": "forecast/model confidence",
+            "confidence": "forecast/model confidence (includes CAMS/Open-Meteo UVI agreement; never alters physics)",
             "overall": "weighted geometric merge of the four components, absolute-dominant/capped, then multiplied by outdoor feasibility",
             "overall_weights": config.OVERALL_SCORE_WEIGHTS,
+            "tandose": "model-defined action-spectrum-weighted cumulative delayed-melanogenesis exposure (melanogenic-effective J/m^2); NOT an internationally standardized dose",
+            "sed": "independent erythemal channel: integral(E_ery dt)/100; NEVER positively increases TanScore/Opportunity",
+            "uva_uvb_dose": "diagnostic physical broadband doses; NOT action-spectrum-weighted biological endpoints",
         },
         "hard_blocks": {
             "active_rain": True,
@@ -508,6 +534,17 @@ def _run_live_inner(
             "cams_direct_forecast": len(cams_direct),
         },
     }
+    try:
+        from .photobiology import model_metadata as _model_metadata
+        from .spectral import emulator_manifest as _emulator_manifest
+
+        summary.update(_model_metadata({
+            "global_reference_version": config.GLOBAL_MELANOGENIC_REFERENCE_VERSION,
+            "global_reference_e_mel_wm2": config.GLOBAL_MELANOGENIC_REFERENCE_WM2,
+        }))
+        summary.update(_emulator_manifest())
+    except (ImportError, ValueError, RuntimeError) as exc:
+        summary["photobiology_metadata_error"] = str(exc)
     (run_dir / "summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8"
     )
@@ -598,7 +635,7 @@ def doctor(root: Path, probe: bool = False) -> bool:
     return ok
 
 
-def debug_report(root: Path) -> None:
+def debug_report(root: Path, photobiology: bool = False) -> None:
     print("SunStack debug")
     latest = root / "latest"
     print("  latest:", latest.resolve() if latest.exists() else "MISSING")
@@ -612,6 +649,60 @@ def debug_report(root: Path) -> None:
         if manifest.exists():
             print("\nOpen-Meteo manifest:")
             print(manifest.read_text())
+    if photobiology:
+        debug_photobiology(root)
+
+
+def debug_photobiology(root: Path) -> None:
+    """Expose every photobiology internal: versions, spectra, E_mel, doses."""
+    import pandas as pd
+
+    print("\nSunStack photobiology debug")
+    try:
+        from .photobiology import load_action_spectrum, model_metadata
+        from .spectral import band_effective_weights, emulator_manifest
+
+        for stem in ("parrish_delayed_melanogenesis", "cie_erythema_reference",
+                     "ipd_action_spectrum"):
+            try:
+                spec = load_action_spectrum(stem)
+                print(f"  spectrum {stem}: tier={spec.tier} sha256={spec.sha256[:16]}... source={spec.source}")
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"  spectrum {stem}: ERROR {exc}")
+        w_uvb, w_uva = band_effective_weights()
+        print(f"  Tier-C band weights: w_uvb={w_uvb:.6f} w_uva={w_uva:.6f}")
+        print(f"  emulator: {emulator_manifest()}")
+        print(f"  metadata: {model_metadata()}")
+    except (ImportError, ValueError, RuntimeError) as exc:
+        print(f"  photobiology core ERROR: {exc}")
+    print(f"  global_reference: {config.GLOBAL_MELANOGENIC_REFERENCE_VERSION} "
+          f"E_mel={config.GLOBAL_MELANOGENIC_REFERENCE_WM2} W/m^2")
+    print(f"  tan_score_model={config.TAN_SCORE_MODEL_VERSION} "
+          f"require_canonical={config.REQUIRE_CANONICAL_SPECTRUM}")
+    latest = root / "latest"
+    hourly = latest / "tables" / "tan_forecast_hourly.parquet"
+    if hourly.exists():
+        try:
+            df = pd.read_parquet(hourly)
+            cols = ["time", "melanogenic_effective_irradiance_wm2", "uv_index",
+                    "uvi_openmeteo", "uvi_cams", "uvi_difference_percent",
+                    "tan_score_absolute_0_100", "legacy_absolute_tan_score_55_30_15",
+                    "erythemal_irradiance_wm2", "tan_dose_1h_j_m2", "sed_1h",
+                    "uva_dose_1h_j_m2", "uvb_dose_1h_j_m2", "spectral_backend",
+                    "spectral_tier", "tan_score_model_version", "cams_cycle",
+                    "tan_calibration_tier", "uv_input_disagree", "tan_forecast_confidence_0_100"]
+            show = [c for c in cols if c in df.columns]
+            print(f"  latest hourly photobiology columns present: {show}")
+            missing = [c for c in cols if c not in df.columns]
+            if missing:
+                print(f"  MISSING columns (stale run?): {missing}")
+            else:
+                day = df.head(6).loc[:, show].to_string(index=False)
+                print(day)
+        except (OSError, ValueError) as exc:
+            print(f"  hourly read ERROR: {exc}")
+    else:
+        print("  no latest hourly table")
 
 
 def _publish_site(site: config.Site) -> None:
@@ -813,6 +904,11 @@ def main() -> None:
     parser.add_argument(
         "--probe", action="store_true", help="Doctor: make real live API probe requests"
     )
+    parser.add_argument(
+        "--photobiology",
+        action="store_true",
+        help="Debug: include full photobiology internals (spectra, E_mel, doses, tiers)",
+    )
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--no-browser", action="store_true")
@@ -843,7 +939,7 @@ def main() -> None:
             if not doctor(root, probe=args.probe):
                 sys.exit(2)
         elif args.command == "debug":
-            debug_report(root)
+            debug_report(root, photobiology=args.photobiology)
         elif args.command in {"setup", "bootstrap"}:
             for site in sites:
                 bootstrap(

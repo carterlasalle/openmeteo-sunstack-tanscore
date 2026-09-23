@@ -216,6 +216,75 @@ def _daily_uv_peaks(hourly: pd.DataFrame) -> dict[str, dict[str, str]]:
     return peaks
 
 
+def _fmt_opt(value: object, fmt: str = "g", suffix: str = "") -> str | None:
+    try:
+        f = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(f):
+        return None
+    return f"{f:{fmt}}{suffix}"
+
+
+def build_interval_ics(
+    half_hour: pd.DataFrame,
+    run_tag: str,
+    site_slug: str | None = None,
+    tz_name: str | None = None,
+) -> str:
+    """Optional per-30-minute VEVENTs with interval doses (native vs interpolated labeled)."""
+    digits = "".join(c for c in run_tag if c.isdigit())
+    sequence = int(digits) if digits else 0
+    now = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    events = []
+    for _, row in half_hour.iterrows():
+        start = row.get("time") or row.get("dt")
+        if start is None or (isinstance(start, float) and pd.isna(start)):
+            continue
+        try:
+            end = (pd.to_datetime(str(start)) + pd.Timedelta(minutes=30)).isoformat()
+        except (ValueError, TypeError):
+            continue
+        bits = []
+        for label, col, fmt, suf in (
+            ("Abs", "tan_score_absolute_0_100", ".0f", "/100"),
+            ("Overall", "overall_tan_opportunity_0_100", ".0f", "/100"),
+            ("TanDose30", "tan_dose_30m_j_m2", "g", " J/m2 mel"),
+            ("SED30", "sed_30m", "g", ""),
+            ("UVA30", "uva_dose_30m_j_m2", "g", " J/m2"),
+            ("UVB30", "uvb_dose_30m_j_m2", "g", " J/m2"),
+            ("Conf", "tan_forecast_confidence_0_100", ".0f", ""),
+        ):
+            v = _fmt_opt(row.get(col), fmt, suf)
+            if v is not None:
+                bits.append(f"{label} {v}")
+        src = str(row.get("subhour_source") or "")
+        if src:
+            bits.append("native HRRR" if src.startswith("native_HRRR") else "interpolated hourly")
+        tier = str(row.get("spectral_tier") or row.get("spectral_backend") or "")
+        if tier:
+            bits.append(f"tier {tier}")
+        feas = str(row.get("outdoor_block_reason") or row.get("outdoor_flags") or "")
+        if feas:
+            bits.append(feas)
+        uid_scope = site_slug or "sunstack"
+        stamp = str(start).replace("-", "").replace(":", "").replace("T", "T")[:15]
+        events.append("\r\n".join([
+            _ics_fold("BEGIN:VEVENT"),
+            _ics_fold(f"UID:sunstack-30m-{uid_scope}-{stamp}@{uid_scope}"),
+            _ics_fold(f"DTSTAMP:{now}"),
+            _ics_fold(f"SEQUENCE:{sequence}"),
+            _ics_fold(f"DTSTART:{_ics_stamp(str(start), tz_name)}"),
+            _ics_fold(f"DTEND:{_ics_stamp(end, tz_name)}"),
+            _ics_fold(f"SUMMARY:{_ics_text('Sun ' + str(start)[11:16] + ' (' + (bits[0] if bits else 'update') + ')')}"),
+            _ics_fold(f"DESCRIPTION:{_ics_text('. '.join(bits))}"),
+        ]))
+    body = "\r\n".join(events)
+    head = ("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SunStack//TanScore//EN\r\n"
+            "CALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\nX-WR-CALNAME:SunStack 30-min doses")
+    return head + ("\r\n" + body if body else "") + "\r\nEND:VCALENDAR\r\n"
+
+
 def build_calendar_ics(
     daily: pd.DataFrame,
     run_tag: str,
@@ -227,7 +296,10 @@ def build_calendar_ics(
 
     UIDs are stable per date, so every rerun updates the same events in
     place instead of duplicating them in subscribed calendars. Pass the
-    hourly table for per-day UV peaks in the descriptions.
+    hourly table for per-day UV peaks in the descriptions. Descriptions carry
+    Absolute/Overall, window TanDose, daily TanDose/SED, UVA/UVB doses,
+    confidence, feasibility, and model tier (never an interpolated spectral
+    value presented as native resolution).
     """
     digits = "".join(c for c in run_tag if c.isdigit())
     sequence = int(digits) if digits else 0
@@ -242,6 +314,9 @@ def build_calendar_ics(
         peak = fnum(row, "day_overall_peak_0_100")
         peak_s = str(int(peak)) if pd.notna(peak) else "?"
         parts = [f"Overall {peak_s}/100"]
+        absp = _fmt_opt(row.get("day_absolute_peak_0_100"), ".0f", "/100")
+        if absp:
+            parts.append(f"Abs {absp}")
         uv = peaks.get(date, {})
         if uv.get("uvi"):
             when = f" at {uv['uvi_time']}" if uv.get("uvi_time") else ""
@@ -257,6 +332,18 @@ def build_calendar_ics(
             uva = fnum(row, "peak_predicted_uva_wm2")
             if pd.notna(uva):
                 parts.append(f"UVA {uva:g} W/m2")
+        for label, col, fmt, suf in (
+            ("TanDose window", "tan_dose_best_window_j_m2", "g", " J/m2 mel"),
+            ("TanDose day", "tan_dose_day_j_m2", "g", " J/m2 mel"),
+            ("SED window", "sed_best_window", "g", ""),
+            ("SED day", "sed_day_total", "g", ""),
+            ("UVA day", "uva_dose_day_j_m2", "g", " J/m2"),
+            ("UVB day", "uvb_dose_day_j_m2", "g", " J/m2"),
+            ("Confidence", "day_confidence_at_peak_0_100", ".0f", ""),
+        ):
+            v = _fmt_opt(row.get(col), fmt, suf)
+            if v is not None:
+                parts.append(f"{label} {v}")
         status = str(row.get("day_status") or "").strip()
         if status and status.lower() != "nan":
             parts.append(status)
@@ -351,6 +438,8 @@ details.debug pre{background:#f3ecdb;padding:12px;border-radius:8px;overflow:aut
 <p class="hero" id="hero">Finding the best light…</p>
 <p class="legend">Overall blends four readings: absolute strength worldwide, how rare it is for this location, air clarity, and forecast confidence. UV is the raw index; clear is the cloud-free value.</p>
 <div class="strip" id="strip" role="tablist" aria-label="Days"></div>
+<div class="daydetail" id="doses"><h3>Doses — intensity vs accumulated exposure</h3><div id="doserow" class="note">Loading doses…</div><div id="provenance" class="note"></div></div>
+<div class="daydetail" id="charts"><h3>Day charts (separate panels — SED is exposure, never “good”)</h3><canvas id="chartScore" width="640" height="150" style="width:100%;border:1px solid var(--line);border-radius:8px;background:#fffdf7"></canvas><canvas id="chartDose" width="640" height="120" style="width:100%;border:1px solid var(--line);border-radius:8px;background:#fffdf7;margin-top:8px"></canvas><canvas id="chartSed" width="640" height="120" style="width:100%;border:1px solid var(--line);border-radius:8px;background:#fffdf7;margin-top:8px"></canvas><div class="note">Instantaneous TanScore (top), cumulative TanDose melanogenic J/m² (middle), cumulative SED (bottom). Optional pigment-darkening shown in tables, not merged into TanScore.</div></div>
 <div class="sunfig" id="sunfigwrap"><svg id="sunfig" width="300" height="190" role="img" aria-label="Sun position and recline figure"></svg><div class="cap"><div id="suncap">Pick a time to see the sun position and posture.</div><label>Time <select id="sunsel"></select></label><div class="note">Legs stay flat, parallel to the ground — only the torso lifts. Click any table row to inspect that time. Guidance is geometry context, not a score.</div></div></div><div class="daydetail" id="detail"></div>
 <details class="debug"><summary>Source data</summary><pre id="debugtext">Loading…</pre></details>
 </div><script>
@@ -371,8 +460,10 @@ async function loadLocs(){try{let j=null;for(const u of ['./locations.json','/ap
 async function init(){await loadLocs();await loadData();}
 async function loadData(){show('Loading…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch(`/api/data?skin_type=${s}&min_temp=${m}&location=${encodeURIComponent(LOC)}`);const j=await r.json();if(!r.ok)throw new Error(j.detail||'Request failed');DATA=j;hide();render();}catch(e){show('Could not load forecast: '+e.message+'. Check the server log, then Refresh.','error');}}
 async function refreshData(){show('Calling live Open-Meteo and CAMS, rebuilding scores (takes minutes)…','info');try{const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value;const r=await fetch(`/api/refresh?skin_type=${s}&min_temp=${m}&location=${encodeURIComponent(LOC)}`,{method:'POST'});const j=await r.json();if(!r.ok)throw new Error(j.detail||'Refresh failed');show('Refresh complete.','info');await loadData();}catch(e){show('Refresh failed: '+e.message,'error');}}
-function exportVisibleCsv(){if(!DATA||!DATA.daily||!DATA.daily.length){show('No forecast data yet.','error');return;}const q=v=>(/[,"\n]/.test(String(v??''))?'"'+String(v??'').replace(/"/g,'""')+'"':String(v??''));const dl=(name,rows)=>{const csv=rows.map(r=>r.map(q).join(',')).join('\n');const b=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);};const hours=rowsFor(DATA.hourly,SEL),half=rowsFor(DATA.half_hour,SEL);const hHead=['time','uv_index','uv_index_clear_sky','predicted_uva_wm2','predicted_uvb_wm2','temperature_2m','apparent_temperature','wind_speed_10m','wind_gusts_10m','cloud_cover','precipitation_probability','direct_normal_irradiance_instant','overall_tan_opportunity_0_100','tan_score_absolute_0_100','local_tan_score_0_100','atmospheric_quality_percentile_0_100','tan_forecast_confidence_0_100','solar_elevation_deg','sun_compass','outdoor_block_reason'];dl(`sunstack-hourly-${SEL}.csv`,[hHead].concat(hours.map(x=>hHead.map(k=>x[k]))));const qHead=['time','uv_index','predicted_uva_wm2','overall_tan_opportunity_0_100','subhour_source'];dl(`sunstack-30min-${SEL}.csv`,[qHead].concat(half.map(x=>qHead.map(k=>x[k]))));const d=DATA.daily.find(x=>x.date===SEL);if(d){const dHead=['date','day_status','day_overall_peak_0_100','peak_uv_index','peak_temperature_f','day_low_temperature_f','day_high_temperature_f','day_low_feels_like_f','day_high_feels_like_f','day_peak_wind_mph','day_peak_gust_mph','day_absolute_peak_0_100','day_local_peak_0_100','best_window_start','best_window_end','best_hour_start','best_hour_score_0_100','blocked_half_hours'];dl(`sunstack-day-${SEL}.csv`,[dHead,[...dHead.map(k=>d[k])]]);}show(`Exported 3 CSVs for ${SEL} (hourly + 30-min + day).`,'info');}
+function exportVisibleCsv(){if(!DATA||!DATA.daily||!DATA.daily.length){show('No forecast data yet.','error');return;}const q=v=>(/[,"\n]/.test(String(v??''))?'"'+String(v??'').replace(/"/g,'""')+'"':String(v??''));const dl=(name,rows)=>{const csv=rows.map(r=>r.map(q).join(',')).join('\n');const b=new Blob([csv],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);};const hours=rowsFor(DATA.hourly,SEL),half=rowsFor(DATA.half_hour,SEL);const hHead=['time','uv_index','uv_index_clear_sky','predicted_uva_wm2','predicted_uvb_wm2','melanogenic_effective_irradiance_wm2','erythemal_irradiance_wm2','pigment_darkening_effective_irradiance','temperature_2m','apparent_temperature','wind_speed_10m','wind_gusts_10m','cloud_cover','precipitation_probability','direct_normal_irradiance_instant','overall_tan_opportunity_0_100','tan_score_absolute_0_100','legacy_absolute_tan_score_55_30_15','local_tan_score_0_100','atmospheric_quality_percentile_0_100','tan_forecast_confidence_0_100','tan_dose_1h_j_m2','sed_1h','uva_dose_1h_j_m2','uvb_dose_1h_j_m2','uvi_openmeteo','uvi_cams','uvi_difference_percent','spectral_tier','tan_score_model_version','solar_elevation_deg','sun_compass','outdoor_block_reason'];dl(`sunstack-hourly-${SEL}.csv`,[hHead].concat(hours.map(x=>hHead.map(k=>x[k]))));const qHead=['time','uv_index','predicted_uva_wm2','melanogenic_effective_irradiance_wm2','tan_dose_30m_j_m2','sed_30m','overall_tan_opportunity_0_100','subhour_source','spectral_tier'];dl(`sunstack-30min-${SEL}.csv`,[qHead].concat(half.map(x=>qHead.map(k=>x[k]))));const d=DATA.daily.find(x=>x.date===SEL);if(d){const dHead=['date','day_status','day_overall_peak_0_100','peak_uv_index','peak_temperature_f','day_low_temperature_f','day_high_temperature_f','day_low_feels_like_f','day_high_feels_like_f','day_peak_wind_mph','day_peak_gust_mph','day_absolute_peak_0_100','day_local_peak_0_100','best_window_start','best_window_end','best_hour_start','best_hour_score_0_100','tan_dose_best_window_j_m2','sed_best_window','tan_dose_day_j_m2','sed_day_total','uva_dose_day_j_m2','uvb_dose_day_j_m2','blocked_half_hours'];dl(`sunstack-day-${SEL}.csv`,[dHead,[...dHead.map(k=>d[k])]]);}show(`Exported 3 CSVs for ${SEL} (hourly + 30-min + day).`,'info');}
 function show(t,c){const m=document.getElementById('msg');m.textContent=t;m.className='status show '+c;}function hide(){document.getElementById('msg').className='status';}
+function renderDoses(){const d=DATA.daily.find(x=>x.date===SEL);const el=document.getElementById('doserow');if(!el||!d){return;}const half=rowsFor(DATA.half_hour,SEL);const nextHr=half.slice(0,2);const hrDose=nextHr.length?nextHr[nextHr.length-1]:null;el.innerHTML=`TanDose this 30 min <b>${f1(hrDose?hrDose.tan_dose_30m_j_m2:null)} J/m² mel</b> · next hour <b>${f1(d.best_hour_tan_dose_j_m2)} J/m²</b> · best window <b>${f1(d.tan_dose_best_window_j_m2)} J/m²</b> · today <b>${f1(d.tan_dose_day_j_m2)} J/m²</b> (${f1(d.tan_dose_day_reference_minutes)} ref-min) &nbsp;|&nbsp; SED 30m ${f2(hrDose?hrDose.sed_30m:null)} · window ${f2(d.sed_best_window)} · today ${f2(d.sed_day_total)} &nbsp;|&nbsp; UVA day ${f1(d.uva_dose_day_j_m2)} J/m² · UVB day ${f2(d.uvb_dose_day_j_m2)} J/m²`;const pv=document.getElementById('provenance');if(pv){const s=DATA.summary||{};pv.textContent=`Model ${s.tan_score_model_version||'action-spectrum-v1'} · spectrum tier ${s.photobiology_action_spectrum_tier||(DATA.hourly[0]||{}).photobiology_action_spectrum_tier||'provisional'} · spectral ${(DATA.hourly[0]||{}).spectral_backend||s.spectral_backend||'tierC-broadband-v1'} (${(DATA.hourly[0]||{}).spectral_tier||'C'}) · global ref ${s.global_reference_version||'global-mel-ref-v1-provisional'} (${s.global_reference_e_mel_wm2||1.6} W/m²) · CAMS ${s.cams_cycle||'?'} · UVI agree ${f1((DATA.hourly[0]||{}).uvi_difference_percent)} · calib ${(DATA.hourly[0]||{}).tan_calibration_tier||s.calibration_tier||'?'}`;}}
+function drawCharts(){const hours=rowsFor(DATA.hourly,SEL);if(!hours.length)return;const line=(id,vals,color,fill)=>{const c=document.getElementById(id);if(!c)return;const x=c.getContext('2d');const W=c.width,H=c.height;x.clearRect(0,0,W,H);const v=vals.map(z=>+z);const m=Math.max(...v.filter(Number.isFinite),1e-9);x.strokeStyle='#e2d7bf';x.beginPath();x.moveTo(0,H-1);x.lineTo(W,H-1);x.stroke();x.strokeStyle=color;x.lineWidth=2;x.beginPath();v.forEach((z,i)=>{const px=i/(Math.max(v.length-1,1))*W,py=H-4-(Number.isFinite(z)?z/m:0)*(H-10);i?x.lineTo(px,py):x.moveTo(px,py);});x.stroke();if(fill){x.lineTo(W,H);x.lineTo(0,H);x.closePath();x.globalAlpha=0.15;x.fillStyle=color;x.fill();x.globalAlpha=1;}};line('chartScore',hours.map(z=>z.tan_score_absolute_0_100),'#b25e00',true);let acc=0;const cumDose=hours.map(z=>{const t=+z.tan_dose_1h_j_m2;acc+=Number.isFinite(t)?t:0;return acc;});line('chartDose',cumDose,'#2e7d46',true);let accS=0;const cumSed=hours.map(z=>{const t=+z.sed_1h;accS+=Number.isFinite(t)?t:0;return accS;});line('chartSed',cumSed,'#7b4bd6',true);}
 function bestDay(){const d=(DATA.daily||[]).filter(x=>+x.day_overall_peak_0_100>0);d.sort((a,b)=>b.day_overall_peak_0_100-a.day_overall_peak_0_100);return d[0]||DATA.daily[0];}
 function render(){if(!DATA||!DATA.daily||!DATA.daily.length){show('No forecast data yet. Press Refresh forecast.','error');return;}
 document.getElementById('runline').textContent='Updated '+fmtTime((DATA.summary||{}).created_at)+' · '+(DATA.hourly||[]).length+' hourly rows · build '+(DATA.build_sha||'?')+' · absolute is worldwide scale, local is this location\u0027s percentile';
@@ -383,7 +474,7 @@ const b=bestDay();
 document.getElementById('strip').innerHTML=DATA.daily.map(d=>{const pk=+d.day_overall_peak_0_100||0;const pp=+d.peak_precip_probability_pct||0;const wet=pp>=40;return `<button class="daycell" role="tab" aria-selected="${d.date===SEL}" data-date="${d.date}"${wet?' style="border-color:#c0392b"':''}><div class="dow">${esc(shortDay(d.date))}</div><div class="dt">${esc(d.day_status||'')}${wet?` · <b style="color:#c0392b">${f0(pp)}% rain</b>`:''}</div><div class="pk" style="color:${wet?'#c0392b':scoreColor(pk)}">${f0(pk)}</div><div class="uv">UV ${f1(d.peak_uv_index??peakOf(rowsFor(DATA.hourly,d.date),'uv_index'))} · ${f1(d.day_low_temperature_f??dayLo(rowsFor(DATA.hourly,d.date)))}–${f1(d.day_high_temperature_f??dayHi(rowsFor(DATA.hourly,d.date)))}\u00b0</div><div class="uv">Feels ${f1(d.day_low_feels_like_f??dayLo(rowsFor(DATA.hourly,d.date),'apparent_temperature'))}–${f1(d.day_high_feels_like_f??dayHi(rowsFor(DATA.hourly,d.date),'apparent_temperature'))}\u00b0</div><div class="uv">Gust ${f0(d.day_peak_gust_mph??dayHi(rowsFor(DATA.hourly,d.date),'wind_gusts_10m'))}${(+d.day_peak_gust_mph>=25||+dayHi(rowsFor(DATA.hourly,d.date),'wind_gusts_10m')>=25)?` <b style="color:#c0392b">windy</b>`:''}</div><div class="uv">Abs ${f0(d.day_absolute_peak_0_100)} · Loc ${f0(d.day_local_peak_0_100)}</div><div class="bar"><i style="width:${Math.max(3,Math.min(100,pk))}%;background:${wet?'#c0392b':scoreColor(pk)}"></i></div></button>`;}).join('');
 document.getElementById('hero').innerHTML=b?`Best light <b>${dayName(b.date)} ${winStr(b.best_window_start,b.best_window_end)}</b> — overall ${f0(b.day_overall_peak_0_100)}, UV ${f1(b.peak_uv_index??peakOf(rowsFor(DATA.hourly,b.date),'uv_index'))}.`:'No usable light in this run.';
 document.querySelectorAll('.daycell').forEach(el=>el.addEventListener('click',()=>{SEL=el.dataset.date;render();}));
-renderDay();{const rh=rowsFor(DATA.hourly,SEL),rq=rowsFor(DATA.half_hour,SEL);renderSunFig(rh,rq);}document.getElementById('debugtext').textContent=JSON.stringify(DATA.summary||{},null,2);}
+renderDay();{const rh=rowsFor(DATA.hourly,SEL),rq=rowsFor(DATA.half_hour,SEL);renderSunFig(rh,rq);}try{renderDoses();drawCharts();}catch(e){}document.getElementById('debugtext').textContent=JSON.stringify(DATA.summary||{},null,2);}
 function sunFigState(){return {sel:null};}
 function compassDeg(c){const pts={N:0,NNE:22.5,NE:45,ENE:67.5,E:90,ESE:112.5,SE:135,SSE:157.5,S:180,SSW:202.5,SW:225,WSW:247.5,W:270,WNW:292.5,NW:315,NNW:337.5};return pts[String(c||'').toUpperCase()]??null;}
 function figXY(cx,cy,r,degUp,degFromNorth){const a=(degFromNorth-90)*Math.PI/180;const el=degUp*Math.PI/180;const rr=r*Math.cos(el);return [cx+rr*Math.cos(a),cy-rr*Math.sin(a)];}

@@ -163,9 +163,31 @@ HRRR_15MIN_STEPS = int(os.getenv("SUNSTACK_HRRR_15MIN_STEPS", "72"))
 
 # Absolute score is intentionally NOT local-normalized. These are reference anchors
 # for unusually strong natural terrestrial UV, not local South Bend maxima.
-ABSOLUTE_UVI_REFERENCE = 20.0
-ABSOLUTE_UVA_REFERENCE_WM2 = 60.0
-ABSOLUTE_TAN_WEIGHTS = {"uvi": 0.55, "uva": 0.30, "interaction": 0.15}
+# LEGACY (deprecated, retained for migration diagnostics only; never used in v4
+# production scoring): the 55/30/15 heuristic and its sqrt(UVIxUVA) interaction
+# are biologically indefensible (see docs/PHOTOBIOLOGY_MODEL.md: Keong 1990
+# photoaddition). Use absolute_tan_score_from_melanogenic_irradiance instead.
+ABSOLUTE_UVI_REFERENCE = 20.0  # LEGACY - do not use in v4 calculations
+ABSOLUTE_UVA_REFERENCE_WM2 = 60.0  # LEGACY - do not use in v4 calculations
+ABSOLUTE_TAN_WEIGHTS = {"uvi": 0.55, "uva": 0.30, "interaction": 0.15}  # LEGACY
+
+# v4 photobiology: fixed versioned global melanogenic reference (W/m^2).
+# Recalibration creates a new score model version; never silently change.
+GLOBAL_MELANOGENIC_REFERENCE_WM2 = float(os.getenv("SUNSTACK_GLOBAL_MEL_REF_WM2", "1.6"))
+GLOBAL_MELANOGENIC_REFERENCE_VERSION = os.getenv(
+    "SUNSTACK_GLOBAL_MEL_REF_VERSION", "global-mel-ref-v1-provisional"
+)
+TAN_SCORE_MODEL_VERSION = "action-spectrum-v1"
+REQUIRE_CANONICAL_SPECTRUM = (
+    os.getenv("SUNSTACK_REQUIRE_CANONICAL_SPECTRUM", "0").strip().lower()
+    not in {"0", "false", "no"}
+)
+# TanDose integration: gaps larger than this split the integral (never silent).
+TANDOSE_MAX_INTERP_GAP_S = float(os.getenv("SUNSTACK_TANDOSE_MAX_GAP_S", "10800"))
+# CAMS/Open-Meteo UVI disagreement: fractional disagreement above this reduces
+# confidence (physics untouched).
+UVI_DISAGREEMENT_WARN_FRAC = float(os.getenv("SUNSTACK_UVI_DISAGREE_FRAC", "0.35"))
+UVI_DISAGREEMENT_STRONG_FRAC = float(os.getenv("SUNSTACK_UVI_DISAGREE_STRONG_FRAC", "0.60"))
 LOCAL_DOY_WINDOW_DAYS = 21
 LOCAL_SOLAR_ELEVATION_WINDOW_DEG = 7.5
 SKIN_TILT_DEG = float(os.getenv("SUNSTACK_SKIN_TILT_DEG", "0"))

@@ -11,6 +11,51 @@ import pvlib.location
 from . import config
 from .calibrate import absolute_tan_score, num, scol
 
+
+def _recompute_v4_scores(frame: pd.DataFrame) -> pd.DataFrame:
+    """Recompute E_mel + v4 Absolute (+ erythemal + legacy diagnostic) in place.
+
+    Used after sub-hour broadband corrections. Wavelength-additive Tier-C
+    reconstruction; no sqrt interaction. Never an interpolated spectral value
+    presented as native resolution (callers retain subhour_source).
+    """
+    from .photobiology import (
+        absolute_tan_score_from_melanogenic_irradiance,
+        erythemal_irradiance_from_uvi,
+    )
+    from .spectral import melanogenic_from_broadband
+
+    out = frame
+    if {"predicted_uva_wm2", "predicted_uvb_wm2"}.issubset(out.columns):
+        e_mel = melanogenic_from_broadband(
+            pd.to_numeric(out["predicted_uva_wm2"], errors="coerce").fillna(0).to_numpy(),
+            pd.to_numeric(out["predicted_uvb_wm2"], errors="coerce").fillna(0).to_numpy(),
+        )
+        if "is_day" in out:
+            night = pd.to_numeric(out["is_day"], errors="coerce").fillna(1) == 0
+            e_mel = np.where(night.to_numpy(), 0.0, e_mel)
+        out["melanogenic_effective_irradiance_wm2"] = np.round(e_mel, 5)
+        out["tan_score_absolute_0_100"] = np.round(
+            absolute_tan_score_from_melanogenic_irradiance(
+                e_mel, float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2)
+            ), 1,
+        )
+        out["tan_score_model_version"] = config.TAN_SCORE_MODEL_VERSION
+    if "uv_index" in out:
+        out["erythemal_irradiance_wm2"] = np.round(
+            erythemal_irradiance_from_uvi(
+                pd.to_numeric(out["uv_index"], errors="coerce").fillna(0).to_numpy()
+            ), 5,
+        )
+    if {"uv_index", "predicted_uva_wm2"}.issubset(out.columns):
+        out["legacy_absolute_tan_score_55_30_15"] = np.round(
+            absolute_tan_score(
+                pd.to_numeric(out["uv_index"], errors="coerce"),
+                pd.to_numeric(out["predicted_uva_wm2"], errors="coerce"),
+            ), 1,
+        )
+    return out
+
 RAIN_CODES = set(range(51, 68)) | {80, 81, 82}
 SNOW_CODES = set(range(71, 78)) | {85, 86}
 THUNDER_CODES = {95, 96, 99}
@@ -183,6 +228,73 @@ def fitzpatrick_context(skin_type: int | None) -> dict[str, str | int | None]:
     }
 
 
+def personalization_context(
+    constitutive_ita_deg: float | None = None,
+    facultative_ita_deg: float | None = None,
+    melanin_index: float | None = None,
+    l_star: float | None = None,
+    pigment_protection_factor: float | None = None,
+    measured_med_sed: float | None = None,
+    measured_mmd: float | None = None,
+    measured_mmd_source_spectrum: str | None = None,
+    fitzpatrick_type: int | None = None,
+) -> dict[str, object]:
+    """Objective-first personalization context. Never alters environmental physics.
+
+    Precedence: measured/objective pigmentation > Fitzpatrick. No precise
+    personal MMD is computed from Fitzpatrick alone; Fitzpatrick-only
+    estimates are disabled by default (return None with wide-uncertainty note).
+    """
+    has_objective = any(
+        v is not None for v in (constitutive_ita_deg, facultative_ita_deg,
+                                melanin_index, l_star, pigment_protection_factor)
+    )
+    has_measured = measured_med_sed is not None or measured_mmd is not None
+    if has_measured:
+        basis = "MEASURED"
+    elif has_objective:
+        basis = "OBJECTIVE_ESTIMATE"
+    elif fitzpatrick_type is not None:
+        basis = "COARSE_ESTIMATE (Fitzpatrick-only, very wide uncertainty, disabled by default)"
+    else:
+        basis = "not personalized"
+    return {
+        "constitutive_ita_deg": constitutive_ita_deg,
+        "facultative_ita_deg": facultative_ita_deg,
+        "melanin_index": melanin_index,
+        "l_star": l_star,
+        "pigment_protection_factor": pigment_protection_factor,
+        "measured_med_sed": measured_med_sed,
+        "measured_mmd": measured_mmd,
+        "measured_mmd_source_spectrum": measured_mmd_source_spectrum,
+        "personalization_basis": basis,
+        "personalization_note": (
+            "Environmental TanDose is skin-type independent. "
+            "personal_mmd_fraction = TanDose / personal_mmd_equivalent_dose "
+            "only when a measured/compatible MMD exists; Fitzpatrick alone never yields a precise MMD."
+        ),
+    }
+
+
+def attach_personalization(
+    df: pd.DataFrame,
+    personal_mmd_j_m2: float | None = None,
+    basis: str | None = None,
+    dose_col: str = "tan_dose_1h_j_m2",
+) -> pd.DataFrame:
+    """Add personal_mmd_fraction without touching environmental columns."""
+    out = df.copy()
+    out["personalization_basis"] = basis or "not personalized"
+    if personal_mmd_j_m2 is not None and np.isfinite(personal_mmd_j_m2) and personal_mmd_j_m2 > 0:
+        dose = pd.to_numeric(out[dose_col], errors="coerce") if dose_col in out else np.nan
+        out["personal_mmd_fraction"] = (dose / personal_mmd_j_m2).round(3)
+        out["personal_mmd_equivalent_dose_j_m2"] = personal_mmd_j_m2
+    else:
+        out["personal_mmd_fraction"] = np.nan
+        out["personal_mmd_equivalent_dose_j_m2"] = np.nan
+    return out
+
+
 def attach_fitzpatrick(df: pd.DataFrame, skin_type: int | None) -> pd.DataFrame:
     out = df.copy()
     ctx = fitzpatrick_context(skin_type)
@@ -323,9 +435,14 @@ def build_30min_forecast(
                 changed
             ] * np.sqrt(ratio[changed])
             if "tan_score_absolute_0_100" in out:
-                out.loc[changed, "tan_score_absolute_0_100"] = absolute_tan_score(
-                    out.loc[changed, "uv_index"], out.loc[changed, "predicted_uva_wm2"]
-                )
+                sub = out.loc[changed].copy()
+                sub = _recompute_v4_scores(sub)
+                for col in ("melanogenic_effective_irradiance_wm2",
+                            "tan_score_absolute_0_100", "erythemal_irradiance_wm2",
+                            "legacy_absolute_tan_score_55_30_15",
+                            "tan_score_model_version"):
+                    if col in sub:
+                        out.loc[changed, col] = sub[col].to_numpy()
     # Discrete WMO weather codes / day-night flags must never be numerically interpolated.
     for discrete in ("weather_code", "is_day"):
         if discrete in h.columns:
@@ -413,13 +530,24 @@ def build_30min_forecast(
             if {"uv_index", "predicted_uva_wm2", "tan_score_absolute_0_100"}.issubset(
                 out.columns
             ):
-                out.loc[is_native, "tan_score_absolute_0_100"] = absolute_tan_score(
-                    out.loc[is_native, "uv_index"],
-                    out.loc[is_native, "predicted_uva_wm2"],
-                )
+                sub = out.loc[is_native].copy()
+                sub = _recompute_v4_scores(sub)
+                for col in ("melanogenic_effective_irradiance_wm2",
+                            "tan_score_absolute_0_100", "erythemal_irradiance_wm2",
+                            "legacy_absolute_tan_score_55_30_15",
+                            "tan_score_model_version"):
+                    if col in sub:
+                        out.loc[is_native, col] = sub[col].to_numpy()
 
     # Reapply merged opportunity after sub-hour corrections.
     out = apply_outdoor_feasibility(out)
+    # Trailing interval doses (TanDose/SED/UVA/UVB) via trapezoidal integration.
+    try:
+        from .doses import add_interval_doses as _add_doses
+
+        out = _add_doses(out)
+    except (ImportError, ValueError):
+        pass
     return out
 
 
@@ -497,6 +625,34 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                 best_hour_score = avg
                 best_hour = s.loc[i, "dt"]
         window = _best_contiguous_window(daylight)
+        # Window ranking stays intensity/opportunity/confidence based (see
+        # _best_contiguous_window): TanDose is reported as a consequence of the
+        # chosen window length, never as the ranking objective. Formula
+        # versioned as window-rank-v1.
+        try:
+            from .doses import day_totals as _day_totals
+            from .doses import window_dose as _window_dose
+
+            _day_row = _day_totals(g)
+            _day_match = _day_row.loc[_day_row["date"] == day]
+            _day_doses = _day_match.iloc[0].to_dict() if len(_day_match) else {}
+            _win_doses = _window_dose(g, window[0], window[1]) if window else {}
+        except (ImportError, ValueError, KeyError):
+            _day_doses, _win_doses = {}, {}
+        # Best-30m / best-hour interval doses from trailing columns when present.
+        def _col_at(col: str, stamp, _daylight: pd.DataFrame = daylight) -> float:
+            try:
+                hit = _daylight.loc[_daylight["dt"] == stamp, col]
+                return float(hit.iloc[0]) if len(hit) else float("nan")
+            except (KeyError, ValueError, IndexError):
+                return float("nan")
+        best_hour_end = (best_hour + pd.Timedelta(minutes=60)) if best_hour is not None else None
+        try:
+            from .doses import window_dose as _wd2
+
+            _hour_doses = _wd2(g, best_hour, best_hour_end) if best_hour is not None else {}
+        except (ImportError, ValueError, KeyError):
+            _hour_doses = {}
         rows.append(
             {
                 "date": day,
@@ -516,15 +672,31 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                     float(best.get("tan_forecast_confidence_0_100", np.nan)), 1
                 ),
                 "best_30m_start": best["dt"].isoformat(),
+                "best_30m_tan_dose_j_m2": _col_at("tan_dose_30m_j_m2", best["dt"]),
+                "best_30m_sed": _col_at("sed_30m", best["dt"]),
                 "best_hour_start": best_hour.isoformat()
                 if best_hour is not None
                 else None,
                 "best_hour_score_0_100": round(best_hour_score, 1)
                 if best_hour is not None
                 else np.nan,
+                "best_hour_tan_dose_j_m2": float(_hour_doses.get("tan_dose_best_window_j_m2", float("nan"))),
+                "best_hour_sed": float(_hour_doses.get("sed_best_window", float("nan"))),
                 "best_window_start": window[0].isoformat() if window else None,
                 "best_window_end": window[1].isoformat() if window else None,
                 "best_window_mean_0_100": round(window[2], 1) if window else np.nan,
+                "best_window_rank_formula": "window-rank-v1 (mean overall opportunity over contiguous eligible half-hours; dose reported, not ranked)",
+                "tan_dose_best_window_j_m2": float(_win_doses.get("tan_dose_best_window_j_m2", float("nan"))),
+                "sed_best_window": float(_win_doses.get("sed_best_window", float("nan"))),
+                "uva_dose_window_j_m2": float(_win_doses.get("uva_dose_window_j_m2", float("nan"))),
+                "uvb_dose_window_j_m2": float(_win_doses.get("uvb_dose_window_j_m2", float("nan"))),
+                "tan_dose_day_j_m2": float(_day_doses.get("tan_dose_day_j_m2", float("nan"))),
+                "tan_dose_day_reference_minutes": float(_day_doses.get("tan_dose_day_reference_minutes", float("nan"))),
+                "tan_dose_complete": bool(_day_doses.get("tan_dose_complete", True)),
+                "tan_dose_coverage_fraction": float(_day_doses.get("tan_dose_coverage_fraction", 1.0)),
+                "sed_day_total": float(_day_doses.get("sed_day_total", float("nan"))),
+                "uva_dose_day_j_m2": float(_day_doses.get("uva_dose_day_j_m2", float("nan"))),
+                "uvb_dose_day_j_m2": float(_day_doses.get("uvb_dose_day_j_m2", float("nan"))),
                 "peak_uv_index": round(float(best.get("uv_index", np.nan)), 2),
                 "peak_predicted_uva_wm2": round(
                     float(best.get("predicted_uva_wm2", np.nan)), 2

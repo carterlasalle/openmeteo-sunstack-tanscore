@@ -164,3 +164,33 @@ bootstrap. Identical code path per site, strict on, no fallback tiers —
 quality cannot regress by construction. 502s in the Sep-22 log are ADS
 queue saturation (Bad Gateway from the retrieve proxy, retried after 120s),
 not request-shape errors; the 400s are the unpublished newest cycle.
+
+## 2026-09-23 — Photobiology v4 (action-spectrum TanScore + TanDose)
+
+Replaces the heuristic 55/30/15 Absolute (55% UVI + 30% UVA + 15%
+sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
+
+- `E_mel = integral E_lambda S_mel dlambda` (Parrish-approximated provisional
+  spectrum, log-space interpolation, 280-400 nm @1 nm); Absolute =
+  100*E_mel/1.6 (global-mel-ref-v1-provisional, 99.9th percentile).
+- Tier-C broadband runtime mapping derives band weights from the spectrum
+  itself (w_uvb~0.57, w_uva~0.005); wavelength-additive by construction, no
+  sqrt interaction (Keong 1990 photoaddition, PMID 2103131; Wolber 2008 kept
+  as downstream-response evidence only).
+- TanDose = trapezoidal integral of E_mel with gap splitting
+  (SUNSTACK_TANDOSE_MAX_GAP_S); SED = integral(E_ery)/100 independent channel
+  that never increases scores; UVA/UVB physical doses diagnostic only.
+- Direct CAMS UVBED/clear-sky/downward UV plus all spectral aerosol optics
+  (340/355/380/400) propagated; CAMS UVI = 40*UVBED; CAMS/OM disagreement
+  reduces confidence only. Validation on the Palisades latest run shows a
+  ~4-5 h CAMS-vs-OM diurnal phase offset (MAE ~3.2 UVI) under investigation;
+  the disagreement penalty is the correct architectural response.
+- Local reference rebuilt with v4 scores (legacy kept as diagnostic column
+  `legacy_absolute_tan_score_55_30_15` for one migration version).
+- Human-literature aggregates encoded in data/research/exposure_studies.json
+  (no fabricated subject data); TanResponse stays interface-only until a
+  fitted model beats cumulative dose on held-out studies.
+- Primary references: Parrish 1982 (PMID 7122713), Keong 1990 (PMID 2103131),
+  Ravnbak & Wulf 2007 (PMID 17256147), Miller 2008 (PMID 18616777), Ravnbak
+  2009 (PMID 19688146), Ravnbak 2010 (PMID 20584251), Wolber 2008
+  (PMID 18627527), MITF timer mechanistic prior (PMID 30401431).
