@@ -1958,3 +1958,14 @@ def test_no_confidence_input_is_nan(tmp_path):
 
     out = score_forecast(_best_air(), Path(tmp_path), None, None)
     assert out["tan_forecast_confidence_0_100"].isna().all()
+
+
+def test_best_tan_windows_ranks_by_overall_when_present():
+    from sunstack.tanscore import best_tan_windows
+
+    out = best_tan_windows(pd.DataFrame({
+        "is_day": [1, 1, 1],
+        "overall_tan_opportunity_0_100": [10.0, 60.0, 30.0],
+        "tan_score_absolute_0_100": [5.0, 50.0, 25.0],
+    }))
+    assert out["tan_window_rank_value"].tolist() == [60.0, 30.0, 10.0]
