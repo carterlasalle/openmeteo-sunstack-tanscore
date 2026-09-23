@@ -443,3 +443,15 @@ def test_doctor_flags_stale_local_reference(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "STALE" in out and "rebuild_v4_references" in out
     assert _config.TAN_SCORE_MODEL_VERSION in out
+
+
+def test_tierAB_claim_without_manifest_fails_loud(tmp_path, monkeypatch):
+    import pytest
+
+    import sunstack.spectral as _spectral
+    from sunstack.tanscore import score_forecast
+
+    monkeypatch.setattr(_spectral, "spectral_tier_for_row",
+                        lambda *a, **k: "B")
+    with pytest.raises(RuntimeError, match="no emulator manifest"):
+        score_forecast(_best_air(), Path(tmp_path), None, _confidence())

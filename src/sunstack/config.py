@@ -182,6 +182,10 @@ REQUIRE_CANONICAL_SPECTRUM = (
     os.getenv("SUNSTACK_REQUIRE_CANONICAL_SPECTRUM", "0").strip().lower()
     not in {"0", "false", "no"}
 )
+# Tier-B emulator manifest path. None means no validated emulator is wired:
+# any claim of tier A/B then fails loudly in score_forecast instead of
+# silently scoring as Tier C while labeled otherwise.
+TIERB_MANIFEST_PATH = os.getenv("SUNSTACK_TIERB_MANIFEST") or None
 # TanDose integration: gaps larger than this split the integral (never silent).
 TANDOSE_MAX_INTERP_GAP_S = float(os.getenv("SUNSTACK_TANDOSE_MAX_GAP_S", "10800"))
 # CAMS/Open-Meteo UVI disagreement: fractional disagreement above this reduces

@@ -449,6 +449,22 @@ def score_forecast(
     out["global_reference_e_mel_wm2"] = global_ref
     out["spectral_backend"] = SPECTRAL_BACKEND_VERSION
     out["spectral_tier"] = spectral_tier_for_row()
+    if str(out["spectral_tier"].iloc[0]) in ("A", "B"):
+        # No silent tier inflation: reference/emulator quality may only be
+        # claimed behind a validated manifest (SUNSTACK_TIERB_MANIFEST).
+        from .spectral import validate_tierB_manifest
+
+        if not config.TIERB_MANIFEST_PATH:
+            raise RuntimeError(
+                "ERROR spectral: tier A/B claimed with no emulator manifest "
+                "configured (SUNSTACK_TIERB_MANIFEST unset). Build the corpus "
+                "with scripts/build_spectral_corpus.py first."
+            )
+        import json as _json
+        from pathlib import Path as _Path
+
+        validate_tierB_manifest(
+            _json.loads(_Path(config.TIERB_MANIFEST_PATH).read_text(encoding="utf-8")))
     # Temporary migration diagnostic: legacy value for comparison reports only.
     # Never used in ranking or UI headline scores after validation.
     out["legacy_absolute_tan_score_55_30_15"] = np.round(

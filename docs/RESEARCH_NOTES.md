@@ -416,3 +416,17 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   loud STALE/unknown warning for mismatched local-reference versions.
   Verified against live workspace data and pinned with tests; no CI workflow
   changes (test-pinned workflow files deliberately untouched).
+
+## 2026-09-23 (follow-up 16) — Tier-B gate wired + reskin on v4 data
+
+- `validate_tierB_manifest` had no production caller (tested but dead). It is
+  now enforced in `score_forecast`: any tier A/B claim requires
+  `SUNSTACK_TIERB_MANIFEST` to point at a manifest passing the contract;
+  with it unset (current state), claiming A/B raises loudly instead of
+  scoring Tier-C physics under a Tier-B label. Pinned with a monkeypatched
+  tier test. `doctor --probe` also smoke-tested live (3/3 feeds OK).
+- Reskin proven on v4-shaped data: reskinned the live South Bend export to
+  scratch (run tag preserved, build SHA restamped to current commit) and
+  executed the page — v4 provenance plus real dose values render. A missing
+  second site page fails the reskin loudly (FileNotFoundError, non-zero
+  exit), which is correct: reskin Fukushima-folds nothing.
