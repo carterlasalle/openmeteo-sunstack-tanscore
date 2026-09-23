@@ -25,7 +25,11 @@ quantity.
 ## Integration rules
 
 - Trapezoidal time integration over **actual timestamps**, never
-  value * nominal interval.
+  value * nominal interval. Samples are instantaneous: window ends are
+  inclusive, so a one-hour window on a 30-minute grid integrates two full
+  legs (E × 3600 s at constant irradiance).
+- Integration is order-invariant (inputs sort stably by timestamp) and a
+  single unparseable timestamp degrades only its own row, never the frame.
 - Gaps larger than `SUNSTACK_TANDOSE_MAX_GAP_S` (default 10800 s) split the
   integral; the output marks `tan_dose_complete = false` with
   `tan_dose_coverage_fraction` (covered seconds / total span). Missing hours
