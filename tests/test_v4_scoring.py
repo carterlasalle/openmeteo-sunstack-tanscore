@@ -345,3 +345,66 @@ def test_local_reference_staleness_is_loud(tmp_path):
     out2 = score_forecast(_best_air(), caldir, None, _confidence())
     assert not out2["local_reference_stale"].any()
     assert out2["local_reference_version"].unique().tolist() == ["action-spectrum-v1"]
+
+
+def test_half_hour_keeps_constants_without_fabricating_observations():
+    from sunstack.opportunity import build_30min_forecast
+
+    hourly = pd.DataFrame({
+        "time": ["2026-06-21T11:00", "2026-06-21T12:00", "2026-06-21T13:00"],
+        "temperature_2m": [78.0, 82.0, 80.0],
+        "shortwave_radiation_instant": [600.0, 800.0, 700.0],
+        "predicted_uva_wm2": [33.0, 44.0, 38.5],
+        "predicted_uvb_wm2": [0.5, 0.65, 0.6],
+        "uv_index": [5.0, 6.5, 6.0],
+        "overall_tan_opportunity_0_100": [28.0, 37.0, 33.0],
+        "tan_score_absolute_0_100": [28.5, 37.3, 33.8],
+        "melanogenic_effective_irradiance_wm2": [0.455, 0.597, 0.541],
+        "erythemal_irradiance_wm2": [0.125, 0.1625, 0.15],
+        "spectral_tier": ["C", "C", "C"],
+        "tan_score_model_version": ["action-spectrum-v1"] * 3,
+        "cams_cycle": ["2026-06-21T00:00Z"] * 3,
+        "uvi_cams": [5.1, np.nan, np.nan],  # CAMS horizon ends: must stay NaN
+    })
+    out = build_30min_forecast(hourly, None)
+    half = out.loc[out["time"] == "2026-06-21T11:30"].iloc[0]
+    assert half["spectral_tier"] == "C"
+    assert half["tan_score_model_version"] == "action-spectrum-v1"
+    assert half["cams_cycle"] == "2026-06-21T00:00Z"
+    late = out.loc[out["time"] == "2026-06-21T13:00"].iloc[0]
+    assert pd.isna(late["uvi_cams"])  # never forward-filled into fabrication
+
+
+def test_missing_inputs_integrate_as_unknown_not_zero():
+    from sunstack.doses import add_interval_doses, day_totals
+
+    frame = pd.DataFrame({
+        "time": ["2026-06-21T12:00", "2026-06-21T12:30", "2026-06-21T13:00"],
+        "uv_index": [5.0, 6.0, 5.5],
+    })
+    dosed = add_interval_doses(frame)  # no melanogenic column at all
+    assert dosed["tan_dose_30m_j_m2"].isna().all()
+    assert not dosed["tan_dose_30m_complete"].any()
+    # But the erythemal path (UVI present) still integrates: no needless degrade.
+    assert dosed.loc[2, "sed_30m"] > 0
+    assert bool(dosed.loc[2, "sed_30m_complete"])
+    days = day_totals(
+        frame.assign(time_utc=pd.to_datetime(frame["time"], utc=True)))
+    assert pd.isna(days.loc[0, "tan_dose_day_j_m2"])
+    assert not bool(days.loc[0, "tan_dose_complete"])
+    assert days.loc[0, "sed_day_total"] > 0
+
+
+def test_primitive_with_no_valid_samples_is_unknown():
+    from sunstack.photobiology import integrate_band_dose, integrate_tandose
+
+    t = pd.Series(pd.to_datetime(["2026-06-21T12:00Z"], utc=True))
+    out = integrate_tandose(t, pd.Series([np.nan]))
+    assert pd.isna(out["tan_dose_melanogenic_j_m2"])
+    assert out["tan_dose_complete"] is False
+    assert out["tan_dose_coverage_fraction"] == 0.0
+    solo = integrate_band_dose(
+        pd.Series(pd.to_datetime(["2026-06-21T12:00Z", "2026-06-21T13:00Z"], utc=True)),
+        pd.Series([0.4, np.nan]))
+    assert solo["dose_j_m2"] == 0.0  # lone finite sample spans zero time
+    assert solo["complete"] is False  # ...but cannot claim a complete window

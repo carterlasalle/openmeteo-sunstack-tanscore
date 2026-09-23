@@ -379,6 +379,19 @@ def build_30min_forecast(
     )
     for col in bool_cols:
         base[col] = numeric[col].reindex(union_idx).sort_index().ffill().reindex(idx)
+    # Never extrapolate an observation beyond its hourly valid span. pandas
+    # time-interpolation forward-fills trailing NaNs, which would otherwise
+    # fabricate horizon-limited fields (e.g. every CAMS column flatlined
+    # across the 9 days past the 5-day CAMS horizon). Stamps outside each
+    # column's [first_valid, last_valid] hourly span revert to NaN; interior
+    # gaps keep their time interpolation, which is the honest middle.
+    for col in base.columns:
+        hseries = numeric[col].dropna() if col in numeric.columns else None
+        if hseries is None or hseries.empty:
+            base[col] = np.nan
+            continue
+        lo, hi = hseries.index.min(), hseries.index.max()
+        base.loc[(base.index < lo) | (base.index > hi), col] = np.nan
     base = base.reindex(columns=[c for c in numeric.columns if c in base.columns])
     base.index.name = "dt"
     out = base.reset_index()
@@ -454,6 +467,23 @@ def build_30min_forecast(
                 .reindex(idx)
             )
             out[discrete] = nearest.to_numpy()
+    # Run-constant model metadata is data we already have: carry it forward
+    # instead of degrading to missing. Only genuinely constant fields qualify
+    # — time-varying quantities (uvi_cams, CAMS irradiances, differences) must
+    # stay NaN where unobserved, never forward-filled into fabrication.
+    for constant in ("spectral_tier", "spectral_backend", "tan_score_model_version",
+                     "tan_dose_model_version", "global_reference_version",
+                     "photobiology_action_spectrum_tier", "tan_calibration_tier",
+                     "local_reference_version", "cams_cycle"):
+        if constant in h.columns:
+            out[constant] = (
+                h[constant]
+                .reindex(h.index.union(idx))
+                .sort_index()
+                .ffill()
+                .reindex(idx)
+                .to_numpy()
+            )
 
     # Guidance labels are pure functions of solar geometry, which interpolates
     # exactly like any numeric field above. Recompute at :30 stamps instead of

@@ -341,3 +341,20 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   UVA/UVB-ratio bins — the direct mechanism test — confirm strongly in the
   same data (+3.1 most UVB-rich to -2.9 most UVA-rich), so the report says
   exactly that instead of laundering a weak proxy into a pass.
+
+## 2026-09-23 (follow-up 9) — degrade loud, never needlessly, never silently
+
+- Missing inputs now integrate as UNKNOWN (NaN + incomplete) at every level:
+  `_trapezoidal_dose` returns NaN/False/0.0 on zero valid samples and
+  0.0/False/0.0 on a lone sample; `add_interval_doses` no longer `fillna(0)`s
+  absent irradiance (only measured night zeros integrate as zero);
+  `day_totals`/`window_dose` treat missing columns as NaN; interior NaN
+  samples are skipped as absent rather than zeroed. SED still derives from
+  UVI when erythemal is absent (data we have), via shared `_ery_or_uvi`.
+- No-extrapolation rule in the 30-min resample: pandas time-interpolation
+  forward-fills trailing NaNs, which flatlined every CAMS column across the
+  9 days past the 5-day CAMS horizon. Stamps outside each column's hourly
+  valid span now revert to NaN; interior interpolation kept. Run-constant
+  tier/version metadata (spectral_tier, model versions, cams_cycle, …) is
+  carried forward instead — data we have, kept; observations we lack, never
+  fabricated. Time-varying CAMS fields are explicitly excluded from carrying.

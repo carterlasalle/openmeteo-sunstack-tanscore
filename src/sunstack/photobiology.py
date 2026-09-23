@@ -216,8 +216,14 @@ def _trapezoidal_dose(
     t = t.iloc[order].reset_index(drop=True)
     v = v[order]
     valid = np.isfinite(v)
-    if valid.sum() < 2:
-        return 0.0, bool(valid.sum() == 0 or len(v) <= 1), 0.0 if len(v) == 0 else 1.0
+    n_valid = int(valid.sum())
+    if n_valid == 0:
+        # No valid samples: the dose is UNKNOWN (NaN), never zero.
+        return float("nan"), False, 0.0
+    if n_valid == 1:
+        # A lone sample spans zero time (dose 0) but cannot claim a complete
+        # window: coverage is undefined, so mark incomplete with zero coverage.
+        return 0.0, False, 0.0
     secs = _epoch_seconds(t)
     dose = 0.0
     covered = 0.0
@@ -236,7 +242,6 @@ def _trapezoidal_dose(
         dose += 0.5 * (v[a] + v[b]) * dt
         covered += dt
     coverage = (covered / total_span) if total_span > 0 else 1.0
-    # Single isolated valid point with no span: dose 0 but coverage 1 if no gap.
     return float(max(dose, 0.0)), bool(complete), float(np.clip(coverage, 0, 1))
 
 
