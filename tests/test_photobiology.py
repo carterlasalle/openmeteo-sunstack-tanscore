@@ -6,6 +6,8 @@ confidence separation.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -271,3 +273,85 @@ def test_personalization_never_alters_environmental_physics():
     assert "COARSE_ESTIMATE" in str(ctx["personalization_basis"])
     assert personalization_context(
         measured_mmd=500.0)["personalization_basis"] == "MEASURED"
+
+
+def _write_spectrum(tmpdir, stem, waves, effs):
+    import hashlib
+    import json as _json
+
+    csv = tmpdir / f"{stem}.csv"
+    csv.write_text("wavelength_nm,effectiveness\n" + "\n".join(
+        f"{w},{e}" for w, e in zip(waves, effs)) + "\n", encoding="utf-8")
+    (tmpdir / f"{stem}.meta.json").write_text(_json.dumps({
+        "resource": f"{stem}.csv",
+        "source_title": "synthetic", "authors": "test", "year": 2026,
+        "identifier": "test", "biological_endpoint": "test",
+        "subject_population": "test", "wavelengths_tested_nm": "test",
+        "assessment_time_after_exposure": "test",
+        "normalization_convention": "test", "original_units": "test",
+        "digitization_method": "test",
+        "checksum_sha256": hashlib.sha256(csv.read_bytes()).hexdigest(),
+        "tier": "provisional", "limitations": "test",
+    }), encoding="utf-8")
+
+
+def test_action_spectrum_strict_validation_rejects_bad_files(tmp_path, monkeypatch):
+    import pytest
+
+    import sunstack.photobiology as pb
+
+    monkeypatch.setattr(pb, "_spectra_dir", lambda: Path(tmp_path))
+    pb._cache.clear()
+    try:
+        full = list(range(280, 401))
+        ones = [1.0] * len(full)
+        _write_spectrum(tmp_path, "bad_neg", full,
+                        [1.0 if w != 350 else -0.5 for w in full])
+        with pytest.raises(ValueError, match="negative effectiveness"):
+            pb.load_action_spectrum("bad_neg")
+        _write_spectrum(tmp_path, "bad_order", full[::-1], ones)
+        with pytest.raises(ValueError, match="monotonic"):
+            pb.load_action_spectrum("bad_order")
+        _write_spectrum(tmp_path, "bad_dup", full + [400], ones + [1.0])
+        with pytest.raises(ValueError, match="duplicated"):
+            pb.load_action_spectrum("bad_dup")
+        short = list(range(300, 401))
+        _write_spectrum(tmp_path, "bad_range", short, [1.0] * len(short))
+        with pytest.raises(ValueError, match="must cover"):
+            pb.load_action_spectrum("bad_range")
+        missing = tmp_path / "bad_missing.csv"
+        assert not missing.exists()
+        with pytest.raises(FileNotFoundError, match="unavailable"):
+            pb.load_action_spectrum("bad_missing")
+    finally:
+        pb._cache.clear()
+
+
+def test_impossible_spectral_irradiance_fails_loudly():
+    import pytest
+
+    from sunstack.photobiology import melanogenic_effective_irradiance
+
+    waves = np.arange(280, 401, dtype=float)
+    good = np.full_like(waves, 0.1)
+    assert melanogenic_effective_irradiance(good, waves) > 0
+    with pytest.raises(ValueError, match="impossible values"):
+        melanogenic_effective_irradiance(-good, waves)
+    with pytest.raises(ValueError, match="share shape"):
+        melanogenic_effective_irradiance(good[:-1], waves)
+
+
+def test_run_manifest_metadata_contract():
+    from sunstack.photobiology import model_metadata
+    from sunstack.spectral import emulator_manifest
+
+    meta = model_metadata({"global_reference_version": "v",
+                           "global_reference_e_mel_wm2": 1.6})
+    for key in ("photobiology_model_version", "tan_score_model_version",
+                "tan_dose_model_version", "action_spectrum_name",
+                "action_spectrum_sha256", "action_spectrum_source"):
+        assert key in meta, key
+    em = emulator_manifest()
+    for key in ("spectral_backend", "spectral_emulator_version",
+                "spectral_training_manifest_sha256", "tierB_reserved_inputs"):
+        assert key in em, key

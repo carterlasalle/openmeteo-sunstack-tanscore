@@ -83,6 +83,18 @@ def validate_scored_hourly(df: pd.DataFrame) -> list[ValidationIssue]:
         tiers = set(pd.Series(df["spectral_tier"]).dropna().astype(str).unique().tolist())
         if tiers - {"A", "B", "C"}:
             issues.append(ValidationIssue("ERROR", "photobiology", f"invalid spectral tier: {sorted(tiers)}"))
+    if "local_reference_stale" in df:
+        try:
+            if bool(pd.Series(df["local_reference_stale"]).fillna(True).any()):
+                versions = pd.Series(
+                    df.get("local_reference_version")).dropna().astype(str).unique().tolist()
+                issues.append(ValidationIssue(
+                    "WARN", "local_reference",
+                    f"local percentiles not from the current score model "
+                    f"(versions seen: {versions or ['unknown']}); rebuild with "
+                    f"scripts/rebuild_v4_references.py"))
+        except (TypeError, ValueError):
+            pass
     return issues
 
 

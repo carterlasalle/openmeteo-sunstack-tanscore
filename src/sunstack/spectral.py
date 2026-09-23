@@ -214,6 +214,37 @@ def emulator_manifest(spectral_backend: str = SPECTRAL_BACKEND_VERSION) -> dict[
             "Tier C derives band weights from the action spectrum itself "
             "(uniform intra-band Tier-C approximation). No hand tuning."
         ),
+        # §7 consumer contract: every direct-CAMS field carried by
+        # _cams_features but not consumed by Tier C is a reserved Tier-B
+        # emulator input. Nothing is fetched merely to be left unused; the
+        # corpus design (scripts/build_spectral_corpus.py RANGES) spans each
+        # of these dimensions.
+        "tierB_reserved_inputs": {
+            "cams_aod_340": "aod340",
+            "cams_aod_355": "aod355 (via angstrom)",
+            "cams_aod_380": "aod380 (via angstrom)",
+            "cams_aod_400": "aod400 (via angstrom)",
+            "cams_abs_aod_340": "absorption AOD (via ssa340 + aod340)",
+            "cams_abs_aod_355": "absorption AOD (via angstrom)",
+            "cams_abs_aod_380": "absorption AOD (via angstrom)",
+            "cams_abs_aod_400": "absorption AOD (via angstrom)",
+            "cams_ssa_340": "ssa340",
+            "cams_ssa_355": "ssa340 (spectral slope via angstrom)",
+            "cams_ssa_380": "ssa340 (spectral slope via angstrom)",
+            "cams_ssa_400": "ssa340 (spectral slope via angstrom)",
+            "cams_asymmetry_340": "asymmetry",
+            "cams_asymmetry_355": "asymmetry",
+            "cams_asymmetry_380": "asymmetry",
+            "cams_asymmetry_400": "asymmetry",
+            "cams_ozone_du": "ozone_du",
+            "cams_water_vapor": "water_vapor_kg_m2",
+            "cams_cloud_liquid_water": "cloud_liquid_g_m2",
+            "cams_cloud_ice_water": "cloud_ice_g_m2",
+            "cams_total_cloud": "total_cloud_cover",
+            "cams_forecast_albedo": "albedo",
+            "cams_erythemal_irradiance_wm2": "validation target (held-out)",
+            "cams_uv_index": "validation target (held-out)",
+        },
     }
 
 

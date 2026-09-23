@@ -98,12 +98,12 @@ def load_action_spectrum(stem: str = "parrish_delayed_melanogenesis") -> ActionS
         raise ValueError(f"ERROR photobiology: {stem} contains NaN values")
     if bool((eff < 0).any()):
         raise ValueError(f"ERROR photobiology: {stem} has negative effectiveness")
+    if len(np.unique(np.round(waves, 6))) != len(waves):
+        raise ValueError(f"ERROR photobiology: {stem} has duplicated wavelengths")
     if bool((np.diff(waves) <= 0).any()):
         raise ValueError(
             f"ERROR photobiology: {stem} wavelengths must be strictly monotonic increasing"
         )
-    if len(np.unique(np.round(waves, 6))) != len(waves):
-        raise ValueError(f"ERROR photobiology: {stem} has duplicated wavelengths")
     lo, hi = REQUIRED_DOMAIN_NM
     if waves.min() > lo + 1e-9 or waves.max() < hi - 1e-9:
         raise ValueError(

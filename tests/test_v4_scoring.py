@@ -284,3 +284,64 @@ def test_absolute_ignores_location_while_local_uses_it():
     })
     assert (add_local_scores(fc, ref_low).loc[0, "local_tan_score_0_100"] >
             add_local_scores(fc, ref_high).loc[0, "local_tan_score_0_100"])
+
+
+def test_pigment_channel_never_enters_opportunity():
+    from sunstack.opportunity import apply_outdoor_feasibility
+
+    base = pd.DataFrame([{
+        "tan_score_absolute_0_100": 40.0, "local_tan_score_0_100": 50.0,
+        "atmospheric_quality_percentile_0_100": 50.0,
+        "tan_forecast_confidence_0_100": 50.0,
+        "temperature_2m": 78.0, "apparent_temperature": 78.0,
+        "rain": 0.0, "showers": 0.0, "snowfall": 0.0, "precipitation": 0.0,
+        "precipitation_probability": 0.0, "weather_code": 0,
+        "wind_speed_10m": 5.0, "relative_humidity_2m": 50.0,
+        "pigment_darkening_effective_irradiance": 0.5,
+        "pigment_darkening_dose_1h_j_m2": 1800.0,
+    }])
+    boosted = base.copy()
+    boosted["pigment_darkening_effective_irradiance"] *= 10.0
+    boosted["pigment_darkening_dose_1h_j_m2"] *= 10.0
+    a = apply_outdoor_feasibility(base)
+    b = apply_outdoor_feasibility(boosted)
+    assert (a["overall_tan_opportunity_0_100"].to_numpy() ==
+            b["overall_tan_opportunity_0_100"].to_numpy()).all()
+    assert (a["overall_components_unblocked_0_100"].to_numpy() ==
+            b["overall_components_unblocked_0_100"].to_numpy()).all()
+
+
+def test_tierB_contract_covers_every_carried_cams_field(tmp_path):
+    from sunstack.spectral import emulator_manifest
+
+    contract = emulator_manifest()["tierB_reserved_inputs"]
+    for key in ("cams_aod_355", "cams_aod_400", "cams_abs_aod_380",
+                "cams_ssa_355", "cams_asymmetry_400", "cams_water_vapor",
+                "cams_cloud_liquid_water", "cams_cloud_ice_water",
+                "cams_total_cloud", "cams_erythemal_irradiance_wm2"):
+        assert key in contract, key
+    # And the scored frame actually emits every contracted column.
+    out = score_forecast(_best_air(), Path(tmp_path),
+                         _cams([0.125, 0.1625, 0.15], [0.15, 0.175, 0.1625]),
+                         _confidence())
+    missing = [k for k in contract if k not in out.columns]
+    assert missing == [], missing
+
+
+def test_local_reference_staleness_is_loud(tmp_path):
+    import json
+
+    from sunstack.validation import validate_scored_hourly
+
+    out = score_forecast(_best_air(), Path(tmp_path), None, _confidence())
+    assert out["local_reference_stale"].all()  # no version file in tmp caldir
+    warns = [i for i in validate_scored_hourly(out)
+             if i.source == "local_reference"]
+    assert warns and all(w.severity == "WARN" for w in warns)
+    caldir = Path(tmp_path) / "cal"
+    caldir.mkdir()
+    (caldir / "local_reference_version.json").write_text(json.dumps(
+        {"tan_score_model_version": "action-spectrum-v1"}))
+    out2 = score_forecast(_best_air(), caldir, None, _confidence())
+    assert not out2["local_reference_stale"].any()
+    assert out2["local_reference_version"].unique().tolist() == ["action-spectrum-v1"]

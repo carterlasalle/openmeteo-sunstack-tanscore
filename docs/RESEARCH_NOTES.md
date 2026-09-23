@@ -278,3 +278,23 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
 - Pinned: sub-grid windows are NaN-not-zero, night-zero stays complete,
   Absolute is location-independent while Local percentiles move with the
   reference climatology (§21 invariant).
+
+## 2026-09-23 (follow-up 5) — full §§1-27 completion audit
+
+- Verified with evidence: spectrum metadata complete + checksums OK (all 4);
+  global manifest carries all 10 required fields; summary writer emits all
+  §20 keys; daily summaries carry every §18 field; snow still hard-blocks
+  opportunity while albedo stays in physics.
+- Fixed: Tier-B reserved-input contract (`emulator_manifest`
+  `tierB_reserved_inputs`) now names a consumer for every carried-but-unused
+  CAMS field, closing §7's fetch-and-drop gap; local-reference version +
+  stale flag on every scored row with a validation WARN on mismatch (§10
+  loudness); duplicate-wavelength diagnostics now precede monotonicity so the
+  error names the actual defect (§19).
+- Pinned: spectrum rejection paths (negative/non-monotonic/duplicated/
+  truncated/missing), impossible-irradiance rejection, manifest metadata
+  contract, pigment/opportunity separation — 88 tests passing.
+- Honestly remaining (need network, raw files, or libRadtran): live-run
+  refresh of committed `latest/` tables, raw-CAMS phase-anchor trace,
+  equatorial/high-altitude corpus + Tier-B training, TanResponse fitting
+  (spec-gated), South-Bend-specific run inspection (no SB latest locally).

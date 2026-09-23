@@ -498,6 +498,23 @@ def score_forecast(
     local_ref = pd.read_parquet(ref_path) if ref_path.exists() else pd.DataFrame()
     out = add_local_scores(out, local_ref)
     out["local_tan_label"] = [_grade_local(float(x)) for x in num(out, "local_tan_score_0_100").fillna(np.nan)]
+    # Loud local-reference provenance: legacy-55/30/15 percentiles must never
+    # be mistaken for v4 percentiles. A missing/mismatched version file marks
+    # every row stale instead of silently mixing climatologies.
+    out["local_reference_version"] = "unknown"
+    out["local_reference_stale"] = True
+    try:
+        import json as _json
+
+        _ver_path = calibration_dir / "local_reference_version.json"
+        if _ver_path.exists():
+            _ver = _json.loads(_ver_path.read_text(encoding="utf-8"))
+            out["local_reference_version"] = str(
+                _ver.get("tan_score_model_version", "unknown"))
+            out["local_reference_stale"] = bool(
+                _ver.get("tan_score_model_version") != config.TAN_SCORE_MODEL_VERSION)
+    except (OSError, ValueError):
+        pass
 
     # Keep quality and uncertainty separate. A low confidence never changes the
     # physical TanScore; it only changes how much to trust that forecast.
