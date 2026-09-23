@@ -217,14 +217,36 @@ def train_uv_models(training: pd.DataFrame, calibration_dir: Path) -> dict:
     for feat in MODEL_FEATURES:
         if feat not in work:
             work[feat] = np.nan
-    X = work.loc[:, MODEL_FEATURES]
+    # Degraded-tier training (e.g. no CAMS EAC4 history) leaves whole feature
+    # columns constant/NaN, on which HistGradientBoosting's binning crashes
+    # instead of training the documented lower tier. Drop such columns loudly
+    # and record them: the bundle's feature list is the contract that
+    # prediction reindexes against.
+    dropped: list[str] = []
+    kept: list[str] = []
+    for feat in MODEL_FEATURES:
+        col = pd.to_numeric(work[feat], errors="coerce")
+        if int(col.dropna().nunique()) < 2:
+            dropped.append(feat)
+        else:
+            kept.append(feat)
+    if not kept:
+        raise RuntimeError("No usable training features: every column is constant/NaN")
+    if dropped:
+        import logging as _logging
+
+        _logging.getLogger("sunstack").warning(
+            "Calibration training without features %s; bundle tier reduced", dropped)
+    X = work.loc[:, kept]
     bundle: dict[str, object] = {
-        "features": MODEL_FEATURES,
+        "features": kept,
+        "dropped_constant_features": dropped,
         "source": "NASA POWER hourly UVA/UVB; optional CAMS EAC4 atmospheric columns",
         "reference_uvi": config.ABSOLUTE_UVI_REFERENCE,
         "reference_uva_wm2": config.ABSOLUTE_UVA_REFERENCE_WM2,
     }
-    report: dict[str, object] = {"rows": len(work), "validation_split_year": split_year}
+    report: dict[str, object] = {"rows": len(work), "validation_split_year": split_year,
+                                 "dropped_constant_features": dropped}
 
     for target in ("uva", "uvb"):
         model = HistGradientBoostingRegressor(

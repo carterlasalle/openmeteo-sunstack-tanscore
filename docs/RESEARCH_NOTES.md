@@ -603,3 +603,14 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   high-sun bias (corroborated by the +29% BSRN NWP-brightness finding);
   POWER truth is itself modeled, so corroborating, not definitive. No
   weights were touched at any point in this investigation.
+
+## 2026-09-23 (follow-up 45) — degraded bootstrap completes end to end
+
+- A CAMS-less bootstrap previously crashed inside sklearn binning
+  (all-NaN atmospheric columns) instead of producing the documented lower
+  tier. Training now drops constant/NaN feature columns loudly (logged +
+  recorded in bundle/metrics) and a scratch `--allow-degraded
+  --skip-cams-history` bootstrap completes: 12-feature bundle, v4 model
+  block + deprecated-labeled legacy block in the calibration summary, fresh
+  local reference + version file. Proven with a synthetic degraded-training
+  test and the full scratch run; committed calibration untouched.

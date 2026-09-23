@@ -1291,3 +1291,36 @@ def test_cams_cycle_labels_majority_cycle():
     cams["cams_cycle"] = ["2026-09-22T12:00Z"] * 2 + ["2026-09-22T00:00Z"]
     frame = build_live_feature_frame(_best_air(), cams)
     assert (frame["cams_cycle"] == "2026-09-22T12:00Z").all()
+
+
+def test_training_drops_constant_features_loudly(tmp_path, caplog):
+    import logging
+
+    import numpy as np
+    import pandas as pd
+
+    from sunstack.calibrate import MODEL_FEATURES, train_uv_models
+
+    n = 2500
+    rng = np.random.default_rng(11)
+    stamps = pd.date_range("2020-01-01", periods=n, freq="12h", tz="UTC")
+    training = pd.DataFrame({
+        "time_utc": stamps,
+        "ghi": rng.uniform(50, 900, n),
+        "sza": rng.uniform(20, 80, n),
+        "uva": rng.uniform(5, 45, n),
+        "uvb": rng.uniform(0.05, 1.2, n),
+    })
+    for feat in MODEL_FEATURES:
+        if feat not in training:
+            # Degraded tier: CAMS columns entirely absent.
+            training[feat] = np.nan
+    with caplog.at_level(logging.WARNING, logger="sunstack"):
+        report = train_uv_models(training, tmp_path)
+    assert set(report["dropped_constant_features"]) >= {"aod340", "ozone_du"}
+    import joblib
+
+    bundle = joblib.load(tmp_path / "uva_uvb_models.joblib")
+    assert "aod340" not in bundle["features"]
+    assert any("Calibration training without features" in r.message
+               for r in caplog.records)
