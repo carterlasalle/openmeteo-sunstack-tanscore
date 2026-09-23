@@ -704,3 +704,9 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   hourly rows labels basis MEASURED throughout, yields 335 finite fractions
   (0.0–1.35; >1 = over-threshold exposure, unclamped by design), and leaves
   Absolute/E_mel columns bit-identical — environmental physics untouched.
+
+- Addendum (export serialization of window flags, offline): `export
+  --site-dir /tmp/...` against live-shaped latest tables emits all eight
+  window/hour flag keys into data.json daily rows with correct values, and
+  the served index.html carries the extended dHead — the follow-up-50
+  contract holds through the full static-site path, not just the builders.
