@@ -34,6 +34,12 @@ quantity.
   integral; the output marks `tan_dose_complete = false` with
   `tan_dose_coverage_fraction` (covered seconds / total span). Missing hours
   are never silently integrated across.
+- Missing input is UNKNOWN, never zero: wholly missing irradiance integrates
+  as NaN (a lone sample spans zero time but still reports incomplete), while
+  only genuinely measured zeros — night rows carry real `0.0` — integrate as
+  complete zeros. Row-level `tan_dose_{15m,30m,1h}_complete` and
+  `tan_dose_{15m,30m,1h}_coverage_fraction` flags (plus SED pairs) expose this
+  per interval, not just per day/window.
 - Night integrates as zero.
 
 ## Presentation unit
