@@ -1597,3 +1597,45 @@ def test_scored_hourly_validator_error_branches():
         melanogenic_effective_irradiance_wm2=None))
     assert errors(_valid_scored_frame(
         tan_score_absolute_0_100=[float("nan")] * 3))
+
+
+def test_calendar_marks_partial_doses_and_leaves_legacy_clean():
+    # Calendar descriptions carry cumulative doses; gap-split ones must say
+    # so via explicit-false complete flags, while pre-v4 rows without the
+    # keys render exactly as before.
+    from sunstack.ui import build_calendar_ics, build_interval_ics
+
+    daily = pd.DataFrame([{
+        "date": "2026-09-26",
+        "best_window_start": "2026-09-26T11:30:00",
+        "best_window_end": "2026-09-26T15:30:00",
+        "day_overall_peak_0_100": 55.0,
+        "day_absolute_peak_0_100": 45.0,
+        "tan_dose_best_window_j_m2": 9253.2,
+        "tan_dose_best_window_complete": False,
+        "tan_dose_day_j_m2": 15761.0,
+        "tan_dose_complete": True,
+        "sed_best_window": 16.437,
+        "sed_best_window_complete": True,
+        "sed_day_total": 30.75,
+        "sed_complete": True,
+    }])
+    ics = build_calendar_ics(daily, "20260926_000000")
+    assert "TanDose window 9253.2 J/m2 mel (partial)" in ics.replace("\r\n ", "")
+    assert "TanDose day 15761 J/m2 mel." in ics.replace("\r\n ", "")
+    legacy = daily.drop(columns=[c for c in daily.columns if "complete" in c])
+    legacy_ics = build_calendar_ics(legacy, "20260926_000000")
+    assert "(partial)" not in legacy_ics
+
+    half = pd.DataFrame([{
+        "time": "2026-09-26T12:00",
+        "tan_score_absolute_0_100": 40.0,
+        "tan_dose_30m_j_m2": 900.0,
+        "tan_dose_30m_complete": False,
+        "sed_30m": 2.5,
+        "sed_30m_complete": True,
+    }])
+    ics30 = build_interval_ics(half, "20260926_000000")
+    flat = ics30.replace("\r\n ", "")
+    assert "TanDose30 900 J/m2 mel (partial)" in flat
+    assert "SED30 2.5." in flat or "SED30 2.5 " in flat

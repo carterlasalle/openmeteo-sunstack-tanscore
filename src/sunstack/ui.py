@@ -269,6 +269,25 @@ def _fmt_opt(value: object, fmt: str = "g", suffix: str = "") -> str | None:
     return f"{f:{fmt}}{suffix}"
 
 
+def _partial_marker(row, flag_col: str | None) -> str:
+    """' (partial)' when a complete flag is explicitly false.
+
+    Pre-v4 rows lack the flag keys entirely and must render unchanged, so
+    only an explicit false (bool False / 0, never missing/NaN) marks.
+    """
+    if not flag_col:
+        return ""
+    fv = row.get(flag_col)
+    if fv is None:
+        return ""
+    try:
+        if bool(pd.isna(fv)):
+            return ""
+        return "" if bool(fv) else " (partial)"
+    except (TypeError, ValueError):
+        return ""
+
+
 def build_interval_ics(
     half_hour: pd.DataFrame,
     run_tag: str,
@@ -289,18 +308,19 @@ def build_interval_ics(
         except (ValueError, TypeError):
             continue
         bits = []
-        for label, col, fmt, suf in (
-            ("Abs", "tan_score_absolute_0_100", ".0f", "/100"),
-            ("Overall", "overall_tan_opportunity_0_100", ".0f", "/100"),
-            ("TanDose30", "tan_dose_30m_j_m2", "g", " J/m2 mel"),
-            ("SED30", "sed_30m", "g", ""),
-            ("UVA30", "uva_dose_30m_j_m2", "g", " J/m2"),
-            ("UVB30", "uvb_dose_30m_j_m2", "g", " J/m2"),
-            ("Conf", "tan_forecast_confidence_0_100", ".0f", ""),
+        for label, col, fmt, suf, flag in (
+            ("Abs", "tan_score_absolute_0_100", ".0f", "/100", None),
+            ("Overall", "overall_tan_opportunity_0_100", ".0f", "/100", None),
+            ("TanDose30", "tan_dose_30m_j_m2", "g", " J/m2 mel",
+             "tan_dose_30m_complete"),
+            ("SED30", "sed_30m", "g", "", "sed_30m_complete"),
+            ("UVA30", "uva_dose_30m_j_m2", "g", " J/m2", None),
+            ("UVB30", "uvb_dose_30m_j_m2", "g", " J/m2", None),
+            ("Conf", "tan_forecast_confidence_0_100", ".0f", "", None),
         ):
             v = _fmt_opt(row.get(col), fmt, suf)
             if v is not None:
-                bits.append(f"{label} {v}")
+                bits.append(f"{label} {v}{_partial_marker(row, flag)}")
         src = str(row.get("subhour_source") or "")
         if src:
             bits.append("native HRRR" if src.startswith("native_HRRR") else "interpolated hourly")
@@ -376,18 +396,21 @@ def build_calendar_ics(
             uva = fnum(row, "peak_predicted_uva_wm2")
             if pd.notna(uva):
                 parts.append(f"UVA {uva:g} W/m2")
-        for label, col, fmt, suf in (
-            ("TanDose window", "tan_dose_best_window_j_m2", "g", " J/m2 mel"),
-            ("TanDose day", "tan_dose_day_j_m2", "g", " J/m2 mel"),
-            ("SED window", "sed_best_window", "g", ""),
-            ("SED day", "sed_day_total", "g", ""),
-            ("UVA day", "uva_dose_day_j_m2", "g", " J/m2"),
-            ("UVB day", "uvb_dose_day_j_m2", "g", " J/m2"),
-            ("Confidence", "day_confidence_at_peak_0_100", ".0f", ""),
+        for label, col, fmt, suf, flag in (
+            ("TanDose window", "tan_dose_best_window_j_m2", "g", " J/m2 mel",
+             "tan_dose_best_window_complete"),
+            ("TanDose day", "tan_dose_day_j_m2", "g", " J/m2 mel",
+             "tan_dose_complete"),
+            ("SED window", "sed_best_window", "g", "",
+             "sed_best_window_complete"),
+            ("SED day", "sed_day_total", "g", "", "sed_complete"),
+            ("UVA day", "uva_dose_day_j_m2", "g", " J/m2", None),
+            ("UVB day", "uvb_dose_day_j_m2", "g", " J/m2", None),
+            ("Confidence", "day_confidence_at_peak_0_100", ".0f", "", None),
         ):
             v = _fmt_opt(row.get(col), fmt, suf)
             if v is not None:
-                parts.append(f"{label} {v}")
+                parts.append(f"{label} {v}{_partial_marker(row, flag)}")
         status = str(row.get("day_status") or "").strip()
         if status and status.lower() != "nan":
             parts.append(status)
