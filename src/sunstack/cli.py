@@ -47,6 +47,7 @@ from .normalize import (
 from .opportunity import (
     apply_outdoor_feasibility,
     attach_fitzpatrick,
+    attach_personalization,
     build_30min_forecast,
     build_daily_summary,
 )
@@ -409,6 +410,9 @@ def _run_live_inner(
     tan_hourly = score_forecast(best_air, calibration_dir, cams_direct, sun_windows)
     tan_hourly = apply_outdoor_feasibility(tan_hourly, min_temp_f)
     tan_hourly = attach_fitzpatrick(tan_hourly, skin_type)
+    # Objective-first personalization columns (environmental physics untouched;
+    # fractions stay NaN until a measured/compatible MMD is supplied).
+    tan_hourly = attach_personalization(tan_hourly)
     try:
         from .doses import add_interval_doses as _add_hourly_doses
 
@@ -435,6 +439,7 @@ def _run_live_inner(
 
     tan_30 = build_30min_forecast(tan_hourly, hrrr15)
     tan_30 = attach_fitzpatrick(tan_30, skin_type)
+    tan_30 = attach_personalization(tan_30, dose_col="tan_dose_30m_j_m2")
     daily_tan = build_daily_summary(tan_30)
     tan_windows = best_tan_windows(tan_hourly)
 

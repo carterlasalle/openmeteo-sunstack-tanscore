@@ -124,6 +124,7 @@ def export_static_site(
         _resolve_site,
         _site_nav,
         build_calendar_ics,
+        build_interval_ics,
         build_sha,
     )
 
@@ -161,6 +162,13 @@ def export_static_site(
     )
     (out_dir / "calendar.ics").write_text(
         build_calendar_ics(daily, str(summary.get("run", "")), hourly), encoding="utf-8"
+    )
+    # Per-30-minute interval events (doses, tier, native-HRRR vs interpolated
+    # labeling). Additive artifact; daily calendar.ics is unchanged.
+    (out_dir / "calendar-30min.ics").write_text(
+        build_interval_ics(half, str(summary.get("run", "")),
+                           site_slug=site.slug, tz_name=site.timezone),
+        encoding="utf-8",
     )
     starts = daily.get("best_window_start")
     return {

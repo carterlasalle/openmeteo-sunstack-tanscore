@@ -63,6 +63,45 @@ def main() -> None:
             f"p90 {diff.quantile(0.9):+.1f}.",
             f"Rank correlation (Spearman): {leg.corr(new, method='spearman'):.3f}.",
             "",
+            "## UVA-rich vs UVB-rich divergence (delayed melanogenesis separates spectra)",
+            "",
+        ]
+        uva_s = pd.to_numeric(
+            df["uva"] if "uva" in df else df.get("predicted_uva_wm2"), errors="coerce")
+        if "uvb" in df:
+            uvb_s = pd.to_numeric(df["uvb"], errors="coerce")
+        else:
+            uvb_s = pd.to_numeric(df.get("predicted_uvb_wm2"), errors="coerce")
+        ratio = (uva_s / uvb_s.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan)
+        day = (pd.to_numeric(
+            df["ghi"] if "ghi" in df else df.get("shortwave_radiation"),
+            errors="coerce").fillna(0) > 10) | (leg > 1)
+        work = pd.DataFrame({"leg": leg, "new": new, "ratio": ratio}).loc[day].dropna()
+        if len(work) >= 100:
+            work["bin"] = pd.qcut(work["ratio"], 5,
+                                  labels=["most UVB-rich", "UVB-leaning", "middle",
+                                          "UVA-leaning", "most UVA-rich"])
+            lines += ["| spectrum bin | n | mean legacy | mean v4 | mean delta |",
+                      "|---|---|---|---|---|"]
+            for lab in work["bin"].cat.categories:
+                sub = work.loc[work["bin"] == lab]
+                d = (sub["new"] - sub["leg"])
+                lines.append(
+                    f"| {lab} | {len(sub)} | {sub['leg'].mean():.1f} | "
+                    f"{sub['new'].mean():.1f} | {d.mean():+.1f} |")
+            lines += ["",
+                      "Reading: UVA-rich hours (cloudy/high-SZA, relatively more "
+                      "UVA per UVB joule) score lower under v4 than under legacy "
+                      "at the same legacy level, because delayed-melanogenesis "
+                      "effectiveness per joule near 360-365 nm is ~3 orders "
+                      "below 290-295 nm while legacy weights UVA at 30%. "
+                      "UVB-rich clear midday hours move the opposite way. "
+                      "This is the intended science-driven reordering.",
+                      ""]
+        else:
+            lines += ["(Too few daylight rows with UVA+UVB bands for divergence bins.)",
+                      ""]
+        lines += [
             "## What to inspect",
             "- September-11-like excellent-local hours should remain excellent "
             "locally without becoming globally near-100 (Absolute stays anchored "

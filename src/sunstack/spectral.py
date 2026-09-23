@@ -223,3 +223,35 @@ def spectral_tier_for_row(has_emulator: bool = False, has_reference: bool = Fals
     if has_emulator:
         return "B"
     return "C"
+
+
+TIER_B_REQUIRED_MANIFEST_FIELDS = (
+    "spectral_emulator_version",
+    "spectral_training_manifest_sha256",
+    "libradtran_version",
+    "parameter_ranges",
+    "validation_metrics",
+)
+
+
+def validate_tierB_manifest(manifest: dict) -> dict:
+    """Enforce the Tier-B emulator manifest contract. Fails loudly.
+
+    Strict mode calls this before trusting any Tier-B spectral output: the
+    emulator version, training-manifest checksum, libRadtran provenance,
+    parameter ranges, and held-out validation metrics must all be present.
+    """
+    if not isinstance(manifest, dict):
+        raise TypeError("ERROR spectral: Tier-B manifest must be a mapping")
+    missing = [f for f in TIER_B_REQUIRED_MANIFEST_FIELDS if f not in manifest]
+    if missing:
+        raise ValueError(
+            f"ERROR spectral: Tier-B manifest missing fields: {missing}. "
+            f"Build the corpus with scripts/build_spectral_corpus.py first."
+        )
+    metrics = manifest["validation_metrics"]
+    if not isinstance(metrics, dict) or not metrics:
+        raise ValueError(
+            "ERROR spectral: Tier-B manifest has no held-out validation metrics"
+        )
+    return manifest

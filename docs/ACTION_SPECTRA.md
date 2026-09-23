@@ -23,7 +23,8 @@ original units, digitization method, checksum, and limitations.
   equation (McKinlay & Diffey; CIE S 007/E-1998). Erythema endpoint only;
   never a melanogenesis weighting.
 - `ipd_action_spectrum.csv` (tier **provisional**): broad 320-400 nm IPD/PPD
-  shape peaking near 340 nm (existing-pigment oxidation/redistribution).
+  shape peaking near 340 nm (Gaussian sigma 28 nm with a short-wave logistic
+  cutoff below ~312 nm; existing-pigment oxidation/redistribution).
   Optional second channel only; never merged into TanScore.
 
 ## Method rules

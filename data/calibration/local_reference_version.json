@@ -1,0 +1,6 @@
+{
+  "tan_score_model_version": "action-spectrum-v1",
+  "global_reference_version": "global-mel-ref-v1-provisional",
+  "global_reference_e_mel_wm2": 1.6,
+  "rows": 108744
+}

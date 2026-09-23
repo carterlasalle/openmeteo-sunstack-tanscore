@@ -209,3 +209,65 @@ def test_source_disagreement_hits_confidence_not_physics():
     e_before = float(melanogenic_from_broadband(35.0, 1.0))
     _ = config.UVI_DISAGREEMENT_WARN_FRAC  # threshold exists and is versioned
     assert float(melanogenic_from_broadband(35.0, 1.0)) == e_before
+
+
+def test_tierB_manifest_validator_fails_loudly():
+    import pytest
+
+    from sunstack.spectral import validate_tierB_manifest
+
+    good = {
+        "spectral_emulator_version": "em-v1",
+        "spectral_training_manifest_sha256": "abc123",
+        "libradtran_version": "2.5.0",
+        "parameter_ranges": {"sza_deg": [0, 88]},
+        "validation_metrics": {"heldout_rmse": 0.01},
+    }
+    assert validate_tierB_manifest(good) is good
+    with pytest.raises(ValueError, match="missing fields"):
+        validate_tierB_manifest({"spectral_emulator_version": "em-v1"})
+    with pytest.raises(ValueError, match="no held-out validation metrics"):
+        validate_tierB_manifest({**good, "validation_metrics": {}})
+
+
+def test_interval_ics_marks_native_vs_interpolated():
+    from sunstack.ui import build_interval_ics
+
+    half = pd.DataFrame({
+        "time": ["2026-09-15T12:00", "2026-09-15T12:30"],
+        "tan_score_absolute_0_100": [40.0, 42.0],
+        "overall_tan_opportunity_0_100": [50.0, 55.0],
+        "tan_dose_30m_j_m2": [900.0, 950.0],
+        "sed_30m": [2.5, 2.6],
+        "subhour_source": ["native_HRRR_radiation_weather_plus_interpolated_UV",
+                           "interpolated_hourly"],
+    })
+    ics = build_interval_ics(half, "20260915_004803")
+    assert ics.count("BEGIN:VEVENT") == 2
+    flat = ics.replace("\r\n ", "")
+    assert "native HRRR" in flat and "interpolated hourly" in flat
+    assert "TanDose30" in flat and "SED30" in flat
+
+
+def test_personalization_never_alters_environmental_physics():
+    from sunstack.opportunity import (
+        attach_personalization,
+        personalization_context,
+    )
+
+    df = pd.DataFrame({
+        "tan_dose_1h_j_m2": [1000.0],
+        "melanogenic_effective_irradiance_wm2": [0.5],
+    })
+    out = attach_personalization(df)
+    assert out.loc[0, "melanogenic_effective_irradiance_wm2"] == 0.5
+    assert out.loc[0, "tan_dose_1h_j_m2"] == 1000.0
+    assert pd.isna(out.loc[0, "personal_mmd_fraction"])
+    assert out.loc[0, "personalization_basis"] == "not personalized"
+    measured = attach_personalization(df, personal_mmd_j_m2=2000.0, basis="MEASURED")
+    assert measured.loc[0, "personal_mmd_fraction"] == 0.5
+    # Fitzpatrick alone never yields a precise MMD.
+    ctx = personalization_context(fitzpatrick_type=3)
+    assert "COARSE_ESTIMATE" in str(ctx["personalization_basis"])
+    assert personalization_context(
+        measured_mmd=500.0)["personalization_basis"] == "MEASURED"

@@ -73,9 +73,14 @@ def ipd_spectrum(w: np.ndarray) -> np.ndarray:
     """Broad UVA-dominant IPD/PPD shape: Gaussian peak near 340 nm.
 
     Zero below 300 nm (IPD is not a UVB endpoint), sigma ~28 nm, normalized
-    to 1.0 at 340 nm. Existing-pigment oxidation/redistribution endpoint only.
+    to 1.0 at 340 nm. A short-wave logistic cutoff (midpoint 312 nm, width
+    2.5 nm) confines the effective domain to ~320-400 nm per the published
+    IPD literature; the 320-400 nm shape is essentially the pure Gaussian.
+    Existing-pigment oxidation/redistribution endpoint only.
     """
     g = np.exp(-0.5 * ((w - 340.0) / 28.0) ** 2)
+    cutoff = 1.0 / (1.0 + np.exp(-(w - 312.0) / 2.5))
+    g = g * cutoff
     g[w < 300] = 0.0
     return g / g.max()
 
@@ -187,11 +192,11 @@ def main() -> None:
             "identifier": "provisional synthesis - no single canonical IPD standard",
             "biological_endpoint": "existing-pigment oxidation/redistribution / persistent darkening (NOT new melanogenesis)",
             "subject_population": "human skin with existing pigment; endpoint requires pigment to darken",
-            "wavelengths_tested_nm": "320-400 nm effective domain (values below 300 nm set to 0)",
+            "wavelengths_tested_nm": "320-400 nm effective domain (logistic short-wave cutoff below ~312 nm; values below 300 nm set to 0)",
             "assessment_time_after_exposure": "minutes to hours after exposure (transient to persistent darkening, fades without new melanin)",
-            "normalization_convention": "1.0 at 340 nm peak; Gaussian sigma 28 nm",
+            "normalization_convention": "1.0 at 340 nm peak; Gaussian sigma 28 nm with short-wave logistic cutoff (midpoint 312 nm, width 2.5 nm)",
             "original_units": "dimensionless relative effectiveness",
-            "digitization_method": "analytic Gaussian model of the broad 320-400 nm IPD peak near 340 nm, not a digitization",
+            "digitization_method": "analytic Gaussian model of the broad 320-400 nm IPD peak near 340 nm with a short-wave cutoff, not a digitization",
             "wavelength_spacing_nm": 1,
             "spectral_domain_nm": [280, 400],
             "interpolation_guidance": "linear interpolation acceptable (dynamic range < 2 orders); keep separate from melanogenesis channel",

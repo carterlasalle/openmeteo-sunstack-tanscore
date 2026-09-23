@@ -194,3 +194,36 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   Ravnbak & Wulf 2007 (PMID 17256147), Miller 2008 (PMID 18616777), Ravnbak
   2009 (PMID 19688146), Ravnbak 2010 (PMID 20584251), Wolber 2008
   (PMID 18627527), MITF timer mechanistic prior (PMID 30401431).
+
+## 2026-09-23 (follow-up) — v4 references rebuilt, stratified validation, literature gates
+
+- Rebuilt `local_reference` (south-bend 108744 rows, pacific-palisades 111696
+  rows) with v4 action-spectrum scores via `scripts/rebuild_v4_references.py`
+  (legacy kept as diagnostic column only). Empirical grounding: pooled
+  daylight Tier-C E_mel p99.9 = 1.522 W/m^2 across both sites' NASA POWER
+  climatology; adopted reference 1.6 retains ~5% headroom for unsampled
+  equatorial/high-altitude extremes (recorded in reference.json, value unchanged).
+- `docs/validation/external_validation.md` now stratifies holdout UVA/UVB
+  errors and CAMS-closure error by SZA/cloud/season/AOD340/ozone. Closure bias
+  concentrates at high sun (SZA 30-50, bias -4.4) with near-zero CAMS values
+  at Open-Meteo peak — consistent with a ~4-5 h decoded-valid-time phase
+  offset, not a scale error; UVI-disagreement confidence penalty is the
+  correct response pending a fix in CAMS time decoding.
+- `scripts/check_literature.py` -> `docs/validation/literature_sanity.md`:
+  all gates pass (Parrish UVB/UVA 1247x, Keong photoaddition exact,
+  erythema/melanogenesis spectral crossing 1.44x at 300 nm vs 3.11x at
+  340 nm, IPD UVA-dominant/UVB-silent, SED/TanDose divergence 5.40 vs 2706).
+  Two provisional-shape bugs caught by the gates and fixed: IPD Gaussian was
+  too broad shortward (added 312 nm logistic cutoff), and the assumed
+  erythema>>melanogenesis ordering at 320 nm was backwards (spectra cross).
+- Migration report gains UVA-rich vs UVB-rich divergence quintiles: most
+  UVB-rich +9.8, most UVA-rich -0.7 under v4 — the intended reordering.
+- Tier-B path scaffolded: `scripts/build_spectral_corpus.py` (stratified
+  design over SZA/ozone/altitude/aerosol/albedo/cloud ranges, DRAFT uvspec
+  template, manifest with checksums; runs uvspec only when installed) plus a
+  strict `validate_tierB_manifest` contract in spectral.py.
+- Remainders wired: per-30-minute `calendar-30min.ics` export, pigment-channel
+  CSV columns, Visible-Darkening Potential in the UI dose row,
+  personalization columns in live outputs (NaN until measured MMD supplied),
+  broadband sqrt-correction rationale documented (sublinear broadband
+  response, not a scoring weight).

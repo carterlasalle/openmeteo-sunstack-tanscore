@@ -6,18 +6,18 @@
   "identifier": "provisional synthesis - no single canonical IPD standard",
   "biological_endpoint": "existing-pigment oxidation/redistribution / persistent darkening (NOT new melanogenesis)",
   "subject_population": "human skin with existing pigment; endpoint requires pigment to darken",
-  "wavelengths_tested_nm": "320-400 nm effective domain (values below 300 nm set to 0)",
+  "wavelengths_tested_nm": "320-400 nm effective domain (logistic short-wave cutoff below ~312 nm; values below 300 nm set to 0)",
   "assessment_time_after_exposure": "minutes to hours after exposure (transient to persistent darkening, fades without new melanin)",
-  "normalization_convention": "1.0 at 340 nm peak; Gaussian sigma 28 nm",
+  "normalization_convention": "1.0 at 340 nm peak; Gaussian sigma 28 nm with short-wave logistic cutoff (midpoint 312 nm, width 2.5 nm)",
   "original_units": "dimensionless relative effectiveness",
-  "digitization_method": "analytic Gaussian model of the broad 320-400 nm IPD peak near 340 nm, not a digitization",
+  "digitization_method": "analytic Gaussian model of the broad 320-400 nm IPD peak near 340 nm with a short-wave cutoff, not a digitization",
   "wavelength_spacing_nm": 1,
   "spectral_domain_nm": [
     280,
     400
   ],
   "interpolation_guidance": "linear interpolation acceptable (dynamic range < 2 orders); keep separate from melanogenesis channel",
-  "checksum_sha256": "ea1c05df061672d991fb4808db62889cdacbd1e5b6c8542e0b0fb0039a343ecf",
+  "checksum_sha256": "58cb4af960233bf7e271e116bceae2eaad4f569da010631af61432cf8ca839c3",
   "tier": "provisional",
   "limitations": "Optional second channel only. Must never merge into production TanScore without a justified response model. Broad literature shape, not a fitted standard."
 }

@@ -21,6 +21,14 @@ is the (interface-only) downstream response model.
 
 - **A** direct/reference-quality reconstruction (reserved; never silently claimed).
 - **B** validated spectral emulator (reserved; requires training manifest).
+  The Tier-B manifest contract (`spectral.validate_tierB_manifest`) requires
+  `spectral_emulator_version`, `spectral_training_manifest_sha256`,
+  `libradtran_version`, `parameter_ranges`, and non-empty held-out
+  `validation_metrics`, enforced before any Tier-B output is trusted.
+  Generate the offline design with
+  `python3 scripts/build_spectral_corpus.py --samples 2000`
+  (runs uvspec per sample only when libRadtran is installed; otherwise the
+  deterministic design + manifest is the artifact, never fake spectra).
 - **C** calibrated broadband approximation (**current production**,
   `tierC-broadband-v1`): distributes predicted UVA/UVB uniformly within
   315-400 / 280-315 nm and convolves with S_mel. Band weights
@@ -39,6 +47,22 @@ Configured via `SUNSTACK_SKIN_TILT_DEG` / `SUNSTACK_SKIN_AZIMUTH_DEG`
 UI roadmap). Direct uses incidence angle; diffuse uses isotropic sky-view
 plus albedo ground bounce and is never discarded. Snow blocking stays an
 outdoor-feasibility rule; snow albedo still raises the radiation quantities.
+
+## Sub-hour broadband corrections (not scoring weights)
+
+Two bounded broadband corrections touch UVB/UVI with a square-root factor,
+and neither is the removed 55/30/15 interaction:
+
+- Clear-sky-index geometry correction (`build_30min_forecast`): the HRRR/TOA
+  broadband ratio rescales UVA linearly and UVB/UVI by its square root
+  (bounded 0.7-1.3), because band-integrated UVB responds sublinearly to a
+  broadband GHI change under shifting cloud.
+- Native-HRRR override: same bounded pattern (0.45-1.55) against the
+  kt-improved baseline.
+
+Both operate on interpolated broadband inputs before the wavelength-additive
+Tier-C convolution. Production Absolute TanScore itself contains no sqrt
+term: `score = clip(100 * E_mel / E_ref)`.
 
 ## Inputs consumed (as available)
 
