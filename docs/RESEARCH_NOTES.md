@@ -472,3 +472,11 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   stays INCONCLUSIVE in the migration report (mechanism-level ratio bins
   carry the claim); `_utc_seconds` naive handling documented as DST-limited
   only for relative seconds.
+
+## 2026-09-23 (follow-up 19) — post-review consolidation verified
+
+- All review-driven behavior changes re-exercised end to end: rescore,
+  validation, migration, and literature scripts rerun green with committed
+  reports byte-identical (window-dose correction already captured in the
+  regenerated rescore doc); suite 113 passing; no caller breakage from the
+  `window_dose` signature extension or broadened dose-failure handlers.
