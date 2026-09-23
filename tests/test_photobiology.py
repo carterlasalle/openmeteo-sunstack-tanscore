@@ -438,3 +438,57 @@ def test_unknown_tier_fails_strict_canonical_gate(monkeypatch):
     issues = validate_action_spectra(strict_canonical=True)
     assert any(i.severity == "ERROR" and "unknown" in i.message for i in issues)
     assert not [i for i in validate_action_spectra(False) if i.severity == "ERROR"]
+
+
+def test_skin_plane_factor_geometry():
+    # Tilt 0 is exactly the horizontal reference; a sun-facing vertical plane
+    # beats a back-to-sun one, and the averted plane keeps its diffuse floor
+    # (diffuse is never discarded).
+    from sunstack.spectral import skin_plane_factor as f
+
+    assert f(0.0, 20.0, 180.0, 180.0, 600.0, 200.0) == 1.0
+    facing = f(90.0, 20.0, 180.0, 180.0, 600.0, 200.0)
+    back = f(90.0, 20.0, 180.0, 0.0, 600.0, 200.0)
+    assert 0.0 < back < facing < 1.0
+    assert abs(back - 0.225) < 1e-9  # diffuse-only floor
+    # Snow albedo raises the plane via ground bounce, never lowers it.
+    assert f(90.0, 20.0, 180.0, 0.0, 600.0, 200.0, albedo=0.9) > back
+    # Night (sun below horizon) falls back to the horizontal reference.
+    assert f(90.0, 95.0, 180.0, 180.0, 0.0, 0.0) == 1.0
+
+
+def test_apply_skin_plane_never_overwrites_environmental_physics():
+    from sunstack.spectral import apply_skin_plane
+
+    frame = pd.DataFrame({
+        "melanogenic_effective_irradiance_wm2": [0.5, 0.6],
+        "tan_score_absolute_0_100": [30.0, 36.0],
+        "sza": [20.0, 25.0],
+        "solar_azimuth_deg": [180.0, 185.0],
+        "direct_radiation": [600.0, 550.0],
+        "diffuse_radiation": [200.0, 210.0],
+        "albedo": [0.2, 0.2],
+    })
+    flat = apply_skin_plane(frame, 0.0, 180.0)
+    assert flat["skin_plane_e_mel_wm2"].tolist() == [0.5, 0.6]
+    assert (flat["skin_plane_factor"] == 1.0).all()
+    tilted = apply_skin_plane(frame, 90.0, 180.0)
+    # Environmental columns are preserved bit-identically; tilt adds context.
+    assert tilted["melanogenic_effective_irradiance_wm2"].tolist() == [0.5, 0.6]
+    assert tilted["tan_score_absolute_0_100"].tolist() == [30.0, 36.0]
+    assert {"skin_plane_e_mel_wm2", "skin_plane_factor",
+            "skin_plane_standard"}.issubset(tilted.columns)
+    assert (tilted["skin_plane_factor"] < 1.0).all()
+    assert (tilted["skin_plane_e_mel_wm2"] <
+            tilted["melanogenic_effective_irradiance_wm2"]).all()
+
+
+def test_resolve_skin_plane_rejects_impossible_geometry():
+    import pytest
+
+    from sunstack.spectral import resolve_skin_plane
+
+    assert resolve_skin_plane(0.0, 0.0).tilt_deg == 0.0
+    for tilt, az in ((200.0, 180.0), (-10.0, 180.0), (90.0, 360.0)):
+        with pytest.raises(ValueError, match="skin-plane"):
+            resolve_skin_plane(tilt, az)
