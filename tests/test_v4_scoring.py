@@ -1705,3 +1705,81 @@ def test_cli_hourly_personalization_uses_interval_doses(tmp_path):
     dosed = add_interval_doses(scored)
     out = attach_personalization(dosed, 2000.0, "MEASURED")
     assert out["personal_mmd_fraction"].notna().any()
+
+
+def test_validate_live_sources_counts_feeds():
+    from sunstack.fetch import FetchResult
+    from sunstack.validation import validate_live_sources
+
+    def ok(name):
+        return FetchResult(name, "", {}, {"hourly": {}}, None)
+
+    full = [ok("deterministic__best_match"), ok("hrrr_15min"),
+            ok("air_quality")]
+    full += [ok(f"deterministic__m{i}") for i in range(7)]
+    full += [ok("ensemble_members__a"), ok("ensemble_members__b")]
+    full += [ok(f"ensemble_mean__m{i}") for i in range(4)]
+    assert validate_live_sources(full) == []
+    short = [FetchResult("deterministic__best_match", "", {}, None, "boom")]
+    errors = validate_live_sources(short)
+    assert any(i.severity == "ERROR" for i in errors)
+    downgraded = validate_live_sources(short, strict=False)
+    assert any(i.severity == "WARN" for i in downgraded)
+
+
+def test_validate_cams_direct_grades_fields():
+    from sunstack.validation import validate_cams_direct
+
+    assert validate_cams_direct(pd.DataFrame())[0].severity == "ERROR"
+    cols = ["aerosol_optical_depth_340", "aerosol_optical_depth_380",
+            "total_column_ozone", "cams_uv_biologically_effective_dose",
+            "cams_uv_biologically_effective_dose_clear_sky",
+            "surface_downward_uv", "aerosol_optical_depth_355",
+            "aerosol_optical_depth_400", "absorption_aod_340",
+            "single_scattering_albedo_340", "asymmetry_factor_340",
+            "total_column_water_vapour", "cloud_liquid_water_content",
+            "cloud_ice_water_content", "forecast_albedo"]
+    full = pd.DataFrame([{c: 1.0 for c in cols}])
+    assert validate_cams_direct(full) == []
+    missing_required = validate_cams_direct(
+        full.drop(columns=[c for c in cols if "380" in c]))
+    assert any(i.severity == "ERROR" for i in missing_required)
+    missing_propagated = validate_cams_direct(
+        full.drop(columns=[c for c in cols if "albedo" in c]))
+    assert missing_propagated
+    assert all(i.severity == "WARN" for i in missing_propagated)
+
+
+def test_raise_on_errors_distinguishes_warn():
+    import pytest
+
+    from sunstack.validation import (
+        DataValidationError,
+        ValidationIssue,
+        raise_on_errors,
+    )
+
+    raise_on_errors([ValidationIssue("WARN", "s", "m")])
+    with pytest.raises(DataValidationError, match="boom"):
+        raise_on_errors([ValidationIssue("ERROR", "s", "boom")])
+
+
+def test_scored_hourly_empty_is_error():
+    from sunstack.validation import validate_scored_hourly
+
+    assert any(i.severity == "ERROR"
+               for i in validate_scored_hourly(pd.DataFrame()))
+
+
+def test_action_spectra_missing_files_are_errors(tmp_path, monkeypatch):
+    import sunstack.photobiology as pb
+    from sunstack.validation import validate_action_spectra
+
+    saved = dict(pb._cache)
+    pb._cache.clear()
+    monkeypatch.setattr(pb, "_spectra_dir", lambda: tmp_path / "empty")
+    try:
+        issues = validate_action_spectra()
+    finally:
+        pb._cache.update(saved)
+    assert any(i.severity == "ERROR" for i in issues)
