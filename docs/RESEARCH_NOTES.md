@@ -710,3 +710,9 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   window/hour flag keys into data.json daily rows with correct values, and
   the served index.html carries the extended dHead — the follow-up-50
   contract holds through the full static-site path, not just the builders.
+
+- Addendum (live HTTP serve proof): uvicorn serving production-wired
+  `create_app(data)` answered `/` and `/api/data?location=south-bend` 200;
+  daily rows carry all eight window/hour flags, and
+  `&personal_mmd=2000&personal_mmd_basis=MEASURED` yields 392/392 finite
+  half-hour fractions. Serve path needs no code change.
