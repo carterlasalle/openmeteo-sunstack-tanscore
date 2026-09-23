@@ -1042,3 +1042,36 @@ def test_api_data_personal_mmd(tmp_path):
     unlabeled = client.get("/api/data", params={
         "location": "south-bend", "personal_mmd": "2000"})
     assert unlabeled.status_code == 400
+
+
+def test_api_refresh_rejects_bad_mmd_without_running(tmp_path):
+    import pytest
+
+    TestClient = pytest.importorskip(
+        "fastapi.testclient",
+        reason="httpx/TestClient not installed").TestClient
+
+    from sunstack.ui import create_app
+
+    client = TestClient(create_app(_api_fixture(tmp_path)))
+    bad = client.post("/api/refresh", params={
+        "location": "south-bend", "personal_mmd": "2000",
+        "personal_mmd_basis": "FOLKLORE"})
+    assert bad.status_code == 400
+    assert "one of" in bad.json()["detail"]
+
+
+def test_export_bakes_personal_mmd_when_asked(tmp_path):
+    from sunstack.output import export_static_site
+
+    root = _api_fixture(tmp_path)
+    plain = export_static_site(root, tmp_path / "plain")
+    import json as _json
+
+    payload = _json.loads((tmp_path / "plain" / "data.json").read_text())
+    assert payload["hourly"][0]["personal_mmd_fraction"] is None
+    export_static_site(root, tmp_path / "pers", personal_mmd_j_m2=2000.0,
+                       personal_mmd_basis="MEASURED")
+    payload = _json.loads((tmp_path / "pers" / "data.json").read_text())
+    assert [r["personal_mmd_fraction"] for r in payload["hourly"]] == [0.5, 1.0, 0.75]
+    assert payload["half_hour"][0]["personalization_basis"] == "MEASURED"
