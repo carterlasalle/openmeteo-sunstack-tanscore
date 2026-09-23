@@ -1582,3 +1582,17 @@ def test_show_config_exposes_photobiology_model(capsys):
                   "tandose_max_gap_s=", "skin_tilt_deg=",
                   "uvi_disagree_warn/strong="):
         assert token in out, token
+
+
+def test_swap_once_fails_loudly_on_anchor_drift():
+    # Static-export template replacement must fail loudly (not ship a subtly
+    # broken page) when an anchor is missing or ambiguous.
+    import pytest
+
+    from sunstack.output import _swap_once
+
+    assert _swap_once("ab", "b", "c") == "ac"
+    with pytest.raises(RuntimeError, match="anchor drifted"):
+        _swap_once("ab", "z", "c")
+    with pytest.raises(RuntimeError, match="anchor drifted"):
+        _swap_once("bb", "b", "c")
