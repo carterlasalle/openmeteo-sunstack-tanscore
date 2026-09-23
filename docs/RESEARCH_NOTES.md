@@ -566,3 +566,12 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
 - Rebuilt the wheel from the current tree and re-verified: 9 runtime data
   files under `sunstack/_data/`, isolated install imports cleanly outside
   the repo, spectrum checksum matches the released value (0eccdc6ff267).
+
+## 2026-09-23 (follow-up 41) — current tree re-verified on a fresh live run
+
+- Fresh South Bend live run against all review-round code: 336 hourly rows
+  carry every v4 column with `local_reference_stale=false` and 100% local
+  coverage; 30-min rows carry tier/model/cycle metadata plus the new
+  complete flags; daily rows carry SED completeness/coverage. Peak Absolute
+  48.7 / Local 83.2 on 9/25 — still moderate globally. Auto-publish churn
+  reverted as usual.
