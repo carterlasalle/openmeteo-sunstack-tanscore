@@ -1770,3 +1770,43 @@ def test_calendar_builders_skip_ragged_rows():
     ics = build_interval_ics(half, "20260915_004803")
     assert ics.count("BEGIN:VEVENT") == 1
     assert ics.count("END:VEVENT") == 1
+
+
+def test_location_registry_rejects_malformed_shapes(tmp_path):
+    # Every malformed registry shape must fail loudly at load (never a
+    # half-parsed location silently scoring the wrong coordinates).
+    import pytest
+    import yaml
+
+    from sunstack.config import load_sites
+
+    def write(obj):
+        p = tmp_path / "loc.yaml"
+        p.write_text(yaml.safe_dump(obj), encoding="utf-8")
+        return p
+
+    def good(**kw):
+        base = {"slug": "a", "lat": 0, "lon": 0, "timezone": "UTC",
+                "default": True}
+        base.update(kw)
+        return base
+
+    with pytest.raises(TypeError, match="must be a list"):
+        load_sites(write({"slug": "a"}))
+    with pytest.raises(TypeError, match="must be a mapping"):
+        load_sites(write(["nope"]))
+    with pytest.raises(TypeError, match="keys must be strings"):
+        load_sites(write([{123: "x", "slug": "a", "lat": 0, "lon": 0,
+                           "timezone": "UTC"}]))
+    with pytest.raises(TypeError, match="missing slug"):
+        load_sites(write([{"lat": 0, "lon": 0, "timezone": "UTC"}]))
+    with pytest.raises(TypeError, match="must be a number"):
+        load_sites(write([good(lat="x")]))
+    with pytest.raises(TypeError, match="must be a number"):
+        load_sites(write([good(lat=True)]))
+    with pytest.raises(TypeError, match="must be a string"):
+        load_sites(write([good(timezone="")]))
+    with pytest.raises(ValueError, match="empty"):
+        load_sites(write([]))
+    with pytest.raises(ValueError, match="default"):
+        load_sites(write([good(default=False)]))
