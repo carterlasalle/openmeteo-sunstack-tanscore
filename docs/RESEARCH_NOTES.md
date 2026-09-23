@@ -227,3 +227,24 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   personalization columns in live outputs (NaN until measured MMD supplied),
   broadband sqrt-correction rationale documented (sublinear broadband
   response, not a scoring weight).
+
+## 2026-09-23 (follow-up 2) — CAMS time-decoder hardening + offline v4 re-score
+
+- CAMS time-axis audit: the decoded `cams_direct_forecast` grid is correctly
+  spaced (121 hourly rows) so the ~4-5 h CAMS-vs-OM diurnal offset is a phase
+  anchoring question, not a collapse; raw netCDFs are not retained locally so
+  the decode source cannot be re-examined here. Hardened
+  `history._dataset_time_column` with `_cams_step_delta`: bare numeric steps
+  are read as hours (CAMS leadtime_hour convention) instead of falling into
+  `pd.to_timedelta`'s nanosecond default, which would collapse a forecast onto
+  its reference time. Locked with `tests/test_cams_time_decode.py` (6 tests:
+  valid_time passthrough, reference/timedelta, reference/numeric-hours,
+  time/timedelta, time-only fallback, no-time empty, all through real .nc
+  files via `normalize_cams_netcdf_zip`).
+- Offline end-to-end v4 re-score (`scripts/rescore_latest_v4.py`) of the real
+  Palisades latest run: 336 hourly -> 671 half-hours -> 14 days with ZERO
+  photobiology/scoring validation errors; v4 max 68.9 at E_mel 1.10 (below
+  the 1.6 global ref, correct for a temperate-September peak); daily TanDose
+  15.6-22.5 kJ mel with complete coverage; 14 daily + 671 interval ICS
+  events. Local scores 100% non-null against the rebuilt v4 reference.
+  Report: `docs/validation/v4_rescore_verification.md` (artifacts in scratch).
