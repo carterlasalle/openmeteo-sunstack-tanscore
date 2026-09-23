@@ -1815,3 +1815,16 @@ def test_location_registry_rejects_malformed_shapes(tmp_path):
     assert load_sites(write(None)) == []
     with pytest.raises(ValueError, match="default"):
         load_sites(write([good(default=False)]))
+
+
+def test_render_static_html_falls_back_to_loaddata_anchor(monkeypatch):
+    # Template variants without the init() anchor must still get skin
+    # wiring via the legacy loadData() anchor, never a half-swapped page.
+    import sunstack.ui as _ui
+    from sunstack.output import render_static_html
+
+    variant = _ui.HTML.replace("init();\n</script>", "loadData();\n</script>")
+    assert "loadData();\n</script>" in variant
+    monkeypatch.setattr(_ui, "HTML", variant)
+    html = render_static_html("20260923_000000")
+    assert "loadData();initSkin();\n</script>" in html
