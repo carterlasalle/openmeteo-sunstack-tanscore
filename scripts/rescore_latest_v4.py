@@ -48,7 +48,18 @@ def main() -> None:
 
     with config.use_site(site):
         best_air = pd.read_parquet(latest / "tables" / "best_match_enriched.parquet")
-        cams = pd.read_parquet(latest / "tables" / "cams_direct_forecast.parquet")
+        # Degraded (CAMS-less) runs write no direct-CAMS artifact at all;
+        # rescore with an empty frame (matching production degraded tiers)
+        # instead of crashing before the validation gate runs.
+        cams_p = latest / "tables" / "cams_direct_forecast.parquet"
+        if cams_p.exists():
+            cams = pd.read_parquet(cams_p)
+            cams_note = f"direct CAMS: {len(cams)} rows"
+        else:
+            cams = pd.DataFrame()
+            cams_note = ("direct CAMS artifact absent (degraded run): "
+                         "rescoring without direct CAMS")
+            print(cams_note, flush=True)
         conf = pd.read_parquet(latest / "tables" / "best_sun_windows.parquet")
         hrrr = pd.read_parquet(latest / "tables" / "hrrr_native_15min.parquet")
 
@@ -87,7 +98,7 @@ def main() -> None:
             "# v4 offline re-score verification (real forecast data, no network)",
             "",
             f"Site: {site.slug}; input rows: hourly={len(scored)}, "
-            f"half-hour={len(half)}, days={len(daily)}.",
+            f"half-hour={len(half)}, days={len(daily)}. {cams_note}.",
             f"Validators: photobiology + scored-hourly ERROR count = {len(errors)}.",
             "",
             "## Score migration on this run",
