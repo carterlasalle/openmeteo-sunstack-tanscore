@@ -371,3 +371,19 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   was correct; the notebook was wrong. Timezone-naive wall times must never
   be compared against UTC stamps without localization — added here so the
   next audit does not re-litigate it.
+
+## 2026-09-23 (follow-up 11) — dashboard JS proven, dose-row labels fixed
+
+- The inline dashboard script is invisible to ruff, so it was checked with
+  `node --check` (parses clean) and executed headlessly: full page script
+  evaluated with a stub DOM against the live South Bend `data.json`, then
+  `renderDoses()` driven for a mid-forecast day. Row renders with real values
+  and no NaN/undefined leaks (peak-30m 1299 J mel, best-window 8571 J,
+  day 15463 J / 161 ref-min, SED 27.54, IPD ~3x TanDose as expected from the
+  spectra). Harness was /tmp scratch (no node infra in repo); method kept
+  here for repeatability.
+- Label bug fixed by that exercise: the row showed the day's first two
+  (midnight) rows under "this 30 min / next hour" headings. It now reads
+  peak-30m (with timestamp), best-hour (with timestamp), best-window, and
+  day values, with Visible-Darkening Potential computed as the day's max
+  30-min IPD dose.
