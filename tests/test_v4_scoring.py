@@ -1123,3 +1123,27 @@ def test_rescore_gate_exits_on_validation_errors(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match="v4 validation errors"):
         rb.main()
     assert not report.exists()
+
+
+def test_site_stack_corruption_raises_without_assert():
+    # use_site crossing must fail loudly even under python -O, where assert
+    # vanishes: the guard is an explicit raise, pinned here behaviorally.
+    import pathlib
+
+    import pytest
+
+    from sunstack import config as _config
+
+    for line in pathlib.Path("src/sunstack/config.py").read_text().splitlines():
+        assert not line.strip().startswith("assert "), line
+    outer = next(s for s in _config.load_sites() if s.slug == "south-bend")
+    inner = next(s for s in _config.load_sites() if s.slug == "pacific-palisades")
+    ctx = _config.use_site(outer)
+    ctx.__enter__()
+    try:
+        _config._SITE_STACK.append(inner)  # intruder: pop returns the wrong site
+        with pytest.raises(RuntimeError, match="site stack corrupted"):
+            ctx.__exit__(None, None, None)
+    finally:
+        _config._SITE_STACK.clear()
+    assert _config.LATITUDE == 41.703293  # globals restored despite the raise

@@ -149,7 +149,12 @@ class use_site:
         active["LONGITUDE"] = self._saved["LONGITUDE"]
         active["TIMEZONE"] = self._saved["TIMEZONE"]
         closed: Site = _SITE_STACK.pop()
-        assert closed is self._site, "site stack corrupted: nested use_site blocks crossed"
+        if closed is not self._site:
+            # Explicit raise, never assert: site-stack corruption silently
+            # misattributes coordinates across locations, and assert vanishes
+            # under python -O.
+            raise RuntimeError(
+                "site stack corrupted: nested use_site blocks crossed")
         return False
 
 
