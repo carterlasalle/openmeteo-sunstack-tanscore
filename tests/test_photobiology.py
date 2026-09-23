@@ -100,6 +100,22 @@ def test_tandose_night_zero():
     assert integrate_tandose(t, pd.Series(np.zeros(4)))["tan_dose_melanogenic_j_m2"] == 0.0
 
 
+def test_tandose_constant_is_exact_and_additive():
+    # Constant irradiance integrates to exactly E x span, and splitting a
+    # gapless window never changes the total.
+    t = _stamps("2026-06-21T12:00Z", 2.0, 3)
+    e = pd.Series(np.full(3, 0.5))
+    out = integrate_tandose(t, e)
+    assert out["tan_dose_melanogenic_j_m2"] == 0.5 * 7200
+    assert out["tan_dose_complete"] is True
+    assert out["tan_dose_coverage_fraction"] == 1.0
+    first = integrate_tandose(t.iloc[:2], e.iloc[:2])
+    second = integrate_tandose(t.iloc[1:], e.iloc[1:])
+    assert (first["tan_dose_melanogenic_j_m2"] +
+            second["tan_dose_melanogenic_j_m2"] ==
+            out["tan_dose_melanogenic_j_m2"])
+
+
 def test_action_spectrum_uvb_orders_above_uva():
     spec = load_action_spectrum("parrish_delayed_melanogenesis")
     uvb = effectiveness_at(spec, np.array([290.0, 292.0, 295.0])).mean()
