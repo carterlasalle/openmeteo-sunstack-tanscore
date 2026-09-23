@@ -1876,3 +1876,33 @@ def test_utc_parsing_handles_dst_fold_and_gap(monkeypatch):
     aware = _to_utc_from_openmeteo(pd.Series(["2026-06-21T12:00Z"]))
     assert aware.tolist() == list(pd.to_datetime(["2026-06-21 12:00"], utc=True))
     assert str(aware.dtype) == "datetime64[ns, UTC]"
+
+
+def test_cams_features_missing_ozone_is_nan():
+    from sunstack.tanscore import _cams_features
+
+    times = pd.date_range("2026-09-22 12:00", periods=2, freq="h", tz="UTC")
+    out = _cams_features(pd.DataFrame({
+        "time_utc": times, "aerosol_optical_depth_340": [0.2, 0.21]}))
+    assert out["ozone_du"].isna().all()
+    assert out["cams_ozone_du"].isna().all()
+
+
+def test_feature_frame_empty_and_fallbacks():
+    from sunstack.tanscore import _percentile, build_live_feature_frame
+
+    assert build_live_feature_frame(pd.DataFrame()).empty
+    assert pd.isna(_percentile(pd.Series([], dtype=float), 5.0))
+    base = pd.DataFrame({
+        "time": ["2026-06-21T12:00", "2026-06-21T13:00"],
+        "elevation_m": [float("nan"), float("nan")],
+        "air__aerosol_optical_depth": [0.15, 0.16],
+        "shortwave_radiation": [500.0, 510.0],
+        "direct_normal_irradiance": [400.0, 410.0],
+        "diffuse_radiation": [100.0, 100.0],
+        "terrestrial_radiation": [1000.0, 1000.0],
+        "temperature_2m": [80.0, 81.0],
+    })
+    out = build_live_feature_frame(base, None)
+    assert out["aod55"].tolist() == [0.15, 0.16]
+    assert out["cams_cycle"].isna().all()
