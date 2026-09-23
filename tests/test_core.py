@@ -1828,3 +1828,20 @@ def test_render_static_html_falls_back_to_loaddata_anchor(monkeypatch):
     monkeypatch.setattr(_ui, "HTML", variant)
     html = render_static_html("20260923_000000")
     assert "loadData();initSkin();\n</script>" in html
+
+
+def test_percentile_helpers_reject_non_series_loudly():
+    import pytest
+
+    from sunstack.tanscore import _circular_doy_distance, _percentile, fnum
+
+    with pytest.raises(TypeError, match="must be a Series"):
+        _percentile([1.0, 2.0], 1.5)
+    with pytest.raises(TypeError, match="must be a Series"):
+        _circular_doy_distance([200, 210], 205)
+    row = pd.Series({"a": 5.0, "b": None, "c": "junk"})
+    assert fnum(row, "a") == 5.0
+    assert pd.isna(fnum(row, "missing"))
+    assert pd.isna(fnum(row, "b"))
+    assert pd.isna(fnum(row, "c"))
+    assert fnum(row, "c", default=-1.0) == -1.0
