@@ -31,8 +31,13 @@ def build_sha() -> str:
         try:
             import subprocess
 
-            out = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
-                                 capture_output=True, text=True, check=False, timeout=10)
+            out = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=10,
+            )
             BUILD_SHA = out.stdout.strip() or "unknown"
         except (OSError, subprocess.SubprocessError):
             BUILD_SHA = "unknown"
@@ -58,9 +63,18 @@ def _site_nav(current_slug: str | None = None) -> list[dict[str, object]]:
             url = "../../"
         else:
             url = f"../{s.slug}/"
-        nav.append({"slug": s.slug, "name": s.name, "lat": s.lat, "lon": s.lon,
-                    "timezone": s.timezone, "default": s.default,
-                    "current": s.slug == current, "url": url})
+        nav.append(
+            {
+                "slug": s.slug,
+                "name": s.name,
+                "lat": s.lat,
+                "lon": s.lon,
+                "timezone": s.timezone,
+                "default": s.default,
+                "current": s.slug == current,
+                "url": url,
+            }
+        )
     return nav
 
 
@@ -74,8 +88,13 @@ def _resolve_site(slug: str | None) -> config.Site:
             return s
     raise FileNotFoundError(f"unknown location: {slug}")
 
+
 def _latest_dir(root: Path, site: config.Site | None = None) -> Path:
-    base = root if site is None or site.slug == config.default_site().slug else root / "sites" / site.slug
+    base = (
+        root
+        if site is None or site.slug == config.default_site().slug
+        else root / "sites" / site.slug
+    )
     latest = base / "latest"
     if latest.exists() and latest.is_dir():
         return latest
@@ -84,7 +103,9 @@ def _latest_dir(root: Path, site: config.Site | None = None) -> Path:
         p = Path(marker.read_text().strip())
         if p.exists():
             return p
-    raise FileNotFoundError("No SunStack run found. Click Refresh or run `uv run sunstack run`.")
+    raise FileNotFoundError(
+        "No SunStack run found. Click Refresh or run `uv run sunstack run`."
+    )
 
 
 def _read_table(run: Path, name: str) -> pd.DataFrame:
@@ -107,13 +128,19 @@ def _records(df: pd.DataFrame, limit: int | None = None):
     return json.loads(text)
 
 
-def _filtered_payload(root: Path, skin_type: int | None, min_temp: float | None,
-                      site: config.Site | None = None):
+def _filtered_payload(
+    root: Path,
+    skin_type: int | None,
+    min_temp: float | None,
+    site: config.Site | None = None,
+):
     run = _latest_dir(root, site)
     hourly = _read_table(run, "tan_forecast_hourly")
     half = _read_table(run, "tan_forecast_30min")
     if hourly.empty or half.empty:
-        raise RuntimeError("Latest run is missing TanScore output tables; refresh the data.")
+        raise RuntimeError(
+            "Latest run is missing TanScore output tables; refresh the data."
+        )
     if min_temp is not None:
         hourly = apply_outdoor_feasibility(hourly, min_temp)
         half = apply_outdoor_feasibility(half, min_temp)
@@ -127,7 +154,11 @@ def _filtered_payload(root: Path, skin_type: int | None, min_temp: float | None,
 
 def _ics_text(value: object) -> str:
     return (
-        str(value).replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+        str(value)
+        .replace("\\", "\\\\")
+        .replace(";", "\\;")
+        .replace(",", "\\,")
+        .replace("\n", "\\n")
     )
 
 
@@ -142,12 +173,16 @@ def _ics_fold(line: str) -> str:
 
 def _ics_stamp(value: str, tz_name: str | None = None) -> str:
     """Local naive wall time to a UTC basic-format ICS stamp."""
-    local = datetime.fromisoformat(str(value)).replace(tzinfo=ZoneInfo(tz_name or config.TIMEZONE))
+    local = datetime.fromisoformat(str(value)).replace(
+        tzinfo=ZoneInfo(tz_name or config.TIMEZONE)
+    )
     return local.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
 def _ics_hhmm(value: str, tz_name: str | None = None) -> str:
-    local = datetime.fromisoformat(str(value)).replace(tzinfo=ZoneInfo(tz_name or config.TIMEZONE))
+    local = datetime.fromisoformat(str(value)).replace(
+        tzinfo=ZoneInfo(tz_name or config.TIMEZONE)
+    )
     return local.strftime("%-I:%M %p")
 
 
@@ -170,7 +205,9 @@ def _daily_uv_peaks(hourly: pd.DataFrame) -> dict[str, dict[str, str]]:
         if uvi.size and bool(np.isfinite(uvi).any()):
             i = int(np.nanargmax(uvi))
             entry["uvi"] = f"{uvi[i]:g}"
-            entry["uvi_time"] = _ics_hhmm(str(np.asarray(scol(sub, "time").astype(str))[i]))
+            entry["uvi_time"] = _ics_hhmm(
+                str(np.asarray(scol(sub, "time").astype(str))[i])
+            )
         for key, col in (("uvb", "predicted_uvb_wm2"), ("uva", "predicted_uva_wm2")):
             vals = _day_col(sub, col)
             if vals.size and bool(np.isfinite(vals).any()):
@@ -180,8 +217,11 @@ def _daily_uv_peaks(hourly: pd.DataFrame) -> dict[str, dict[str, str]]:
 
 
 def build_calendar_ics(
-    daily: pd.DataFrame, run_tag: str, hourly: pd.DataFrame | None = None,
-    site_slug: str | None = None, tz_name: str | None = None,
+    daily: pd.DataFrame,
+    run_tag: str,
+    hourly: pd.DataFrame | None = None,
+    site_slug: str | None = None,
+    tz_name: str | None = None,
 ) -> str:
     """Best-window VEVENTs, one per day with a window.
 
@@ -227,16 +267,20 @@ def build_calendar_ics(
         else:
             summary = f"Best sun {_ics_hhmm(start, tz_name)}-{_ics_hhmm(end, tz_name)} (overall {peak_s})"
         uid_scope = site_slug or "sunstack"
-        events.append("\r\n".join([
-            _ics_fold("BEGIN:VEVENT"),
-            _ics_fold(f"UID:sunstack-best-{uid_scope}-{date}@{uid_scope}"),
-            _ics_fold(f"DTSTAMP:{now}"),
-            _ics_fold(f"SEQUENCE:{sequence}"),
-            _ics_fold(f"DTSTART:{_ics_stamp(start, tz_name)}"),
-            _ics_fold(f"DTEND:{_ics_stamp(end, tz_name)}"),
-            _ics_fold(f"SUMMARY:{_ics_text(summary)}"),
-            _ics_fold(f"DESCRIPTION:{_ics_text(desc)}"),
-        ]))
+        events.append(
+            "\r\n".join(
+                [
+                    _ics_fold("BEGIN:VEVENT"),
+                    _ics_fold(f"UID:sunstack-best-{uid_scope}-{date}@{uid_scope}"),
+                    _ics_fold(f"DTSTAMP:{now}"),
+                    _ics_fold(f"SEQUENCE:{sequence}"),
+                    _ics_fold(f"DTSTART:{_ics_stamp(start, tz_name)}"),
+                    _ics_fold(f"DTEND:{_ics_stamp(end, tz_name)}"),
+                    _ics_fold(f"SUMMARY:{_ics_text(summary)}"),
+                    _ics_fold(f"DESCRIPTION:{_ics_text(desc)}"),
+                ]
+            )
+        )
     body = "\r\n".join(events)
     head = (
         "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SunStack//TanScore//EN\r\n"
@@ -245,7 +289,7 @@ def build_calendar_ics(
     return head + ("\r\n" + body if body else "") + "\r\nEND:VCALENDAR\r\n"
 
 
-HTML = r'''<!doctype html>
+HTML = r"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sunlight hours — SunStack</title>
 <link rel="icon" href="data:,">
@@ -310,7 +354,7 @@ details.debug pre{background:#f3ecdb;padding:12px;border-radius:8px;overflow:aut
 <div class="sunfig" id="sunfigwrap"><svg id="sunfig" width="300" height="190" role="img" aria-label="Sun position and recline figure"></svg><div class="cap"><div id="suncap">Pick a time to see the sun position and posture.</div><label>Time <select id="sunsel"></select></label><div class="note">Legs stay flat, parallel to the ground — only the torso lifts. Click any table row to inspect that time. Guidance is geometry context, not a score.</div></div></div><div class="daydetail" id="detail"></div>
 <details class="debug"><summary>Source data</summary><pre id="debugtext">Loading…</pre></details>
 </div><script>
-function peakOf(list,key){let m=null;for(const x of list||[]){const v=+x[key];if(!Number.isNaN(v)&&(m==null||v>m))m=v;}return m;}
+function dayLo(list){let m=null;for(const x of list||[]){const v=+x.temperature_2m;if(!Number.isNaN(v)&&(m==null||v<m))m=v;}return m;}function dayHi(list){let m=null;for(const x of list||[]){const v=+x.temperature_2m;if(!Number.isNaN(v)&&(m==null||v>m))m=v;}return m;}function peakOf(list,key){let m=null;for(const x of list||[]){const v=+x[key];if(!Number.isNaN(v)&&(m==null||v>m))m=v;}return m;}
 function fmtTime(s){if(!s)return 'unknown time';const d=new Date(s);return Number.isNaN(d)?s:d.toLocaleString([],{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}
 const f0=n=>n==null||Number.isNaN(+n)?'—':Math.round(+n);
 const f1=n=>n==null||Number.isNaN(+n)?'—':(+n).toFixed(1);
@@ -335,7 +379,7 @@ console.log('[sunstack] build=%s run=%s updated=%s',DATA.build_sha,DATA.run,(DAT
 document.getElementById('cal').href='webcal://'+location.host+'/api/calendar.ics?skin_type='+document.getElementById('skin').value+'&min_temp='+document.getElementById('mintemp').value+'&location='+encodeURIComponent(LOC);
 if(!SEL||!DATA.daily.some(d=>d.date===SEL)){const today=new Date();const pad2=n=>String(n).padStart(2,'0');const tstr=`${today.getFullYear()}-${pad2(today.getMonth()+1)}-${pad2(today.getDate())}`;const tb=DATA.daily.find(d=>d.date===tstr)||bestDay();SEL=tb?tb.date:DATA.daily[0].date;}
 const b=bestDay();
-document.getElementById('strip').innerHTML=DATA.daily.map(d=>{const pk=+d.day_overall_peak_0_100||0;const pp=+d.peak_precip_probability_pct||0;const wet=pp>=40;return `<button class="daycell" role="tab" aria-selected="${d.date===SEL}" data-date="${d.date}"${wet?' style="border-color:#c0392b"':''}><div class="dow">${esc(shortDay(d.date))}</div><div class="dt">${esc(d.day_status||'')}${wet?` · <b style="color:#c0392b">${f0(pp)}% rain</b>`:''}</div><div class="pk" style="color:${wet?'#c0392b':scoreColor(pk)}">${f0(pk)}</div><div class="uv">UV ${f1(d.peak_uv_index??peakOf(rowsFor(DATA.hourly,d.date),'uv_index'))} · ${f1(d.day_low_temperature_f)}–${f1(d.day_high_temperature_f)}\u00b0</div><div class="uv">Abs ${f0(d.day_absolute_peak_0_100)} · Loc ${f0(d.day_local_peak_0_100)}</div><div class="bar"><i style="width:${Math.max(3,Math.min(100,pk))}%;background:${wet?'#c0392b':scoreColor(pk)}"></i></div></button>`;}).join('');
+document.getElementById('strip').innerHTML=DATA.daily.map(d=>{const pk=+d.day_overall_peak_0_100||0;const pp=+d.peak_precip_probability_pct||0;const wet=pp>=40;return `<button class="daycell" role="tab" aria-selected="${d.date===SEL}" data-date="${d.date}"${wet?' style="border-color:#c0392b"':''}><div class="dow">${esc(shortDay(d.date))}</div><div class="dt">${esc(d.day_status||'')}${wet?` · <b style="color:#c0392b">${f0(pp)}% rain</b>`:''}</div><div class="pk" style="color:${wet?'#c0392b':scoreColor(pk)}">${f0(pk)}</div><div class="uv">UV ${f1(d.peak_uv_index??peakOf(rowsFor(DATA.hourly,d.date),'uv_index'))} · ${f1(d.day_low_temperature_f??dayLo(rowsFor(DATA.hourly,d.date)))}–${f1(d.day_high_temperature_f??dayHi(rowsFor(DATA.hourly,d.date)))}\u00b0</div><div class="uv">Abs ${f0(d.day_absolute_peak_0_100)} · Loc ${f0(d.day_local_peak_0_100)}</div><div class="bar"><i style="width:${Math.max(3,Math.min(100,pk))}%;background:${wet?'#c0392b':scoreColor(pk)}"></i></div></button>`;}).join('');
 document.getElementById('hero').innerHTML=b?`Best light <b>${dayName(b.date)} ${winStr(b.best_window_start,b.best_window_end)}</b> — overall ${f0(b.day_overall_peak_0_100)}, UV ${f1(b.peak_uv_index??peakOf(rowsFor(DATA.hourly,b.date),'uv_index'))}.`:'No usable light in this run.';
 document.querySelectorAll('.daycell').forEach(el=>el.addEventListener('click',()=>{SEL=el.dataset.date;render();}));
 renderDay();{const rh=rowsFor(DATA.hourly,SEL),rq=rowsFor(DATA.half_hour,SEL);renderSunFig(rh,rq);}document.getElementById('debugtext').textContent=JSON.stringify(DATA.summary||{},null,2);}
@@ -373,7 +417,7 @@ let FIG=sunFigState();
 function renderDay(){const d=DATA.daily.find(x=>x.date===SEL);if(!d)return;const el=document.getElementById('detail');
 const hours=rowsFor(DATA.hourly,SEL),half=rowsFor(DATA.half_hour,SEL);
 const uvRows=hours.filter(x=>+x.uv_index>0);
-const hHtml=hours.map(x=>{const w=inWin(x.time,d.best_window_start,d.best_window_end);const note=disagreeNote(x);const pp=+x.precipitation_probability||0;const wet=pp>=40;const sun=(+x.solar_elevation_deg>0)?` <span class=\"note\">☀ ${f0(x.solar_elevation_deg)}° ${esc(x.sun_compass||'')}</span>`:'';const rainCell=wet?`<b style="color:#c0392b">${f0(pp)}%</b>`:`${f0(pp)}%`;return `<tr data-time="${esc(x.time)}" ${w?' class="inwindow"':''}><td>${hhmm(x.time)}</td><td><span class="uvdot" style="background:${uvColor(x.uv_index)}"></span><b>${f1(x.uv_index)}</b></td><td>${f1(x.uv_index_clear_sky)}</td><td>${f1(x.predicted_uva_wm2)}</td><td>${f2(x.predicted_uvb_wm2)}</td><td>${f1(x.temperature_2m)}°</td><td>${f0(x.cloud_cover)}%</td><td>${rainCell}</td><td>${f0(x.direct_normal_irradiance_instant)}</td><td><b>${f0(x.overall_tan_opportunity_0_100)}</b></td><td>core_0_100)}</td><td>${f0(x.tan_score_absolute_0_100)}</td><td>${f0(x.local_tan_score_0_100)}</td><td>${f0(x.atmospheric_quality_percentile_0_100)}</td><td>${f0(x.tan_forecast_confidence_0_100)}</td><td class="note">${esc(note)}${esc(sun)}</td></tr>`;}).join('');
+const hHtml=hours.map(x=>{const w=inWin(x.time,d.best_window_start,d.best_window_end);const note=disagreeNote(x);const pp=+x.precipitation_probability||0;const wet=pp>=40;const sun=(+x.solar_elevation_deg>0)?` <span class=\"note\">☀ ${f0(x.solar_elevation_deg)}° ${esc(x.sun_compass||'')}</span>`:'';const rainCell=wet?`<b style="color:#c0392b">${f0(pp)}%</b>`:`${f0(pp)}%`;return `<tr data-time="${esc(x.time)}" ${w?' class="inwindow"':''}><td>${hhmm(x.time)}</td><td><span class="uvdot" style="background:${uvColor(x.uv_index)}"></span><b>${f1(x.uv_index)}</b></td><td>${f1(x.uv_index_clear_sky)}</td><td>${f1(x.predicted_uva_wm2)}</td><td>${f2(x.predicted_uvb_wm2)}</td><td>${f1(x.temperature_2m)}°</td><td>${f0(x.cloud_cover)}%</td><td>${rainCell}</td><td>${f0(x.direct_normal_irradiance_instant)}</td><td><b>${f0(x.overall_tan_opportunity_0_100)}</b></td><td>${f0(x.tan_score_absolute_0_100)}</td><td>${f0(x.local_tan_score_0_100)}</td><td>${f0(x.atmospheric_quality_percentile_0_100)}</td><td>${f0(x.tan_forecast_confidence_0_100)}</td><td class="note">${esc(note)}${esc(sun)}</td></tr>`;}).join('');
 const qHtml=half.map(x=>{const w=inWin(x.time,d.best_window_start,d.best_window_end);const uv=x.uv_index!=null?x.uv_index:x.air__uv_index;return `<tr data-time="${esc(x.time)}" ${w?' class="inwindow"':''}><td>${hhmm(x.time)}</td><td><span class="uvdot" style="background:${uvColor(uv)}"></span><b>${f1(uv)}</b></td><td>${f1(x.predicted_uva_wm2)}</td><td><b>${f0(x.overall_tan_opportunity_0_100)}</b></td><td class="note">${esc(x.subhour_source==='native_HRRR_radiation_weather_plus_interpolated_UV'?'HRRR 15-min':(x.subhour_source||'').slice(0,24)||'hourly split')}</td><td class="note">${esc(disagreeNote(x))}</td></tr>`;}).join('');
 el.innerHTML=`<h2>${dayName(d.date)} <span style="color:${scoreColor(d.day_overall_peak_0_100)}">· ${f0(d.day_overall_peak_0_100)}</span> <span class="note">${esc(d.day_status||'')}</span></h2>
 <p class="bestline">Best window <b>${winStr(d.best_window_start,d.best_window_end)}</b> · best hour ${hhmm(d.best_hour_start)} (${f0(d.best_hour_score_0_100)}) · peak UV ${f1(d.peak_uv_index??peakOf(hours,'uv_index'))} · ${f1(d.peak_temperature_f??peakOf(hours,'temperature_2m'))}°F · ${f0(d.blocked_half_hours)} blocked half-hours. Rows tinted below fall inside the best window.</p>
@@ -383,7 +427,7 @@ el.innerHTML=`<h2>${dayName(d.date)} <span style="color:${scoreColor(d.day_overa
  const dd=document.getElementById('sunsel');if(dd&&!dd.dataset.wired){dd.dataset.wired='1';dd.addEventListener('change',()=>{FIG.sel=dd.value;const hours=rowsFor(DATA.hourly,SEL),half=rowsFor(DATA.half_hour,SEL);renderSunFig(hours,half);});}
 }
 init();
-</script></body></html>'''
+</script></body></html>"""
 
 
 def create_app(root: Path) -> FastAPI:
@@ -394,21 +438,29 @@ def create_app(root: Path) -> FastAPI:
         return HTML
 
     @app.get("/api/data")
-    def data(skin_type: str = Query(default=""), min_temp: float | None = Query(default=None),
-             location: str = Query(default="")):
+    def data(
+        skin_type: str = Query(default=""),
+        min_temp: float | None = Query(default=None),
+        location: str = Query(default=""),
+    ):
         try:
             st = int(skin_type) if skin_type else None
             site = _resolve_site(location or None)
-            run, hourly, half, daily, summary = _filtered_payload(root, st, min_temp, site)
+            run, hourly, half, daily, summary = _filtered_payload(
+                root, st, min_temp, site
+            )
             # Keep the UI useful: daylight-ish hours only, but source files retain everything.
             ht = pd.to_datetime(scol(hourly, "time"))
             hourly_ui = hourly.loc[(ht.dt.hour >= 7) & (ht.dt.hour <= 20)].copy()
             qt = pd.to_datetime(scol(half, "time"))
             half_ui = half.loc[(qt.dt.hour >= 7) & (qt.dt.hour <= 20)].copy()
             return {
-                "run": str(run), "daily": _records(daily),
-                "hourly": _records(hourly_ui), "half_hour": _records(half_ui),
-                "summary": summary, "location": site.slug,
+                "run": str(run),
+                "daily": _records(daily),
+                "hourly": _records(hourly_ui),
+                "half_hour": _records(half_ui),
+                "summary": summary,
+                "location": site.slug,
                 "build_sha": build_sha(),
             }
         except Exception as exc:
@@ -416,31 +468,57 @@ def create_app(root: Path) -> FastAPI:
 
     @app.get("/api/locations")
     def locations():
-        return {"locations": [{k: e[k] for k in
-                ("slug", "name", "lat", "lon", "timezone", "default")}
-            for e in _site_nav()]}
+        return {
+            "locations": [
+                {k: e[k] for k in ("slug", "name", "lat", "lon", "timezone", "default")}
+                for e in _site_nav()
+            ]
+        }
 
     @app.post("/api/refresh")
-    def refresh(skin_type: str = Query(default=""), min_temp: float | None = Query(default=None),
-                location: str = Query(default="")):
+    def refresh(
+        skin_type: str = Query(default=""),
+        min_temp: float | None = Query(default=None),
+        location: str = Query(default=""),
+    ):
         try:
             from .cli import run_live
+
             st = int(skin_type) if skin_type else None
             site = _resolve_site(location or None)
-            result = run_live(root, auto_calibrate=True, force_cams=True, strict=True, skin_type=st, min_temp_f=min_temp, fresh=True, site=site)
+            result = run_live(
+                root,
+                auto_calibrate=True,
+                force_cams=True,
+                strict=True,
+                skin_type=st,
+                min_temp_f=min_temp,
+                fresh=True,
+                site=site,
+            )
             return {"ok": True, "run": str(result)}
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"LIVE REFRESH FAILED: {exc}") from exc
+            raise HTTPException(
+                status_code=500, detail=f"LIVE REFRESH FAILED: {exc}"
+            ) from exc
 
     @app.get("/api/calendar.ics")
-    def calendar(skin_type: str = Query(default=""), min_temp: float | None = Query(default=None),
-                 location: str = Query(default="")):
+    def calendar(
+        skin_type: str = Query(default=""),
+        min_temp: float | None = Query(default=None),
+        location: str = Query(default=""),
+    ):
         try:
             st = int(skin_type) if skin_type else None
             site = _resolve_site(location or None)
             _, hourly, _, daily, summary = _filtered_payload(root, st, min_temp, site)
-            ics = build_calendar_ics(daily, str(summary.get("run", "")), hourly,
-                                     site_slug=site.slug, tz_name=site.timezone)
+            ics = build_calendar_ics(
+                daily,
+                str(summary.get("run", "")),
+                hourly,
+                site_slug=site.slug,
+                tz_name=site.timezone,
+            )
             return Response(content=ics, media_type="text/calendar; charset=utf-8")
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -448,8 +526,14 @@ def create_app(root: Path) -> FastAPI:
     return app
 
 
-def serve(root: Path, host: str | None = None, port: int | None = None, open_browser: bool = True) -> None:
+def serve(
+    root: Path,
+    host: str | None = None,
+    port: int | None = None,
+    open_browser: bool = True,
+) -> None:
     import uvicorn
+
     host = host or config.UI_HOST
     port = int(port or config.UI_PORT)
     if open_browser:
