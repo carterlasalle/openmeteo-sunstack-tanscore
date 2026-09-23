@@ -530,3 +530,11 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   populate; no throws; both payloads select the same best day (shared score
   columns, as expected). Method: full page script minus auto-`init()`,
   chainable element stubs (`appendChild`/`createElementNS` return elements).
+
+## 2026-09-23 (follow-up 31) — committed references reproduce byte-identically
+
+- Ran `rebuild_v4_references.py` (no-adopt path) against an isolated skeleton
+  with symlinked training tables: all six outputs (both sites'
+  local_reference.parquet/.csv and local_reference_version.json) are
+  byte-identical to the committed files. The rebuild path is deterministic;
+  the committed climatology provably comes from current code.
