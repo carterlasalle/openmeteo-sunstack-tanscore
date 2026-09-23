@@ -328,3 +328,16 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   `validation_issues`, 13 daily + 671 interval calendar events, all UI
   anchors present. Details: `docs/validation/live_export_verification.md`.
   Export wrote only the scratch dir; committed docs untouched.
+
+## 2026-09-23 (follow-up 8) — migration report answers §25 on live SB data
+
+- `docs/migration/legacy_vs_v4_comparison.md` gains a live-South-Bend section
+  (336 hourly rows, dual-scored in production, not recomputed): peak Absolute
+  47.8 at Local 91.8 (CONFIRMED excellent-locally/not-globally-near-100);
+  confidence/lead Spearman -0.43 vs Absolute/lead -0.00 (CONFIRMED separate).
+- Cloud-cover proxy check came back INCONCLUSIVE rather than forced:
+  matched-level deltas (-0.8 cloudy vs -1.3 clear, n=41/44) slightly favor
+  clear, because this run's cloudy sample is small and low-sun. The
+  UVA/UVB-ratio bins — the direct mechanism test — confirm strongly in the
+  same data (+3.1 most UVB-rich to -2.9 most UVA-rich), so the report says
+  exactly that instead of laundering a weak proxy into a pass.
