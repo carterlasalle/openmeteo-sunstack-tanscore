@@ -318,3 +318,13 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
 - The run's auto-publish commit was reverted to keep generated docs out of
   the feature PR (publishing belongs to the scheduled workflow); run tables
   remain locally under data/ (gitignored) for inspection.
+
+## 2026-09-23 (follow-up 7) — live export surface verified to scratch
+
+- `sunstack export --site south-bend` against the live v4 run: payload
+  complete at all levels, §20 summary keys present with honestly degraded
+  CAMS fields (`direct_cams_used=false`, `cams_cycle=null`,
+  `calibration_tier=nasa_power_ml`), CAMS ERROR retained in
+  `validation_issues`, 13 daily + 671 interval calendar events, all UI
+  anchors present. Details: `docs/validation/live_export_verification.md`.
+  Export wrote only the scratch dir; committed docs untouched.
