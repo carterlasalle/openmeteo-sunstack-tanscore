@@ -407,3 +407,12 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   calendar.ics untouched at 13 events, and the reskinned page executed
   headlessly shows legacy provenance with em-dash doses — the fallback fix
   holds on the genuine reskin path, not just synthetic payloads.
+
+## 2026-09-23 (follow-up 14) — doctor pre-flights the photobiology core
+
+- `sunstack doctor` now checks action spectra (all three endpoints, with the
+  canonical-tier gate when configured) and the versioned global reference
+  (located, parsed, value sanity-checked) as hard pre-flight gates, plus a
+  loud STALE/unknown warning for mismatched local-reference versions.
+  Verified against live workspace data and pinned with tests; no CI workflow
+  changes (test-pinned workflow files deliberately untouched).

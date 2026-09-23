@@ -408,3 +408,40 @@ def test_primitive_with_no_valid_samples_is_unknown():
         pd.Series([0.4, np.nan]))
     assert solo["dose_j_m2"] == 0.0  # lone finite sample spans zero time
     assert solo["complete"] is False  # ...but cannot claim a complete window
+
+
+def test_doctor_checks_photobiology_resources(tmp_path, capsys):
+    from sunstack.cli import _global_reference_status, doctor
+
+    ok, detail = _global_reference_status()
+    assert ok and "1.6" in detail  # real repo resources resolve
+    # Empty root: missing models fail loud, spectra still resolve from repo.
+    assert doctor(Path(tmp_path)) is False
+    out = capsys.readouterr().out
+    assert "action spectra" in out
+    assert "global melanogenic reference" in out
+    assert "local_reference_version.json" in out  # unknown-version note
+
+
+def test_doctor_flags_stale_local_reference(tmp_path, capsys):
+    import json
+
+    from sunstack.cli import doctor
+
+    (Path(tmp_path) / "local_reference_version.json").write_text(json.dumps(
+        {"tan_score_model_version": "legacy-55-30-15"}))
+    # doctor() resolves the *default-site* calibration dir for the tmp root;
+    # emulate it so the stale file is seen.
+    from sunstack import cli as _cli
+    from sunstack import config as _config
+
+    real_paths = _cli._calibration_paths
+    _cli._calibration_paths = lambda root, slug=None: (
+        root / "x", Path(tmp_path), root / "y")
+    try:
+        _cli.doctor(Path(tmp_path))
+    finally:
+        _cli._calibration_paths = real_paths
+    out = capsys.readouterr().out
+    assert "STALE" in out and "rebuild_v4_references" in out
+    assert _config.TAN_SCORE_MODEL_VERSION in out

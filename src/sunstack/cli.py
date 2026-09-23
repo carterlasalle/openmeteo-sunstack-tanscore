@@ -604,6 +604,29 @@ def _run_live_inner(
     return run_dir
 
 
+def _global_reference_status() -> tuple[bool, str]:
+    """Locate + sanity-check the versioned global melanogenic reference."""
+    here = Path(__file__).resolve()
+    candidates = [here.parent.parent.parent / "data" / "calibration" /
+                  "global_melanogenic_reference" / "reference.json",
+                  Path.cwd() / "data" / "calibration" /
+                  "global_melanogenic_reference" / "reference.json"]
+    for cand in candidates:
+        if cand.exists():
+            try:
+                import json as _json
+
+                manifest = _json.loads(cand.read_text(encoding="utf-8"))
+                value = float(manifest.get("global_reference_e_mel_wm2", 0))
+                version = str(manifest.get("global_reference_version", ""))
+                if value > 0 and version:
+                    return True, f"{version} ({value:g} W/m^2 mel)"
+                return False, f"{cand}: invalid value/version"
+            except (OSError, ValueError) as exc:
+                return False, f"{cand}: unreadable ({exc})"
+    return False, "reference.json not found"
+
+
 def doctor(root: Path, probe: bool = False) -> bool:
     _, calibration_dir, _ = _calibration_paths(root)
     checks = {
@@ -614,10 +637,45 @@ def doctor(root: Path, probe: bool = False) -> bool:
             calibration_dir / "openmeteo_model_skill.parquet"
         ).exists(),
     }
+    # Photobiology pre-flight (§19): without evaluable spectra + reference the
+    # model cannot run at all — always fatal, even --allow-degraded (degraded
+    # covers source tiers, never missing physics files).
+    from .validation import validate_action_spectra
+
+    photo_issues = validate_action_spectra(
+        strict_canonical=config.REQUIRE_CANONICAL_SPECTRUM)
+    photo_errors = [i for i in photo_issues if i.severity == "ERROR"]
+    checks["action spectra (melanogenesis/erythema/IPD)"] = not photo_errors
+    ref_ok, ref_detail = _global_reference_status()
+    checks["global melanogenic reference"] = ref_ok
     print("SunStack doctor")
     print(f"  location: {config.LATITUDE}, {config.LONGITUDE} ({config.TIMEZONE})")
     for k, v in checks.items():
         print(f"  {k}: {'OK' if v else 'MISSING'}")
+    for issue in photo_errors:
+        print(f"  photobiology ERROR: [{issue.source}] {issue.message}")
+    print(f"  global reference detail: {ref_detail}")
+    # Stale local climatology is loud but non-fatal (validation WARNs at run).
+    stale_note = ""
+    try:
+        import json as _json
+
+        ver_path = calibration_dir / "local_reference_version.json"
+        if ver_path.exists():
+            ver = _json.loads(ver_path.read_text(encoding="utf-8"))
+            if ver.get("tan_score_model_version") != config.TAN_SCORE_MODEL_VERSION:
+                stale_note = (
+                    f"  local reference STALE (model "
+                    f"{ver.get('tan_score_model_version')}; current "
+                    f"{config.TAN_SCORE_MODEL_VERSION}): rebuild with "
+                    f"scripts/rebuild_v4_references.py")
+        else:
+            stale_note = ("  local reference version: unknown (no "
+                          "local_reference_version.json)")
+    except (OSError, ValueError):
+        stale_note = "  local reference version: unreadable"
+    if stale_note:
+        print(stale_note)
     ok = (
         all(checks.values())
         if config.REQUIRE_DIRECT_CAMS
