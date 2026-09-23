@@ -492,3 +492,23 @@ def test_resolve_skin_plane_rejects_impossible_geometry():
     for tilt, az in ((200.0, 180.0), (-10.0, 180.0), (90.0, 360.0)):
         with pytest.raises(ValueError, match="skin-plane"):
             resolve_skin_plane(tilt, az)
+
+
+def test_provenance_metadata_covers_dashboard_keys():
+    # The dashboard provenance line + exports read these keys from the run
+    # summary; the metadata builders must always provide them (a dropped key
+    # would silently render as legacy/unknown downstream).
+    from sunstack.photobiology import model_metadata
+    from sunstack.spectral import emulator_manifest
+
+    meta = model_metadata({
+        "global_reference_version": "global-mel-ref-v1-provisional",
+        "global_reference_e_mel_wm2": 1.6,
+    })
+    meta.update(emulator_manifest())
+    for key in ("photobiology_model_version", "tan_score_model_version",
+                "tan_dose_model_version", "action_spectrum_name",
+                "action_spectrum_sha256",
+                "photobiology_action_spectrum_tier", "spectral_backend"):
+        assert key in meta, key
+        assert meta[key], key
