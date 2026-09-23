@@ -85,7 +85,7 @@ CAMS UVBED field: `cams_uv_biologically_effective_dose` (dose rate, W/m^2 erythe
 
 ### Closure error by SZA / cloud / season / AOD / ozone
 
-(AOD340 median split at 0.200; ozone median split at 285 DU; CAMS UVI predicted, Open-Meteo UVI truth)
+(AOD340 median split at 0.200; ozone median split at 285 DU; CAMS UVI predicted, Open-Meteo UVI as comparator — NOT truth: see the forecast-UVI bias section below)
 
 | stratum | n | MAE | RMSE | bias |
 |---|---|---|---|---|
@@ -108,6 +108,19 @@ CAMS UVBED field: `cams_uv_biologically_effective_dose` (dose rate, W/m^2 erythe
 
 No training touched CAMS UVBED targets, so this comparison is independent.
 NOTE: the bias concentrates at high sun (SZA 30-50) with near-zero CAMS values while Open-Meteo peaks — consistent with a ~4-5 h diurnal phase offset in the decoded CAMS valid times (under investigation in history._dataset_time_column), not with a radiometric scale error. This attribution is unconfirmed until a measured phase analysis supports it; meanwhile the UVI-disagreement confidence penalty is the correct architectural response.
+
+## Forecast UVI bias vs POWER truth by SZA
+
+Archived Open-Meteo UVI minus NASA POWER UVI, relative, on overlapping hours (POWER truth is itself modeled, so corroborating rather than definitive):
+
+| stratum | n | mean relative bias |
+|---|---|---|
+| SZA 0-30 | 2356 | -0.125 |
+| SZA 30-50 | 4509 | +0.059 |
+| SZA 50-65 | 5244 | +0.511 |
+| SZA 65-80 | 2723 | +1.745 |
+
+Reading: the comparator in the closure section runs hot at low sun, which depresses live E_mel/E_ery with SZA independent of any Tier-C shape error.
 
 ## Open-Meteo UVI self-consistency
 

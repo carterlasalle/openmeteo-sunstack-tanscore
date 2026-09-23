@@ -840,6 +840,7 @@ def test_closure_requires_canonical_utc(tmp_path, monkeypatch):
     rb.main()
     text = out.read_text(encoding="utf-8")
     assert "never parsed as UTC" in text
+    assert "calibration_sources archive tables not present" in text
 
 
 def test_csv_export_covers_all_days_with_v4_columns():

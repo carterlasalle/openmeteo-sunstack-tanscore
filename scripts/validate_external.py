@@ -202,7 +202,8 @@ def main() -> None:
                           "",
                           f"(AOD340 median split at {aod_med:.3f}; ozone median "
                           f"split at {ozo_med:.0f} DU; CAMS UVI predicted, "
-                          f"Open-Meteo UVI truth)",
+                          f"Open-Meteo UVI as comparator — NOT truth: see the "
+                          f"forecast-UVI bias section below)",
                           ""]
                 lines += _stratified_table(m2, "om_uvi", "cams_uvi", strata)
                 lines += [""]
@@ -225,6 +226,52 @@ def main() -> None:
     else:
         lines += ["## CAMS/Open-Meteo", "",
                   f"Latest tables not found under {latest}; run a live forecast first.", ""]
+    # Forecast-UVI bias vs POWER truth by SZA: reads the closure bias above
+    # correctly (a hot comparator, not a cold CAMS model) and explains the
+    # live E_mel/E_ery SZA fall. Optional: needs calibration_sources tables.
+    arch_om = cal.parent / "calibration_sources" / "tables" / "openmeteo_historical_hourly.parquet"
+    arch_pw = cal.parent / "calibration_sources" / "tables" / "nasa_power_hourly.parquet"
+    if arch_om.exists() and arch_pw.exists():
+        try:
+            _om = pd.read_parquet(arch_om, columns=["time_utc", "uv_index"])
+            _pw = pd.read_parquet(arch_pw)
+            _m = pd.merge_asof(
+                _om.sort_values("time_utc"), _pw.sort_values("time_utc"),
+                on="time_utc", direction="nearest",
+                tolerance=pd.Timedelta("35min")).dropna(
+                    subset=["uv_index", "ALLSKY_SFC_UV_INDEX", "SZA"])
+            _m = _m.loc[_m["ALLSKY_SFC_UV_INDEX"] > 0.3]
+            _rel = ((_m["uv_index"] - _m["ALLSKY_SFC_UV_INDEX"]) /
+                    _m["ALLSKY_SFC_UV_INDEX"].replace(0, np.nan))
+            _bins = pd.cut(_m["SZA"], [0, 30, 50, 65, 80, 95],
+                           labels=["0-30", "30-50", "50-65", "65-80", "80-95"])
+            _rows = []
+            for _lab in _bins.cat.categories:
+                _sub = _rel.loc[(_bins == _lab).to_numpy()]
+                if len(_sub) >= 100:
+                    _rows.append(f"| SZA {_lab} | {len(_sub)} | {_sub.mean():+.3f} |")
+            lines += ["## Forecast UVI bias vs POWER truth by SZA",
+                      "",
+                      "Archived Open-Meteo UVI minus NASA POWER UVI, relative, "
+                      "on overlapping hours (POWER truth is itself modeled, so "
+                      "corroborating rather than definitive):",
+                      "",
+                      "| stratum | n | mean relative bias |",
+                      "|---|---|---|\n" + "\n".join(_rows) if _rows else
+                      "| (insufficient overlap) | 0 | — |",
+                      "",
+                      "Reading: the comparator in the closure section runs hot "
+                      "at low sun, which depresses live E_mel/E_ery with SZA "
+                      "independent of any Tier-C shape error.",
+                      ""]
+        except (KeyError, ValueError, TypeError, OSError) as exc:
+            lines += [f"Forecast-UVI bias section skipped ({exc}).", ""]
+    else:
+        lines += ["## Forecast UVI bias vs POWER truth by SZA",
+                  "",
+                  "Skipped: calibration_sources archive tables not present "
+                  "for this site.",
+                  ""]
     lines += ["## Open-Meteo UVI self-consistency",
               "",
               "Modeled UVI in the hourly table IS Open-Meteo UVI (plus bounded HRRR/kt "
