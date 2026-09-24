@@ -602,19 +602,31 @@ def _latest_safe_cams_cycle(now: datetime | None = None) -> tuple[date, str]:
     return (now - timedelta(days=1)).date(), "12:00"
 
 
-def _candidate_cams_cycles(now: datetime | None = None) -> list[tuple[date, str]]:
-    """Newest-first CAMS run cycles that have already started.
+def _is_unpublished_cycle_error(exc: BaseException) -> bool:
+    """ADS 400 'not a valid combination' means the cycle isn't published yet."""
+    s = str(exc).lower()
+    return "400" in s and ("valid combination" in s or "invalid request" in s)
 
-    The newest cycle is not always published yet (ADS then rejects the
-    request); callers fall back to older cycles, reusing downloaded files.
+
+def _candidate_cams_cycles(now: datetime | None = None) -> list[tuple[date, str]]:
+    """Newest-first CAMS run cycles, starting from the latest safe cycle.
+
+    The newest started cycle is often not published yet (ADS 400s); starting
+    from _latest_safe_cams_cycle skips that wasted attempt. Callers still fall
+    back to older cycles.
     """
     now = now or datetime.now(UTC)
+    safe_date, safe_cycle = _latest_safe_cams_cycle(now)
+    safe_run = datetime(
+        safe_date.year, safe_date.month, safe_date.day,
+        int(safe_cycle[:2]), tzinfo=UTC,
+    )
     out: list[tuple[date, str]] = []
-    for back in range(3):
-        day = now.date() - timedelta(days=back)
+    for back in range(4):
+        day = safe_date - timedelta(days=back)
         for hh in ("12:00", "00:00"):
             run = datetime(day.year, day.month, day.day, int(hh[:2]), tzinfo=UTC)
-            if run < now:
+            if run <= safe_run:
                 out.append((day, hh))
             if len(out) >= 4:
                 return out
@@ -726,6 +738,10 @@ def _fetch_cams_cycle(
                 entries.append({"group": group, "variables": variables, "ok": True, "mode": "group"})
             except Exception as exc:
                 entries.append({"group": group, "variables": variables, "ok": False, "mode": "group", "error": str(exc)})
+                if _is_unpublished_cycle_error(exc):
+                    print(f"WARN direct CAMS group {group} hit unpublished cycle; skipping single-variable retries.")
+                    complete = False
+                    continue
                 print(f"WARN direct CAMS group {group} failed; retrying variables individually: {exc}")
         if group_ok:
             frame = normalize_cams_netcdf_zip(target, extract, "cams_direct_forecast")

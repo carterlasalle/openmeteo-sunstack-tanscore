@@ -41,8 +41,8 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
     )
     html = _swap_once(
         html,
-        '<button onclick="loadData()">Apply</button><button class="primary" onclick="refreshData()">Refresh forecast</button>',
-        f'<span class="note">Static export · min {min_temp_f:g}°F · reruns publish fresh data</span>',
+        '<button onclick="loadData()">Apply</button></div><div class="controls actions" role="group" aria-label="Actions"><button class="primary livereq" onclick="refreshData()">Refresh forecast</button>',
+        f'</div><div class="controls actions" role="group" aria-label="Actions"><span class="note">Static export · min {min_temp_f:g}°F · reruns publish fresh data</span>',
     )
     html = _swap_once(
         html,

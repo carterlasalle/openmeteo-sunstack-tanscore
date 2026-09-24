@@ -267,13 +267,41 @@ def test_circular_doy_distance_wraps_year_boundary():
 
 
 def test_cams_cycle_candidates_run_newest_first():
+    # Candidates start from the latest safe cycle (unpublished newest skipped):
+    # at 03:20 the safe cycle is 9/13 12z; at 12:00 exactly, 12z just started
+    # so the safe cycle is still 00z.
     got = _candidate_cams_cycles(datetime(2026, 9, 14, 3, 20, tzinfo=UTC))
-    assert got[0] == (date(2026, 9, 14), "00:00")
-    assert got[1] == (date(2026, 9, 13), "12:00")
+    assert got[0] == (date(2026, 9, 13), "12:00")
+    assert got[1] == (date(2026, 9, 13), "00:00")
     assert len(got) == 4
-    # A cycle starting exactly now is not published yet.
     got = _candidate_cams_cycles(datetime(2026, 9, 14, 12, 0, tzinfo=UTC))
     assert got[0] == (date(2026, 9, 14), "00:00")
+def test_cams_group_unpublished_skips_single_retries(monkeypatch):
+    # A 400 'not a valid combination' on a group means the cycle isn't
+    # published: skip per-variable retries (wasted ADS calls), keep the
+    # genuine-failure path (unknown 400 still retries each variable).
+    from sunstack import history
+
+    calls = []
+
+    def fake_retrieve(client, dataset, request, target):
+        calls.append(request["variable"])
+        raise RuntimeError(
+            "400 Client Error: Request has not produced a valid combination of values"
+        )
+
+    monkeypatch.setattr(history, "_retrieve_cams", fake_retrieve)
+    monkeypatch.setattr(history, "normalize_cams_netcdf_zip", lambda *a: __import__("pandas").DataFrame())
+    manifest: list = []
+    frames, complete = history._fetch_cams_cycle(
+        __import__("pathlib").Path("/tmp/nonexistent-cams-test"),
+        object(), manifest, __import__("datetime").date(2026, 9, 24), "12:00", True,
+    )
+    group_calls = [c for c in calls if len(c) > 1]
+    single_calls = [c for c in calls if len(c) == 1]
+    assert len(group_calls) == len(history.config.CAMS_FORECAST_VARIABLE_GROUPS)
+    assert single_calls == []
+    assert frames == [] and complete is False
 
 
 def test_cams_forecast_falls_back_to_older_cycle(monkeypatch, tmp_path):
