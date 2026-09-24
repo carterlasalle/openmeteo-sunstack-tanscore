@@ -131,6 +131,38 @@ def test_uvi_disagreement_moves_confidence_not_physics(tmp_path):
                        clash["tan_score_absolute_0_100"].to_numpy())
 
 
+def test_uvi_disagreement_covers_epa_outlier(tmp_path):
+    # OM + CAMS agree while EPA is far: the all-source spread must flag and
+    # discount confidence, never touch E_mel. The old pairwise OM/CAMS check
+    # was blind to exactly this case.
+    base = _best_air().iloc[:1].copy()
+    agree_epa = base.copy()
+    agree_epa["uvi_epa"] = [5.0]
+    clash_epa = base.copy()
+    clash_epa["cams_uv_index"] = clash_epa["uv_index"]
+    clash_epa["uvi_epa"] = [0.5]
+    agree = score_forecast(agree_epa, Path(tmp_path), None, _confidence(80.0))
+    clash = score_forecast(clash_epa, Path(tmp_path), None, _confidence(80.0))
+    assert not bool(agree["uvi_source_disagree"].iloc[0])
+    assert bool(clash["uvi_source_disagree"].iloc[0])
+    assert float(clash["tan_forecast_confidence_0_100"].iloc[0]) < 80.0
+    assert np.allclose(agree["melanogenic_effective_irradiance_wm2"].to_numpy(),
+                       clash["melanogenic_effective_irradiance_wm2"].to_numpy())
+
+
+def test_uvi_spread_thresholds_are_absolute(tmp_path):
+    # Spread is absolute UVI: >=2.0 strong (x0.65), >=1.0 mild (x0.85).
+    one = _best_air().iloc[:1].copy()
+    one["cams_uv_index"] = one["uv_index"] + 1.2
+    mild = score_forecast(one, Path(tmp_path), None, _confidence(80.0))
+    assert bool(mild["uvi_source_disagree"].iloc[0])
+    assert float(mild["tan_forecast_confidence_0_100"].iloc[0]) == round(80.0 * 0.85, 1)
+    two = _best_air().iloc[:1].copy()
+    two["cams_uv_index"] = two["uv_index"] + 2.5
+    strong = score_forecast(two, Path(tmp_path), None, _confidence(80.0))
+    assert float(strong["tan_forecast_confidence_0_100"].iloc[0]) == round(80.0 * 0.65, 1)
+
+
 def _half_hour_frame(emel_scale: float = 1.0) -> pd.DataFrame:
     dts = pd.date_range("2026-06-21 11:00", periods=8, freq="30min")
     return pd.DataFrame({

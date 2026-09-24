@@ -517,9 +517,9 @@ def score_forecast(
         "existing-pigment oxidation/redistribution / persistent darkening"
     )
 
-    # Agreement modulates confidence only, never the action-spectrum
-    # weighting or E_mel. Pairwise OM/CAMS difference kept for back-compat;
-    # uvi_source_spread covers all available sources including EPA.
+    # Agreement modulates confidence below via all-source spread (never the
+    # action-spectrum weighting or E_mel). Pairwise OM/CAMS difference kept
+    # for back-compat; uvi_source_spread covers every source including EPA.
     with np.errstate(divide="ignore", invalid="ignore"):
         denom = np.maximum(
             np.maximum(out["uvi_openmeteo"].to_numpy(dtype=float),
@@ -585,10 +585,13 @@ def score_forecast(
     out["tan_forecast_confidence_0_100"] = apply_disagreement_penalty(
         out["tan_forecast_confidence_0_100"], out["uv_input_disagree"]
     )
-    # CAMS/Open-Meteo UVI disagreement reduces confidence (physics untouched).
-    disag = pd.to_numeric(out["uvi_difference_percent"], errors="coerce").fillna(0)
-    strong = disag >= config.UVI_DISAGREEMENT_STRONG_FRAC
-    mild = (disag >= config.UVI_DISAGREEMENT_WARN_FRAC) & ~strong
+    # All-source spread disagreement reduces confidence (physics untouched).
+    # Spread is absolute UVI (not fractional): a 3-UVI split matters at any
+    # level, and fractional thresholds go blind at low sun. Pairwise
+    # uvi_difference_percent is kept for back-compat only.
+    spread = pd.to_numeric(out["uvi_source_spread"], errors="coerce").fillna(0)
+    strong = spread >= 2.0
+    mild = (spread >= 1.0) & ~strong
     conf = pd.to_numeric(out["tan_forecast_confidence_0_100"], errors="coerce")
     conf = conf.where(~mild, conf * 0.85).where(~strong, conf * 0.65)
     out["tan_forecast_confidence_0_100"] = np.round(conf, 1)
