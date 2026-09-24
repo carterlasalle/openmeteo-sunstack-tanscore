@@ -2019,6 +2019,8 @@ def test_uvi_consensus_resists_single_bad_source(tmp_path):
     assert np.allclose(out["uvi_consensus"].to_numpy(), [5.0, 5.0])
     assert (out["uvi_consensus_sources"].to_numpy() == 3).all()
     assert np.allclose(out["uvi_source_spread"].to_numpy(), [3.0, 3.46])
+    assert np.allclose(out["uvi_sunny"].to_numpy(), [5.6, 5.56])
+    assert np.allclose(out["uvi_cloudy"].to_numpy(), [2.6, 2.1])
 
 
 def test_sed_integrates_consensus_not_raw_om(tmp_path):

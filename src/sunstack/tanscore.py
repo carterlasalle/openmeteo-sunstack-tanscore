@@ -496,6 +496,11 @@ def score_forecast(
         out["uvi_consensus"] = np.round(np.nanmedian(stacked, axis=0), 3)
         out["uvi_consensus_sources"] = np.sum(np.isfinite(stacked), axis=0).astype(int)
         out["uvi_source_spread"] = np.round(np.nanmax(stacked, axis=0) - np.nanmin(stacked, axis=0), 3)
+        # Sunny-case (max across sources) vs cloudy-case (min): the honest range
+        # when sources argue about clouds. Median stays the headline; the range
+        # is display-only context, never a score input.
+        out["uvi_sunny"] = np.round(np.nanmax(stacked, axis=0), 3)
+        out["uvi_cloudy"] = np.round(np.nanmin(stacked, axis=0), 3)
     # Independent erythemal channel (SED input) from the consensus UVI. NEVER
     # added to TanScore. Consensus resists one bad source; raw OM UVI kept as
     # uvi_openmeteo for display/debug. Missing consensus stays missing: only
