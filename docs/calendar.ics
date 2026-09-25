@@ -5,96 +5,84 @@ CALSCALE:GREGORIAN
 METHOD:PUBLISH
 X-WR-CALNAME:SunStack best sun windows
 BEGIN:VEVENT
-UID:sunstack-best-sunstack-2026-09-24@sunstack
-DTSTAMP:20260925T013039Z
-SEQUENCE:20260925012404
-DTSTART:20260924T153000Z
-DTEND:20260924T180000Z
-SUMMARY:Best sun 11:30 AM-2:00 PM (UV 4.434\, overall 51)
-DESCRIPTION:Overall 51/100. Abs 46/100. Peak UV 4.434 at 1:00 PM. UVA 35.90
- 4 W/m2. UVB 0.9631 W/m2. TanDose window 5874.7 J/m2 mel. TanDose day 13782
- .7 J/m2 mel. SED window 9.508. SED day 22.718. UVA day 795025 J/m2. UVB da
- y 16961.7 J/m2. Confidence 40. GOOD. Times refresh with each SunStack run.
-END:VEVENT
-BEGIN:VEVENT
 UID:sunstack-best-sunstack-2026-09-25@sunstack
-DTSTAMP:20260925T013039Z
-SEQUENCE:20260925012404
-DTSTART:20260925T160000Z
+DTSTAMP:20260925T043240Z
+SEQUENCE:20260925042333
+DTSTART:20260925T173000Z
 DTEND:20260925T193000Z
-SUMMARY:Best sun 12:00 PM-3:30 PM (UV 3.75\, overall 42)
-DESCRIPTION:Overall 42/100. Abs 45/100. Peak UV 3.75 at 1:00 PM. UVA 34.531
-  W/m2. UVB 0.9182 W/m2. TanDose window 6394.4 J/m2 mel. TanDose day 11939.
- 7 J/m2 mel. SED window 9.5. SED day 16.899. UVA day 689743 J/m2. UVB day 1
- 4684.3 J/m2. Confidence 19. FAIR. Times refresh with each SunStack run.
+SUMMARY:Best sun 1:30 PM-3:30 PM (UV 3.75\, overall 49)
+DESCRIPTION:Overall 49/100. Abs 47/100. Peak UV 3.75 at 1:00 PM. UVA 34.566
+  W/m2. UVB 0.9267 W/m2. TanDose window 4963.1 J/m2 mel. TanDose day 13592.
+ 1 J/m2 mel. SED window 5.112. SED day 17.112. UVA day 773779 J/m2. UVB day
+  16818.7 J/m2. Confidence 29. FAIR. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-sunstack-2026-09-26@sunstack
-DTSTAMP:20260925T013039Z
-SEQUENCE:20260925012404
+DTSTAMP:20260925T043240Z
+SEQUENCE:20260925042333
 DTSTART:20260926T163000Z
 DTEND:20260926T193000Z
 SUMMARY:Best sun 12:30 PM-3:30 PM (UV 5.266\, overall 64)
-DESCRIPTION:Overall 64/100. Abs 52/100. Peak UV 5.266 at 2:00 PM. UVA 43.26
- 6 W/m2. UVB 1.0792 W/m2. TanDose window 8477.9 J/m2 mel. TanDose day 17191
- .1 J/m2 mel. SED window 13.335. SED day 28.288. UVA day 1.03187e+06 J/m2. 
- UVB day 20796.1 J/m2. Confidence 83. GOOD. Times refresh with each SunStac
- k run.
+DESCRIPTION:Overall 64/100. Abs 52/100. Peak UV 5.266 at 2:00 PM. UVA 44.02
+ 9 W/m2. UVB 1.0677 W/m2. TanDose window 8478 J/m2 mel. TanDose day 17362 J
+ /m2 mel. SED window 13.335. SED day 28.288. UVA day 1.06092e+06 J/m2. UVB 
+ day 20834.5 J/m2. Confidence 84. GOOD. Times refresh with each SunStack ru
+ n.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-sunstack-2026-09-27@sunstack
-DTSTAMP:20260925T013039Z
-SEQUENCE:20260925012404
+DTSTAMP:20260925T043240Z
+SEQUENCE:20260925042333
 DTSTART:20260927T160000Z
 DTEND:20260927T200000Z
 SUMMARY:Best sun 12:00 PM-4:00 PM (UV 5.304\, overall 61)
 DESCRIPTION:Overall 61/100. Abs 50/100. Peak UV 5.304 at 2:00 PM. UVA 40.87
  4 W/m2. UVB 1.0442 W/m2. TanDose window 10620 J/m2 mel. TanDose day 17027.
  1 J/m2 mel. SED window 17.269. SED day 28.854. UVA day 1.00886e+06 J/m2. U
- VB day 20715.3 J/m2. Confidence 71. GOOD. Times refresh with each SunStack
+ VB day 20715.3 J/m2. Confidence 73. GOOD. Times refresh with each SunStack
   run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-sunstack-2026-09-28@sunstack
-DTSTAMP:20260925T013039Z
-SEQUENCE:20260925012404
+DTSTAMP:20260925T043240Z
+SEQUENCE:20260925042333
 DTSTART:20260928T160000Z
 DTEND:20260928T193000Z
-SUMMARY:Best sun 12:00 PM-3:30 PM (UV 5.339\, overall 62)
-DESCRIPTION:Overall 62/100. Abs 52/100. Peak UV 5.339 at 2:00 PM. UVA 42.61
+SUMMARY:Best sun 12:00 PM-3:30 PM (UV 5.339\, overall 63)
+DESCRIPTION:Overall 63/100. Abs 52/100. Peak UV 5.339 at 2:00 PM. UVA 42.61
  3 W/m2. UVB 1.083 W/m2. TanDose window 9644.2 J/m2 mel. TanDose day 16957.
  9 J/m2 mel. SED window 15.54. SED day 28.709. UVA day 1.01605e+06 J/m2. UV
- B day 20530.1 J/m2. Confidence 67. GOOD. Times refresh with each SunStack 
+ B day 20530.1 J/m2. Confidence 69. GOOD. Times refresh with each SunStack 
  run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-sunstack-2026-09-29@sunstack
-DTSTAMP:20260925T013039Z
-SEQUENCE:20260925012404
+DTSTAMP:20260925T043240Z
+SEQUENCE:20260925042333
 DTSTART:20260929T160000Z
 DTEND:20260929T193000Z
-SUMMARY:Best sun 12:00 PM-3:30 PM (UV 4.45\, overall 45)
-DESCRIPTION:Overall 45/100. Abs 38/100. Peak UV 4.45 at 1:00 PM. UVA 34.758
+SUMMARY:Best sun 12:00 PM-3:30 PM (UV 4.45\, overall 46)
+DESCRIPTION:Overall 46/100. Abs 38/100. Peak UV 4.45 at 1:00 PM. UVA 34.758
   W/m2. UVB 0.7605 W/m2. TanDose window 6409.9 J/m2 mel. TanDose day 11331.
  9 J/m2 mel. SED window 11.593. SED day 22.991. UVA day 730076 J/m2. UVB da
- y 13261.3 J/m2. Confidence 45. FAIR. Times refresh with each SunStack run.
+ y 13261.3 J/m2. Confidence 49. FAIR. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-sunstack-2026-10-01@sunstack
-DTSTAMP:20260925T013039Z
-SEQUENCE:20260925012404
+DTSTAMP:20260925T043240Z
+SEQUENCE:20260925042333
 DTSTART:20261001T160000Z
-DTEND:20261001T203000Z
-SUMMARY:Best sun 12:00 PM-4:30 PM (UV 4.9\, overall 45)
-DESCRIPTION:Overall 45/100. Abs 43/100. Peak UV 4.9 at 2:00 PM. UVA 39.102 
- W/m2. UVB 0.8572 W/m2. TanDose window 9502.6 J/m2 mel. TanDose day 13560.3
-  J/m2 mel. SED window 17.905. SED day 28.8. UVA day 902186 J/m2. UVB day 1
- 5613.8 J/m2. Confidence 22. FAIR. Times refresh with each SunStack run.
+DTEND:20261001T200000Z
+SUMMARY:Best sun 12:00 PM-4:00 PM (UV 4.9\, overall 46)
+DESCRIPTION:Overall 46/100. Abs 43/100. Peak UV 4.9 at 2:00 PM. UVA 39.102 
+ W/m2. UVB 0.8572 W/m2. TanDose window 8754.4 J/m2 mel. TanDose day 13560.3
+  J/m2 mel. SED window 16.268. SED day 28.8. UVA day 902186 J/m2. UVB day 1
+ 5613.8 J/m2. Confidence 26. FAIR. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-sunstack-2026-10-03@sunstack
-DTSTAMP:20260925T013039Z
-SEQUENCE:20260925012404
+DTSTAMP:20260925T043240Z
+SEQUENCE:20260925042333
 DTSTART:20261003T153000Z
 DTEND:20261003T200000Z
 SUMMARY:Best sun 11:30 AM-4:00 PM (UV 4.2\, overall 43)
@@ -105,32 +93,32 @@ DESCRIPTION:Overall 43/100. Abs 38/100. Peak UV 4.2 at 2:00 PM. UVA 34.551
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-sunstack-2026-10-05@sunstack
-DTSTAMP:20260925T013039Z
-SEQUENCE:20260925012404
-DTSTART:20261005T163000Z
+DTSTAMP:20260925T043240Z
+SEQUENCE:20260925042333
+DTSTART:20261005T160000Z
 DTEND:20261005T203000Z
-SUMMARY:Best sun 12:30 PM-4:30 PM (UV 4.35\, overall 44)
+SUMMARY:Best sun 12:00 PM-4:30 PM (UV 4.35\, overall 44)
 DESCRIPTION:Overall 44/100. Abs 36/100. Peak UV 4.35 at 2:00 PM. UVA 38.087
-  W/m2. UVB 0.6866 W/m2. TanDose window 7523.6 J/m2 mel. TanDose day 11143.
- 3 J/m2 mel. SED window 14.243. SED day 24.03. UVA day 771466 J/m2. UVB day
-  12561.5 J/m2. Confidence 43. FAIR. Times refresh with each SunStack run.
+  W/m2. UVB 0.6866 W/m2. TanDose window 8307.7 J/m2 mel. TanDose day 11143.
+ 3 J/m2 mel. SED window 15.79. SED day 24.03. UVA day 771466 J/m2. UVB day 
+ 12561.5 J/m2. Confidence 44. FAIR. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-sunstack-2026-10-06@sunstack
-DTSTAMP:20260925T013039Z
-SEQUENCE:20260925012404
+DTSTAMP:20260925T043240Z
+SEQUENCE:20260925042333
 DTSTART:20261006T153000Z
 DTEND:20261006T203000Z
-SUMMARY:Best sun 11:30 AM-4:30 PM (UV 4.45\, overall 43)
-DESCRIPTION:Overall 43/100. Abs 36/100. Peak UV 4.45 at 2:00 PM. UVA 37.893
+SUMMARY:Best sun 11:30 AM-4:30 PM (UV 4.45\, overall 44)
+DESCRIPTION:Overall 44/100. Abs 36/100. Peak UV 4.45 at 2:00 PM. UVA 37.893
   W/m2. UVB 0.6818 W/m2. TanDose window 9174.2 J/m2 mel. TanDose day 12259.
  4 J/m2 mel. SED window 17.68. SED day 25.92. UVA day 891435 J/m2. UVB day 
- 13437.3 J/m2. Confidence 36. FAIR. Times refresh with each SunStack run.
+ 13437.3 J/m2. Confidence 41. FAIR. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-sunstack-2026-10-07@sunstack
-DTSTAMP:20260925T013039Z
-SEQUENCE:20260925012404
+DTSTAMP:20260925T043240Z
+SEQUENCE:20260925042333
 DTSTART:20261007T153000Z
 DTEND:20261007T200000Z
 SUMMARY:Best sun 11:30 AM-4:00 PM (UV 4.1\, overall 41)
@@ -138,5 +126,17 @@ DESCRIPTION:Overall 41/100. Abs 35/100. Peak UV 4.1 at 1:00 PM. UVA 36.331
  W/m2. UVB 0.6577 W/m2. TanDose window 8139.2 J/m2 mel. TanDose day 11359.9
   J/m2 mel. SED window 15.002. SED day 23.535. UVA day 795997 J/m2. UVB day
   12720.4 J/m2. Confidence 29. FAIR. Times refresh with each SunStack run.
+END:VEVENT
+BEGIN:VEVENT
+UID:sunstack-best-sunstack-2026-10-08@sunstack
+DTSTAMP:20260925T043240Z
+SEQUENCE:20260925042333
+DTSTART:20261008T153000Z
+DTEND:20261008T183000Z
+SUMMARY:Best sun 11:30 AM-2:30 PM (UV 3.35\, overall 40)
+DESCRIPTION:Overall 40/100. Abs 34/100. Peak UV 3.35 at 1:00 PM. UVA 33.046
+  W/m2. UVB 0.6673 W/m2. TanDose window 5334 J/m2 mel. TanDose day 8800.3 J
+ /m2 mel. SED window 8.269. SED day 17.055. UVA day 580107 J/m2. UVB day 10
+ 181.3 J/m2. Confidence 30. FAIR. Times refresh with each SunStack run.
 END:VEVENT
 END:VCALENDAR
