@@ -475,9 +475,11 @@ def score_forecast(
     ]
 
     # UVI source fusion: EPA/NWS operational (US public product) + CAMS
-    # spectral + Open-Meteo/GFS. Median of available sources resists a single
-    # bad feed (e.g. OM best-match GFS/cloud mixing vs clear-sky + DNI).
-    # Not a blind average: spread/confidence derive from the same sources.
+    # spectral + Open-Meteo/GFS. OM gets double weight: 65-snapshot verification
+    # (Sep 2026) shows OM 1-day-lead MAE 0.57 vs CAMS 1.49 with a -1.4 systematic
+    # low bias (thin-cloud over-attenuation). Weighted median still resists a
+    # single bad feed but no longer lets a systematically-low source drag the
+    # headline down: OM ties break toward OM, lone-OM rows stay OM.
     out["uvi_openmeteo"] = num(out, "uv_index")
     if "cams_uv_index" in out:
         out["uvi_cams"] = num(out, "cams_uv_index")
@@ -488,12 +490,24 @@ def score_forecast(
     else:
         out["uvi_epa"] = np.nan
     with np.errstate(divide="ignore", invalid="ignore"):
-        stacked = np.vstack([
-            out["uvi_openmeteo"].to_numpy(dtype=float),
-            out["uvi_cams"].to_numpy(dtype=float),
-            out["uvi_epa"].to_numpy(dtype=float),
-        ])
-        out["uvi_consensus"] = np.round(np.nanmedian(stacked, axis=0), 3)
+        om = out["uvi_openmeteo"].to_numpy(dtype=float)
+        cams = out["uvi_cams"].to_numpy(dtype=float)
+        epa = out["uvi_epa"].to_numpy(dtype=float)
+        stacked = np.vstack([om, cams, epa])
+        # OM x2 weighted median, NaN-tolerant: replicate each finite value by
+        # its weight, then take the median. Missing sources simply add no votes.
+        med = np.full(len(out), np.nan)
+        for i in range(len(out)):
+            votes: list[float] = []
+            if np.isfinite(om[i]):
+                votes.extend([float(om[i])] * 2)
+            if np.isfinite(cams[i]):
+                votes.append(float(cams[i]))
+            if np.isfinite(epa[i]):
+                votes.append(float(epa[i]))
+            if votes:
+                med[i] = float(np.median(votes))
+        out["uvi_consensus"] = np.round(med, 3)
         out["uvi_consensus_sources"] = np.sum(np.isfinite(stacked), axis=0).astype(int)
         out["uvi_source_spread"] = np.round(np.nanmax(stacked, axis=0) - np.nanmin(stacked, axis=0), 3)
         # Sunny-case (max across sources) vs cloudy-case (min): the honest range

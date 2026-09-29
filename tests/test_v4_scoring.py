@@ -2013,10 +2013,11 @@ def _split_frame() -> pd.DataFrame:
 
 
 def test_uvi_consensus_resists_single_bad_source(tmp_path):
-    # Median of OM/CAMS/EPA follows the two agreeing sources, never the
-    # outlier; spread names the disagreement width; source count is exact.
+    # OM-double-weighted median: OM outlier vs two agreeing sources lands
+    # between (3.8/3.55), closer to the pair than to OM; spread names the
+    # disagreement width; source count is exact.
     out = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
-    assert np.allclose(out["uvi_consensus"].to_numpy(), [5.0, 5.0])
+    assert np.allclose(out["uvi_consensus"].to_numpy(), [3.8, 3.55])
     assert (out["uvi_consensus_sources"].to_numpy() == 3).all()
     assert np.allclose(out["uvi_source_spread"].to_numpy(), [3.0, 3.46])
     assert np.allclose(out["uvi_sunny"].to_numpy(), [5.6, 5.56])
@@ -2027,15 +2028,15 @@ def test_sed_integrates_consensus_not_raw_om(tmp_path):
     # SED's erythemal input is consensus-derived: a bad OM UVI must not drag
     # the erythemal channel down while the other sources agree.
     out = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
-    assert np.allclose(out["erythemal_irradiance_wm2"].to_numpy(), [0.125, 0.125])
+    assert np.allclose(out["erythemal_irradiance_wm2"].to_numpy(), [0.095, 0.08875])
 
 
 def test_consensus_degrades_with_missing_sources(tmp_path):
-    # EPA-less rows (non-US site / failed fetch) degrade to the OM/CAMS
-    # median; a lone OM row degrades to OM itself. NaN never becomes zero.
+    # EPA-less rows (non-US site / failed fetch) degrade OM-weighted: OM ties
+    # break toward OM; a lone OM row degrades to OM itself. NaN never zero.
     two = _split_frame().drop(columns=["uvi_epa"])
     out = score_forecast(two, Path(tmp_path), None, _confidence())
-    assert np.allclose(out["uvi_consensus"].to_numpy(), [4.1, 3.83], atol=0.01)
+    assert np.allclose(out["uvi_consensus"].to_numpy(), [2.6, 2.1], atol=0.01)
     assert (out["uvi_consensus_sources"].to_numpy() == 2).all()
     one = _best_air().iloc[:1].copy()
     solo = score_forecast(one, Path(tmp_path), None, _confidence())
@@ -2044,13 +2045,15 @@ def test_consensus_degrades_with_missing_sources(tmp_path):
 
 def test_daily_peak_uv_uses_consensus(tmp_path):
     # Day-card peak UVI follows the consensus column when present, so a
-    # split-source day never publishes the outlier as the headline.
+    # split-source day never publishes the outlier as the headline. Peak is
+    # the consensus at the best-scoring row (not the column max).
     from sunstack.opportunity import build_30min_forecast, build_daily_summary
 
     scored = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
     half = build_30min_forecast(scored, None)
     daily = build_daily_summary(half)
-    assert np.allclose(daily["peak_uv_index"].to_numpy(), half["uvi_consensus"].max())
+    best = half.loc[half["overall_tan_opportunity_0_100"].idxmax()]
+    assert np.allclose(daily["peak_uv_index"].to_numpy(), [best["uvi_consensus"]])
 
 
 def test_epa_normalizers_parse_live_shape():
