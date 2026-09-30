@@ -180,7 +180,9 @@ def export_static_site(
         encoding="utf-8",
     )
     (out_dir / "calendar.ics").write_text(
-        build_calendar_ics(daily, str(summary.get("run", "")), hourly), encoding="utf-8"
+        build_calendar_ics(daily, str(summary.get("run", "")), hourly,
+                           site_slug=site.slug, tz_name=site.timezone),
+        encoding="utf-8",
     )
     # Per-30-minute interval events (doses, tier, native-HRRR vs interpolated
     # labeling). Night rows carry no usable sun: emit daylight intervals only

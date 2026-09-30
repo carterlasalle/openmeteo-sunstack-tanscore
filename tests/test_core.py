@@ -701,7 +701,7 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path):
     assert "may burn" in skin["3"]["fitzpatrick_label"]
     ics = (tmp_path / "site" / "calendar.ics").read_text()
     assert ics.count("BEGIN:VEVENT") == 1
-    assert "UID:sunstack-best-sunstack-2026-09-15@sunstack" in ics
+    assert "UID:sunstack-best-south-bend-2026-09-15@south-bend" in ics
 
 def test_fusion_recomputed_after_subhour_correction():
     # P1 regression: 30-min geometry/HRRR corrections must recompute fusion
@@ -1336,8 +1336,10 @@ def test_run_alternates_publish_per_site(tmp_path):
 
     # run→publish per site (not run-all→publish-all): one slow site can never
     # take down the other's fresh data.
-    src = inspect.getsource(cli.run_one_site)
+    src = inspect.getsource(cli._run_one_site_locked)
     assert "run_live" in src and "export_static_site" in src and "_publish_site" in src
+    assert "site_lock" in inspect.getsource(cli.run_one_site), (
+        "per-site runs serialize under the site lock (audit: globals unsafe)")
     # Cold sites skip without failing: calibrate workflow owns bootstrap.
     assert "_SiteSkipped" in inspect.getsource(cli._run_all_sites)
     # Run dirs are ephemeral CI state (artifact carries them); only docs +
@@ -1494,10 +1496,11 @@ def test_posture_labels_recomputed_at_half_hours():
     out = build_30min_forecast(hourly, None)
     half = out.loc[out["time"] == "2026-09-15T13:30"]
     assert len(half) == 1
-    # 13:30 geometry is the midpoint: elev ~49.1, azim ~172.2 → S, not SSE.
+    # 13:30 geometry is exact pvlib (audit: was interpolated midpoint):
+    # elev ~51.0, azim ~172 → S, not SSE; lift = 90 - elev.
     assert half["sun_compass"].iloc[0] == "S"
     assert "S" in half["sun_posture_guidance"].iloc[0]
-    assert 39.0 < float(half["torso_lift_deg"].iloc[0]) < 42.0
+    assert 38.0 < float(half["torso_lift_deg"].iloc[0]) < 42.0
 
 
 def test_location_registry_loads_south_bend_default(tmp_path):

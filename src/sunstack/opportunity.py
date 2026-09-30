@@ -364,7 +364,9 @@ def _toa_wm2(times_utc: pd.Series) -> np.ndarray:
 
 
 def build_30min_forecast(
-    hourly: pd.DataFrame, hrrr15: pd.DataFrame | None = None
+    hourly: pd.DataFrame, hrrr15: pd.DataFrame | None = None,
+    min_temp_f: float | None = None,
+    calibration_dir = None,
 ) -> pd.DataFrame:
     if hourly.empty:
         return pd.DataFrame()
@@ -546,11 +548,22 @@ def build_30min_forecast(
                 .to_numpy()
             )
 
-    # Guidance labels are pure functions of solar geometry, which interpolates
-    # exactly like any numeric field above. Recompute at :30 stamps instead of
-    # nearest-filling text — the figure then shows the true mid-hour sun, and
-    # the same code path serves hourly, half-hourly, and future 15-min grids.
-    # ponytail: nearest-fill would also work; recompute is exact for free.
+    # Solar geometry is recomputed exactly at every :30 stamp with pvlib
+    # (audit: linear interpolation mislabeled as "true mid-hour sun"; near
+    # noon the error is small, at shoulders it is not). Same code path serves
+    # hourly, half-hourly, and future 15-min grids.
+    try:
+        import pvlib.location as _pvloc
+
+        _loc = _pvloc.Location(config.LATITUDE, config.LONGITUDE, tz="UTC")
+        _times = pd.DatetimeIndex(pd.to_datetime(_as_utc(out["dt"])))
+        _pos = pd.DataFrame(_loc.get_solarposition(_times))
+        out["solar_elevation_deg"] = np.round(
+            90.0 - _pos["zenith"].to_numpy(dtype=float), 2)
+        out["solar_azimuth_deg"] = np.round(
+            _pos["azimuth"].to_numpy(dtype=float), 2)
+    except (ImportError, ValueError, TypeError):
+        pass
     try:
         from .tanscore import add_sun_posture as _add_posture
 
@@ -660,9 +673,38 @@ def build_30min_forecast(
                 _spread = pd.to_numeric(
                     out["uvi_source_spread"], errors="coerce").fillna(0)
                 out["uvi_source_disagree"] = (_spread >= 1.0).to_numpy(dtype=bool)
+    # Local/Atmospheric recompute: Absolute changed under HRRR/kt correction
+    # above, but Local/Atmo still percentile the OLD physics (audit: composite
+    # of two physical states). Recompute against the calibration reference
+    # when one is available; otherwise leave interpolated values.
+    if calibration_dir is not None:
+        try:
+            import pandas as _pd
 
-    # Reapply merged opportunity after sub-hour corrections.
-    out = apply_outdoor_feasibility(out)
+            from .tanscore import add_local_scores as _add_local
+
+            _ref_path = calibration_dir / "local_reference.parquet"
+            _ver_path = calibration_dir / "local_reference_version.json"
+            _ref_ok = False
+            try:
+                import json as _json
+
+                from . import config as _cfg
+
+                _ver = _json.loads(_ver_path.read_text(encoding="utf-8"))
+                _ref_ok = (_ver.get("tan_score_model_version")
+                           == _cfg.TAN_SCORE_MODEL_VERSION)
+            except (OSError, ValueError, TypeError):
+                _ref_ok = False
+            if _ref_ok and _ref_path.exists():
+                _ref = _pd.read_parquet(_ref_path)
+                out = _add_local(out, _ref)
+        except (ImportError, ValueError, OSError):
+            pass
+
+    # Reapply merged opportunity after sub-hour corrections, carrying the
+    # requested temperature floor (audit: used to fall back to 50F default).
+    out = apply_outdoor_feasibility(out, min_temp_f)
     # Trailing interval doses (TanDose/SED/UVA/UVB) via trapezoidal integration.
     try:
         from .doses import add_interval_doses as _add_doses
@@ -726,8 +768,25 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
     for day, g in df.groupby("date"):
         if not isinstance(g, pd.DataFrame):
             raise TypeError("date group must be a DataFrame")
-        hours = scol(g, "dt").dt.hour
-        daylight = g.loc[(hours >= 8) & (hours < 20)].copy()
+        # Astronomical daylight (audit: wall-clock 8-20 was wrong by
+        # season/latitude/DST). is_day when present, else solar elevation.
+        def _col(name: str, _g: pd.DataFrame = g) -> pd.Series:
+            _raw = _g.get(name)
+            _n, _idx = len(_g), _g.index
+            return pd.to_numeric(
+                _raw if isinstance(_raw, pd.Series)
+                else pd.Series([_raw] * _n, index=_idx),
+                errors="coerce")
+        _isday = _col("is_day")
+        if bool(_isday.notna().any()):
+            daylight = g.loc[_isday.fillna(0) > 0].copy()
+        elif "solar_elevation_deg" in g.columns:
+            daylight = g.loc[_col("solar_elevation_deg").fillna(-90) > 0].copy()
+        else:
+            # No astronomical signal at all (unit fixtures): fall back to the
+            # legacy wall-clock window rather than dropping the day silently.
+            _hours = pd.to_datetime(scol(g, "dt")).dt.hour
+            daylight = g.loc[(_hours >= 8) & (_hours < 20)].copy()
         if daylight.empty:
             continue
         score = _num(daylight, "overall_tan_opportunity_0_100").fillna(0)
@@ -837,15 +896,30 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                 "sed_coverage_fraction": float(_day_doses.get("sed_coverage_fraction", float("nan"))),
                 "uva_dose_day_j_m2": float(_day_doses.get("uva_dose_day_j_m2", float("nan"))),
                 "uvb_dose_day_j_m2": float(_day_doses.get("uvb_dose_day_j_m2", float("nan"))),
-                "peak_uv_index": round(float(best.get("uvi_consensus", best.get("uv_index", np.nan))), 2),
+                "peak_uv_index": round(float(_num(s, "uvi_consensus" if "uvi_consensus" in s else "uv_index").max()), 2),
                 "peak_predicted_uva_wm2": round(
-                    float(best.get("predicted_uva_wm2", np.nan)), 2
+                    float(_num(s, "predicted_uva_wm2").max()), 2
                 ),
                 "peak_temperature_f": round(
-                    float(best.get("temperature_2m", np.nan)), 1
+                    float(_num(s, "temperature_2m").max()), 1
                 ),
                 "peak_precip_probability_pct": round(
+                    float(_num(s, "precipitation_probability").max()), 1
+                ),
+                # Values at the opportunity peak (what the old peak_* fields
+                # used to mean). True maxima above; both kept for back-compat.
+                "uvi_at_best": round(float(best.get("uvi_consensus", best.get("uv_index", np.nan))), 2),
+                "temperature_at_best_f": round(
+                    float(best.get("temperature_2m", np.nan)), 1
+                ),
+                "precip_at_best_pct": round(
                     float(best.get("precipitation_probability", np.nan)), 1
+                ),
+                "peak_30m_tan_dose_j_m2": round(
+                    float(_num(s, "tan_dose_30m_j_m2").max()), 1
+                ),
+                "peak_30m_sed": round(
+                    float(_num(s, "sed_30m").max()), 3
                 ),
                 "day_high_temperature_f": round(
                     float(_num(s, "temperature_2m").max()), 1

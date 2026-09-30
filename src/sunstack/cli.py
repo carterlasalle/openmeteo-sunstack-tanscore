@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import shutil
 import sys
 from contextlib import nullcontext
@@ -369,7 +370,12 @@ def _run_live_inner(
     _, calibration_dir, cache_dir = _calibration_paths(
         root, site.slug if site else None
     )
-    stamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
+    # Collision-proof run ID (audit: second-resolution stamps collided
+    # under simultaneous runs). Microseconds + pid suffix.
+    import os as _os
+
+    stamp = (datetime.now().astimezone().strftime("%Y%m%d_%H%M%S_%f")
+             + f"_{_os.getpid() % 100000:05d}")
     run_dir = site_root / "runs" / stamp
     raw_dir = run_dir / "raw"
     table_dir = run_dir / "tables"
@@ -472,6 +478,10 @@ def _run_live_inner(
         getattr(LOG, "error" if issue.severity == "ERROR" else "warning")(
             "[%s] %s", issue.source, issue.message
         )
+    # Gate 1 (hourly product): validate the scored hourly frame now for fast
+    # failure, but the STRICT publish gate runs after ALL products exist
+    # (30-min + daily + cross-product invariants below). A broken final
+    # product must never publish with validation_issues: [].
     score_issues = validate_scored_hourly(tan_hourly)
     for issue in score_issues:
         getattr(LOG, "error" if issue.severity == "ERROR" else "warning")(
@@ -480,14 +490,37 @@ def _run_live_inner(
     if strict:
         raise_on_errors(photo_issues + score_issues, "TanScore output validation failed")
 
-    tan_30 = build_30min_forecast(tan_hourly, hrrr15)
+    tan_30 = build_30min_forecast(tan_hourly, hrrr15, min_temp_f=min_temp_f,
+                                     calibration_dir=calibration_dir)
     tan_30 = attach_fitzpatrick(tan_30, skin_type)
     tan_30 = attach_personalization(
         tan_30, personal_mmd_j_m2=personal_mmd_j_m2,
         basis=personal_mmd_basis, dose_col="tan_dose_30m_j_m2")
     daily_tan = build_daily_summary(tan_30)
     tan_windows = best_tan_windows(tan_hourly)
+    # Gate 2 (final products): strict validates the PUBLISHED artifacts, not
+    # just the hourly frame. Cross-product invariants catch a broken final
+    # product that hourly validation cannot see (audit P0).
+    if strict:
+        from .validation import validate_final_products
 
+        final_issues = validate_final_products(tan_hourly, tan_30, daily_tan)
+        for issue in final_issues:
+            getattr(LOG, "error" if issue.severity == "ERROR" else "warning")(
+                "[%s] %s", issue.source, issue.message
+            )
+        raise_on_errors(final_issues, "Final product validation failed")
+
+    # Privacy: personal MMD fractions must never persist into shared run
+    # tables (audit: clearing the input didn't clear prior personalization,
+    # and exports could carry it). Strip before writing; the API/export
+    # layers recompute fractions per-request from query params instead.
+    _personal_cols = ("personal_mmd_fraction", "personal_mmd_equivalent_dose_j_m2",
+                      "personal_mmd_j_m2", "personalization_basis")
+    for _frame in (tan_hourly, tan_30):
+        for _col in _personal_cols:
+            if _col in _frame.columns:
+                _frame.drop(columns=[_col], inplace=True)
     for frame, name in [
         (det_hourly, "deterministic_hourly"),
         (det_daily, "deterministic_daily"),
@@ -558,7 +591,10 @@ def _run_live_inner(
         "calibration_available": (calibration_dir / "uva_uvb_models.joblib").exists(),
         "calibration_tier": str(tan_hourly["tan_calibration_tier"].iloc[0]) if "tan_calibration_tier" in tan_hourly and len(tan_hourly) else None,
         "source_health": source_health,
-        "validation_issues": _issue_dicts(source_issues + cams_issues + photo_issues + score_issues),
+        "validation_issues": _issue_dicts(
+            source_issues + cams_issues + photo_issues + score_issues
+            + (final_issues if "final_issues" in dir() else []),
+        ),
         "photobiology_model_version": _PBV,
         "tan_score_model_version": config.TAN_SCORE_MODEL_VERSION,
         "tan_dose_model_version": _TDV,
@@ -611,14 +647,22 @@ def _run_live_inner(
     (run_dir / "summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8"
     )
-    # Single latest-run pointer: a directory copy. (A former LATEST marker file
-    # is gone: on case-insensitive filesystems it collides with this directory.)
+    # Single latest-run pointer: atomic swap (audit: delete-then-copy left
+    # a window with no/partial latest). Copy to temp + os.replace rename.
+    # (A former LATEST marker file is gone: it collides on case-insensitive
+    # filesystems.) Caller must hold config.site_lock() for cross-run safety.
     latest = site_root / "latest"
+    _tmp = site_root / f".latest_tmp_{stamp}"
+    if _tmp.is_symlink() or _tmp.is_file():
+        _tmp.unlink()
+    elif _tmp.exists():
+        shutil.rmtree(_tmp)
+    _latest_copy: Path = shutil.copytree(run_dir, _tmp)
     if latest.is_symlink() or latest.is_file():
         latest.unlink()
     elif latest.exists():
         shutil.rmtree(latest)
-    _latest_copy: Path = shutil.copytree(run_dir, latest)
+    os.replace(_tmp, latest)
 
     LOG.info("Run written to %s", run_dir)
     if not daily_tan.empty:
@@ -911,6 +955,24 @@ def run_one_site(
     Zero quality reduction by construction: identical code path per site,
     strict stays on, no fallback tiers, no skipped validations.
     """
+    with config.site_lock():
+        return _run_one_site_locked(
+            root, site, strict, skin_type, min_temp_f, personal_mmd_j_m2,
+            personal_mmd_basis, fresh, force_cams, auto_calibrate)
+
+
+def _run_one_site_locked(
+    root: Path,
+    site: config.Site,
+    strict: bool = True,
+    skin_type: int | None = None,
+    min_temp_f: float | None = None,
+    personal_mmd_j_m2: float | None = None,
+    personal_mmd_basis: str | None = None,
+    fresh: bool = True,
+    force_cams: bool = False,
+    auto_calibrate: bool = True,
+) -> Path:
     from .output import export_static_site
 
     _, calibration_dir, _ = _calibration_paths(

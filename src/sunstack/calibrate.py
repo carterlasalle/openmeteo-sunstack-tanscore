@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import math
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -262,6 +262,25 @@ def train_uv_models(training: pd.DataFrame, calibration_dir: Path) -> dict:
         report[target] = _metrics(work.loc[test_mask, target].to_numpy(), pred)
         bundle[f"{target}_model"] = model
 
+    # Bundle manifest: bind the pickle to training code/data/sklearn versions.
+    # The runtime fails closed on mismatch (audit: stale pickle masqueraded
+    # as the current model). sklearn pinned by importlib version at train time.
+    import hashlib as _hashlib
+
+    try:
+        import sklearn as _sk
+        _sk_ver = _sk.__version__
+    except ImportError:
+        _sk_ver = "unknown"
+    _train_src = Path(__file__).read_bytes()
+    bundle["manifest"] = {
+        "model_version": config.TAN_SCORE_MODEL_VERSION,
+        "training_code_sha256": _hashlib.sha256(_train_src).hexdigest()[:16],
+        "sklearn_version": _sk_ver,
+        "trained_at": datetime.now(UTC).isoformat(),
+        "feature_schema": sorted(kept),
+        "metrics": {k: v for k, v in report.items() if k in ("uva", "uvb")},
+    }
     joblib.dump(bundle, calibration_dir / "uva_uvb_models.joblib")
     (calibration_dir / "model_metrics.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     return report

@@ -180,8 +180,41 @@ def build_live_feature_frame(best: pd.DataFrame, cams_direct: pd.DataFrame | Non
 
 
 def _load_bundle(calibration_dir: Path):
+    """Load the UVA/UVB bundle, failing closed on version mismatch.
+
+    A stale pickle (old sklearn, old model version) must never masquerade
+    as the current model: warn loudly on sklearn drift, error on model
+    version drift. Bundles trained before manifests existed load with a
+    warning (back-compat), not a failure.
+    """
+    import logging as _logging
+
     path = calibration_dir / "uva_uvb_models.joblib"
-    return joblib.load(path) if path.exists() else None
+    if not path.exists():
+        return None
+    bundle = joblib.load(path)
+    man = bundle.get("manifest") if isinstance(bundle, dict) else None
+    if not isinstance(man, dict):
+        _logging.getLogger("sunstack").warning(
+            "UVA/UVB bundle has no manifest (pre-manifest training); "
+            "retrain with `sunstack bootstrap` to bind versions.")
+        return bundle
+    try:
+        import sklearn as _sk
+        _rt_sk = _sk.__version__
+    except ImportError:
+        _rt_sk = "unknown"
+    if man.get("sklearn_version") != _rt_sk:
+        _logging.getLogger("sunstack").warning(
+            "UVA/UVB bundle trained under sklearn %s, runtime is %s; "
+            "retrain to remove version skew.",
+            man.get("sklearn_version"), _rt_sk)
+    if man.get("model_version") != config.TAN_SCORE_MODEL_VERSION:
+        raise RuntimeError(
+            f"UVA/UVB bundle model_version={man.get('model_version')} != "
+            f"runtime {config.TAN_SCORE_MODEL_VERSION}: retrain with "
+            f"`sunstack bootstrap`.")
+    return bundle
 
 
 def predict_uva_uvb(features: pd.DataFrame, calibration_dir: Path) -> tuple[np.ndarray, np.ndarray, str]:
@@ -190,8 +223,14 @@ def predict_uva_uvb(features: pd.DataFrame, calibration_dir: Path) -> tuple[np.n
         X = features.reindex(columns=bundle["features"])
         uva = np.clip(bundle["uva_model"].predict(X), 0, None)
         uvb = np.clip(bundle["uvb_model"].predict(X), 0, None)
-        full_cams = all(c in features and num(features, c).notna().any() for c in ("ozone_du", "aod340", "aod380"))
-        tier = "nasa_power_ml_plus_cams_spectral" if full_cams else "nasa_power_ml"
+        # Per-row tier: whole-frame .any() used to stamp full-CAMS on rows
+        # past the CAMS horizon with no CAMS data (audit P1).
+        _has = lambda c: (num(features, c).notna().to_numpy()
+                          if c in features else np.full(len(features), False))
+        _full = (_has("ozone_du") & _has("aod340") & _has("aod380"))
+        # Per-row array: the caller assigns it as the column (audit P1: the
+        # old scalar stamped full-CAMS on rows past the CAMS horizon).
+        tier = np.where(_full, "nasa_power_ml_plus_cams_spectral", "nasa_power_ml")
     else:
         # Last-resort fallback only. It is explicitly labeled so it can never be
         # mistaken for the calibrated model. Missing inputs stay missing
@@ -429,6 +468,19 @@ def score_forecast(
 
     uva, uvb, tier = predict_uva_uvb(features, calibration_dir)
     out = features.copy()
+    # Feature coverage 0-15: confidence degrades when atmospheric predictors
+    # vanish past CAMS/AQ horizons (audit: missing inputs read as full model).
+    _feat_cols = ("ghi", "dni", "dhi", "clear_ghi", "clear_dni", "kt_clear",
+                  "albedo", "aod550", "cloud_cover", "sza", "temperature_2m",
+                  "ozone_du", "aod340", "aod380", "relative_humidity_2m")
+    try:
+        _cov = np.zeros(len(features), dtype=int)
+        for c in _feat_cols:
+            if c in features:
+                _cov = _cov + num(features, c).notna().to_numpy().astype(int)
+        out["atmospheric_feature_coverage"] = _cov
+    except (TypeError, ValueError):
+        pass
     out["predicted_uva_wm2"] = np.round(uva, 3)
     out["predicted_uvb_wm2"] = np.round(uvb, 4)
     out["tan_calibration_tier"] = tier
@@ -475,7 +527,8 @@ def score_forecast(
     ]
 
     # UVI source fusion: EPA/NWS operational (US public product) + CAMS
-    # spectral + Open-Meteo/GFS. OM gets double weight: 65-snapshot verification
+    # spectral + Open-Meteo Best Match (not GFS-only). OM gets double weight:
+    # 65-snapshot verification
     # (Sep 2026) shows OM 1-day-lead MAE 0.57 vs CAMS 1.49 with a -1.4 systematic
     # low bias (thin-cloud over-attenuation). Weighted median still resists a
     # single bad feed but no longer lets a systematically-low source drag the
@@ -547,9 +600,11 @@ def score_forecast(
         out["uvi_difference_absolute"] = (
             out["uvi_openmeteo"] - out["uvi_cams"]
         ).round(3)
+        # Percent (0-100), not fraction: the old 0-1 storage rendered as
+        # 0.4% instead of 35% wherever a % sign was appended (audit 100x bug).
         out["uvi_difference_percent"] = (
-            (out["uvi_openmeteo"] - out["uvi_cams"]).abs() / denom
-        ).round(4)
+            100.0 * (out["uvi_openmeteo"] - out["uvi_cams"]).abs() / denom
+        ).round(2)
 
     ref_path = calibration_dir / "local_reference.parquet"
     # Version-gate BEFORE scoring percentiles: a stale/missing version file
@@ -608,9 +663,14 @@ def score_forecast(
     # Spread is absolute UVI (not fractional): a 3-UVI split matters at any
     # level, and fractional thresholds go blind at low sun. Pairwise
     # uvi_difference_percent is kept for back-compat only.
+    # Env-wired thresholds (audit: SUNSTACK_UVI_DISAGREE_* were read but
+    # ignored). Absolute UVI spread stays the mechanism; env fractions scale
+    # the defaults so stock config reproduces 1.0/2.0 exactly.
+    _warn_thr = 1.0 * (config.UVI_DISAGREEMENT_WARN_FRAC / 0.35)
+    _strong_thr = 2.0 * (config.UVI_DISAGREEMENT_STRONG_FRAC / 0.60)
     spread = pd.to_numeric(out["uvi_source_spread"], errors="coerce").fillna(0)
-    strong = spread >= 2.0
-    mild = (spread >= 1.0) & ~strong
+    strong = spread >= _strong_thr
+    mild = (spread >= _warn_thr) & ~strong
     conf = pd.to_numeric(out["tan_forecast_confidence_0_100"], errors="coerce")
     conf = conf.where(~mild, conf * 0.85).where(~strong, conf * 0.65)
     out["tan_forecast_confidence_0_100"] = np.round(conf, 1)

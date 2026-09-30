@@ -127,11 +127,28 @@ def current_site() -> Site | None:
     return _SITE_STACK[-1] if _SITE_STACK else None
 
 
+_SITE_LOCK = None
+def site_lock():
+    """Process-wide reentrant lock serializing per-site runs.
+
+    use_site mutates module globals (thread-unsafe by construction); holders
+    of this lock cannot interleave coordinates. Use with `with site_lock()`
+    around run_one_site / refresh handlers.
+    """
+    global _SITE_LOCK
+    if _SITE_LOCK is None:
+        import threading as _threading
+
+        _SITE_LOCK = _threading.RLock()
+    return _SITE_LOCK
+
+
 class use_site:
     """Run a block as one location: config.* reads follow the site.
 
     Read-only override, not mutation: globals are restored on exit, so
-    concurrent or sequential per-site runs cannot leak coordinates.
+    SEQUENTIAL per-site runs cannot leak coordinates. CONCURRENT runs must
+    hold site_lock() (audit: threads could otherwise cross-contaminate).
     """
 
     _site: Site

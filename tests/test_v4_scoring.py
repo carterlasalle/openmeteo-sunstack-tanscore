@@ -1424,6 +1424,9 @@ def test_attach_rejects_unlabeled_mmd():
 
 
 def test_export_preserves_run_attached_fractions(tmp_path):
+    # Audit privacy fix: run tables never carry personal columns (cli strips
+    # before write). Stale run-attached fractions must NOT leak into exports:
+    # export without explicit MMD yields clean NaN; explicit MMD bakes fresh.
     import json as _json
 
     import pandas as pd
@@ -1439,7 +1442,12 @@ def test_export_preserves_run_attached_fractions(tmp_path):
     half.to_parquet(half_path, index=False)
     export_static_site(root, tmp_path / "kept")
     payload = _json.loads((tmp_path / "kept" / "data.json").read_text())
-    assert {r["personal_mmd_fraction"] for r in payload["half_hour"]} == {0.25}
+    assert {r["personal_mmd_fraction"] for r in payload["half_hour"]} == {None}, (
+        "stale run-attached fractions must not leak into exports")
+    export_static_site(root, tmp_path / "pers", personal_mmd_j_m2=2000.0,
+                       personal_mmd_basis="MEASURED")
+    payload = _json.loads((tmp_path / "pers" / "data.json").read_text())
+    assert {r["personal_mmd_fraction"] for r in payload["half_hour"]} != {None}
     with pytest.raises(ValueError, match="explicit basis"):
         export_static_site(root, tmp_path / "bad", personal_mmd_j_m2=2000.0)
 
@@ -2044,16 +2052,16 @@ def test_consensus_degrades_with_missing_sources(tmp_path):
 
 
 def test_daily_peak_uv_uses_consensus(tmp_path):
-    # Day-card peak UVI follows the consensus column when present, so a
-    # split-source day never publishes the outlier as the headline. Peak is
-    # the consensus at the best-scoring row (not the column max).
+    # Day-card peak UVI is the TRUE daylight maximum of the consensus column
+    # (audit: it used to be the value at the opportunity-peak row). A
+    # split-source day never publishes the outlier as the headline.
     from sunstack.opportunity import build_30min_forecast, build_daily_summary
 
     scored = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
     half = build_30min_forecast(scored, None)
     daily = build_daily_summary(half)
-    best = half.loc[half["overall_tan_opportunity_0_100"].idxmax()]
-    assert np.allclose(daily["peak_uv_index"].to_numpy(), [best["uvi_consensus"]])
+    assert np.allclose(daily["peak_uv_index"].to_numpy(),
+                       [half["uvi_consensus"].max()])
 
 
 def test_epa_normalizers_parse_live_shape():

@@ -110,6 +110,95 @@ def raise_on_errors(issues: list[ValidationIssue], prefix: str = "SunStack valid
         raise DataValidationError(f"{prefix}:\n{msg}")
 
 
+def validate_final_products(
+    hourly: pd.DataFrame, half: pd.DataFrame, daily: pd.DataFrame,
+) -> list[ValidationIssue]:
+    """Cross-product invariants on the PUBLISHED artifacts (strict gate 2).
+
+    Hourly validation cannot see these: 30-min/daily derivation bugs (weather
+    loss, fusion drift, false peaks) shipped with validation_issues: [].
+    """
+    issues: list[ValidationIssue] = []
+    if half.empty:
+        return [ValidationIssue("ERROR", "tan_forecast_30min", "30-min product is empty")]
+    if daily.empty:
+        return [ValidationIssue("ERROR", "tan_daily_summary", "daily product is empty")]
+    # 1. Fusion integrity: consensus inside visible source range, integer
+    # source count, spread equals max-min (audit: 2.5 sources, drifted ΔUV).
+    for label, frame in (("30min", half), ("hourly", hourly)):
+        if frame.empty:
+            continue
+        for _, r in frame.iterrows():
+            try:
+                vs = [float(r[c]) for c in ("uv_index", "uvi_cams", "uvi_epa")
+                      if r.get(c) is not None and pd.notna(r[c])]
+            except (TypeError, ValueError):
+                continue
+            cons = r.get("uvi_consensus")
+            if (len(vs) >= 2 and cons is not None and pd.notna(cons)
+                    and not (min(vs) - 0.01 <= float(cons) <= max(vs) + 0.01)):
+                issues.append(ValidationIssue(
+                    "ERROR", f"tan_forecast_{label}",
+                    f"consensus {cons} outside sources at {r.get('time')}"))
+                break
+            sp = r.get("uvi_source_spread")
+            if (len(vs) >= 2 and sp is not None and pd.notna(sp)
+                    and abs(float(sp) - (max(vs) - min(vs))) > 0.02):
+                issues.append(ValidationIssue(
+                    "ERROR", f"tan_forecast_{label}",
+                    f"spread {sp} != source range at {r.get('time')}"))
+                break
+        sc = frame.get("uvi_consensus_sources")
+        if sc is not None:
+            bad = pd.to_numeric(sc, errors="coerce")
+            if bool(((bad % 1) != 0).any()):
+                issues.append(ValidationIssue(
+                    "ERROR", f"tan_forecast_{label}",
+                    "uvi_consensus_sources is fractional (interpolated metadata)"))
+    # 2. Daily peaks are real maxima, not values-at-opportunity-peak.
+    try:
+        daylight = half.copy()
+        daylight["date"] = pd.to_datetime(daylight["dt"]).dt.date.astype(str)
+        for _, d in daily.iterrows():
+            day = str(d.get("date"))
+            g = daylight[daylight["date"] == day]
+            if g.empty:
+                continue
+            for col, dcol in (("uvi_consensus", "peak_uv_index"),
+                              ("tan_dose_30m_j_m2", "best_30m_tan_dose_j_m2"),
+                              ("sed_30m", "best_30m_sed")):
+                if col in g.columns and dcol in d and pd.notna(d[dcol]):
+                    actual = pd.to_numeric(g[col], errors="coerce").max()
+                    if pd.notna(actual) and abs(float(actual) - float(d[dcol])) > 0.05 * max(1.0, abs(float(actual))):
+                        issues.append(ValidationIssue(
+                            "ERROR", "tan_daily_summary",
+                            f"{dcol}={d[dcol]} != true max {round(float(actual), 2)} on {day}"))
+                        break
+    except (KeyError, ValueError, TypeError):
+        pass
+    # 3. Daily weather summaries must not be all-null (weather-loss signal).
+    for col in ("day_high_temperature_f", "day_peak_wind_mph"):
+        if col in daily.columns and daily[col].isna().all():
+            issues.append(ValidationIssue(
+                "ERROR", "tan_daily_summary",
+                f"{col} is 100% null: 30-min weather never arrived"))
+    # 4. Exact-hour weather parity hourly<->30min (audit: 161/196 disagreed).
+    try:
+        hh = hourly[["time", "temperature_2m"]].copy()
+        mm = half[half["time"].isin(hh["time"])][["time", "temperature_2m"]]
+        j = hh.merge(mm, on="time", suffixes=("_h", "_m"))
+        if len(j):
+            dt = (pd.to_numeric(j["temperature_2m_h"], errors="coerce")
+                  - pd.to_numeric(j["temperature_2m_m"], errors="coerce")).abs()
+            if bool((dt > 1.0).sum() > len(j) * 0.1):
+                issues.append(ValidationIssue(
+                    "ERROR", "tan_forecast_30min",
+                    "exact-hour temperature diverges hourly<->30min (weather loss)"))
+    except (KeyError, ValueError, TypeError):
+        pass
+    return issues
+
+
 def validate_cams_direct(df: pd.DataFrame) -> list[ValidationIssue]:
     if df is None or df.empty:
         return [ValidationIssue("ERROR", "cams_direct_ads", "no CAMS rows returned")]
