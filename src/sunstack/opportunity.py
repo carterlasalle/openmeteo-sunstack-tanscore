@@ -118,6 +118,22 @@ def apply_outdoor_feasibility(
     out = scored.copy()
     min_temp = float(config.MIN_TAN_TEMP_F if min_temp_f is None else min_temp_f)
     temp = _num(out, "temperature_2m")
+    # Sun-adjusted feels-like for BARE SKIN lying still (user context:
+    # shirtless + shorts on grass/sand). Solar heating from headline UVI x
+    # clear-sky transmission (bare skin gains ~1.5x the clothed adult), plus a
+    # muggy penalty from dew point (sweat can't evaporate), minus wind strip
+    # (lying still = wind does all cooling). Used for the comfort band ONLY —
+    # hard blocks still use the thermometer.
+    _uvi = _num(out, "uvi_consensus" if "uvi_consensus" in out.columns else "uv_index")
+    _clear = _num(out, "uv_index_clear_sky")
+    _trans = (_uvi / _clear.replace(0, np.nan)).clip(0, 1.2).fillna(0.5)
+    _wind_f = _num(out, "wind_speed_10m", 0).fillna(0)
+    _dew = _num(out, "dew_point_2m")
+    _sun_add = (18.0 * (_uvi / 10.0).clip(0, 1.2) * _trans.clip(0, 1)).fillna(0)
+    _muggy = ((_dew - 65.0).clip(0, 15) * 0.6).fillna(0)
+    _wind_cut = (8.0 * (_wind_f / 25.0).clip(0, 1.5)).fillna(0)
+    out["sun_adjusted_feels_like_f"] = np.round((temp + _sun_add + _muggy - _wind_cut), 1)
+    _feel = temp + _sun_add + _muggy - _wind_cut
     feels = _num(out, "apparent_temperature")
     rain = _num(out, "rain", 0).fillna(0)
     showers = _num(out, "showers", 0).fillna(0)
@@ -139,11 +155,14 @@ def apply_outdoor_feasibility(
     hard_block = rain_now | snow_now | thunder | too_hot | too_cold
 
     multiplier = pd.Series(1.0, index=out.index)
-    # Cold/heat comfort penalties between hard floors/ceilings.
-    cold_band = (temp >= min_temp) & (temp < config.COMFORTABLE_TAN_TEMP_F)
+    # Cold/heat comfort penalties use sun-adjusted feels-like: 65F calm + high
+    # sun feels ~warm and must not be shitted on; same 65F in wind feels cold.
+    # Floor sain: the penalty curve is shallower (0.65 floor, was 0.45) so
+    # strong sun is never dragged to POOR by mild air alone.
+    cold_band = (_feel >= min_temp) & (_feel < config.COMFORTABLE_TAN_TEMP_F)
     if config.COMFORTABLE_TAN_TEMP_F > min_temp:
-        frac = (temp - min_temp) / (config.COMFORTABLE_TAN_TEMP_F - min_temp)
-        multiplier.loc[cold_band] *= 0.45 + 0.55 * frac.loc[cold_band].clip(0, 1)
+        frac = (_feel - min_temp) / (config.COMFORTABLE_TAN_TEMP_F - min_temp)
+        multiplier.loc[cold_band] *= 0.65 + 0.35 * frac.loc[cold_band].clip(0, 1)
     warm = (temp >= config.HEAT_WARNING_TEMP_F) & (temp < config.MAX_TAN_TEMP_F)
     if config.MAX_TAN_TEMP_F > config.HEAT_WARNING_TEMP_F:
         heat_frac = (temp - config.HEAT_WARNING_TEMP_F) / (
@@ -172,7 +191,7 @@ def apply_outdoor_feasibility(
         if pd.notna(temp.loc[i]) and temp.loc[i] < min_temp:
             rs.append(f"temperature < {min_temp:.0f}F")
         if not rs:
-            if pd.notna(temp.loc[i]) and temp.loc[i] < config.COMFORTABLE_TAN_TEMP_F:
+            if pd.notna(_feel.loc[i]) and _feel.loc[i] < config.COMFORTABLE_TAN_TEMP_F:
                 fs.append("cold")
             if pd.notna(temp.loc[i]) and temp.loc[i] >= config.HEAT_WARNING_TEMP_F:
                 fs.append("heat")
@@ -195,6 +214,7 @@ def apply_outdoor_feasibility(
     _comfort = pd.Series("perfect", index=out.index)
     _comfort = _comfort.mask(temp < min_temp, "too cold")
     _comfort = _comfort.mask(cold_band, "cool")
+    _comfort = _comfort.mask((_feel >= config.COMFORTABLE_TAN_TEMP_F) & (temp < config.COMFORTABLE_TAN_TEMP_F), "sun-warmed")
     try:
         _comfort = _comfort.mask((temp >= config.HEAT_WARNING_TEMP_F) & (temp < config.MAX_TAN_TEMP_F), "warm")
         _comfort = _comfort.mask(temp >= config.MAX_TAN_TEMP_F, "too hot")

@@ -2069,3 +2069,32 @@ def test_class_aware_window_excludes_class_blocks():
     assert row["best_available_window_start"] is not None
     assert not ("11:00" <= row["best_available_window_start"][11:16] < "12:15"), (
         f"available window starts in class: {row['best_available_window_start']}")
+
+
+def test_sun_adjusted_comfort_rewards_calm_sun_punishes_wind():
+    # Bare-skin lying still: calm sun feels warmer than windy sun; muggy adds more.
+    import pandas as pd
+
+    from sunstack.opportunity import apply_outdoor_feasibility
+
+    def row(temp, uvi, wind, dew):
+        return pd.DataFrame({
+            'temperature_2m': [temp], 'apparent_temperature': [temp],
+            'uv_index': [uvi], 'uvi_consensus': [uvi], 'uv_index_clear_sky': [5.5],
+            'wind_speed_10m': [wind], 'wind_gusts_10m': [wind + 5],
+            'precipitation_probability': [0.0], 'dew_point_2m': [dew],
+            'relative_humidity_2m': [60.0], 'rain': [0.0], 'showers': [0.0],
+            'snowfall': [0.0], 'weather_code': [1],
+            'tan_score_absolute_0_100': [80.0], 'local_tan_score_0_100': [96.0],
+            'atmospheric_quality_percentile_0_100': [80.0],
+            'tan_forecast_confidence_0_100': [80.0]})
+
+    calm = apply_outdoor_feasibility(row(68.0, 5.0, 2, 55)).iloc[0]
+    windy = apply_outdoor_feasibility(row(68.0, 5.0, 20, 55)).iloc[0]
+    muggy = apply_outdoor_feasibility(row(68.0, 5.0, 2, 74)).iloc[0]
+    assert calm['sun_adjusted_feels_like_f'] > windy['sun_adjusted_feels_like_f'] + 3
+    assert muggy['sun_adjusted_feels_like_f'] > calm['sun_adjusted_feels_like_f'] + 3
+    # 65F scorcher-sun stays GOOD, never shitted on by mild air.
+    hot = apply_outdoor_feasibility(row(65.0, 5.5, 3, 55)).iloc[0]
+    assert hot['overall_tan_opportunity_0_100'] >= 65, (
+        f"65F sun must stay GOOD, got {hot['overall_tan_opportunity_0_100']}")

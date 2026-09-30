@@ -247,7 +247,9 @@ ACTIVE_SNOW_IN_THRESHOLD = float(os.getenv("SUNSTACK_ACTIVE_SNOW_IN_THRESHOLD", 
 PRECIP_PROBABILITY_PENALTY_MAX = float(os.getenv("SUNSTACK_PRECIP_PROBABILITY_PENALTY_MAX", "0.55"))
 WIND_WARNING_MPH = float(os.getenv("SUNSTACK_WIND_WARNING_MPH", "25"))
 WIND_STRONG_MPH = float(os.getenv("SUNSTACK_WIND_STRONG_MPH", "35"))
-OVERALL_SCORE_WEIGHTS = {"absolute": 0.60, "local": 0.15, "atmosphere": 0.10, "confidence": 0.15}
+# Tanning weather leads (audit: 65F scorcher-sun must stay GOOD). Absolute
+# dominates; local is context; atmosphere/confidence are small modifiers.
+OVERALL_SCORE_WEIGHTS = {"absolute": 0.70, "local": 0.15, "atmosphere": 0.05, "confidence": 0.10}
 OVERALL_ABSOLUTE_HEADROOM = float(os.getenv("SUNSTACK_OVERALL_ABSOLUTE_HEADROOM", "20"))
 STRICT_DEFAULT = os.getenv("SUNSTACK_STRICT", "1").strip().lower() not in {"0", "false", "no"}
 REQUIRE_DIRECT_CAMS = os.getenv("SUNSTACK_REQUIRE_DIRECT_CAMS", "1").strip().lower() not in {"0", "false", "no"}
