@@ -572,10 +572,11 @@ def test_calendar_feed_lists_each_window_once_with_stable_uids():
     # 12:30 PM Indiana daylight time is 16:30 UTC.
     assert "DTSTART:20260915T163000Z" in first
     assert "DTEND:20260915T203000Z" in first
-    assert "SEQUENCE:20260915004803" in first
+    assert "SEQUENCE:0" in first
     # Same date UID across reruns: subscribed calendars update in place.
+    # SEQUENCE stays 0 (immutable events; audit: run-tag digits overflowed).
     assert "UID:sunstack-best-sunstack-2026-09-15@sunstack" in second
-    assert "SEQUENCE:20260915010000" in second
+    assert "SEQUENCE:0" in second
     # Hourly-fed descriptions carry per-day UV peaks, not just the score.
     hourly = pd.DataFrame(
         {

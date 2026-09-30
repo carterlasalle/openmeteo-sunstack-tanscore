@@ -197,10 +197,11 @@ def _ery_or_uvi(group: pd.DataFrame, ery: pd.Series) -> pd.Series:
     Data we already have (UVI) must not degrade into missing SED, but a
     derived value is still marked by its source column, never invented.
     """
-    if ery.notna().any():
-        return ery
+    # Rowwise: fill ONLY the holes from UVI (audit: the .any() check kept
+    # null ery where UVI existed). combine_first never invents where both miss.
     if "uv_index" in group.columns:
-        return pd.to_numeric(group["uv_index"], errors="coerce") / 40.0
+        _derived = pd.to_numeric(group["uv_index"], errors="coerce") / 40.0
+        return ery.combine_first(_derived)
     return ery
 
 

@@ -201,6 +201,13 @@ def apply_outdoor_feasibility(
     out["overall_components_unblocked_0_100"] = out.apply(
         _weighted_geometric, axis=1
     ).round(1)
+    # Coverage honesty (audit: missing components silently redefined Overall).
+    _comp_cols = ("tan_score_absolute_0_100", "local_tan_score_0_100",
+                  "atmospheric_quality_percentile_0_100",
+                  "tan_forecast_confidence_0_100")
+    out["overall_component_coverage"] = sum(
+        pd.to_numeric(out[c], errors="coerce").notna().to_numpy().astype(int)
+        if c in out.columns else 0 for c in _comp_cols)
     out["overall_tan_opportunity_0_100"] = (
         (out["overall_components_unblocked_0_100"] * multiplier).clip(0, 100).round(1)
     )

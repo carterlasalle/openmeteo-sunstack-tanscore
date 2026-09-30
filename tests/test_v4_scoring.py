@@ -590,14 +590,16 @@ def test_configured_gap_threshold_reaches_day_and_window(monkeypatch):
         "predicted_uva_wm2": [35.0] * 4,
         "predicted_uvb_wm2": [1.0] * 4,
     })
-    assert window_dose(frame, stamps[0], stamps[3])["tan_dose_best_window_j_m2"] > 0
-    assert day_totals(frame).loc[0, "tan_dose_complete"]
-    monkeypatch.setattr(_config, "TANDOSE_MAX_INTERP_GAP_S", 3600.0)
+    # Default gap is 1h (audit: 3h bridged half the morning): the 2h gap
+    # splits by default and only bridges when patched to 10800.
     split = window_dose(frame, stamps[0], stamps[3])
     assert split["tan_dose_best_window_j_m2"] == 2 * 0.5 * 3600
     days = day_totals(frame)
     assert not bool(days.loc[0, "tan_dose_complete"])
     assert days.loc[0, "tan_dose_coverage_fraction"] < 1.0
+    monkeypatch.setattr(_config, "TANDOSE_MAX_INTERP_GAP_S", 10800.0)
+    assert window_dose(frame, stamps[0], stamps[3])["tan_dose_best_window_j_m2"] > 0
+    assert day_totals(frame).loc[0, "tan_dose_complete"]
 
 
 def test_daily_summary_carries_sed_completeness():

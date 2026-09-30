@@ -249,6 +249,9 @@ def emulator_manifest(spectral_backend: str = SPECTRAL_BACKEND_VERSION) -> dict[
 
 
 def spectral_tier_for_row(has_emulator: bool = False, has_reference: bool = False) -> str:
+    """Tier C: implemented (broadband reconstruction). Tier B: scaffold/contract
+    defined (manifest validation exists, no production emulator wired).
+    Tier A: reserved. Production always resolves C today."""
     if has_reference:
         return "A"
     if has_emulator:

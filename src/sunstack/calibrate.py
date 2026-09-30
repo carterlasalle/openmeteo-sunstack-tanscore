@@ -426,6 +426,10 @@ def compute_openmeteo_model_skill(
     skill["inverse_mae"] = inv
     denom = inv.groupby([scol(skill, "variable"), scol(skill, "lead_days")]).transform("sum")
     skill["normalized_weight"] = inv / denom
+    # Audit: these weights are DIAGNOSTIC artifacts — no runtime consumer
+    # applies them to fusion/scoring yet. Labeled so nobody mistakes the
+    # CSV for live calibration.
+    skill["live_use"] = "diagnostic-only (no runtime consumer as of v4)"
     calibration_dir.mkdir(parents=True, exist_ok=True)
     skill.to_parquet(calibration_dir / "openmeteo_model_skill.parquet", index=False)
     skill.to_csv(calibration_dir / "openmeteo_model_skill.csv", index=False)

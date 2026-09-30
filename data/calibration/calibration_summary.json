@@ -30,7 +30,8 @@
       "median_absolute_error": 0.010592917676502445
     }
   },
-  "absolute_score_definition": {
+  "legacy_absolute_score_definition_55_30_15": {
+    "status": "DEPRECATED: retained for migration diagnostics only; never used in v4 production scoring",
     "uvi_reference": 20.0,
     "uva_reference_wm2": 60.0,
     "weights": {

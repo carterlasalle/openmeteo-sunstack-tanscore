@@ -31,6 +31,16 @@ def _registry_path() -> Path:
         cand = parent / "locations.yaml"
         if cand.exists():
             return cand
+    # Installed wheel: locations.yaml ships as sunstack/_data/locations.yaml
+    # (audit: unpackaged registry fell back silently outside the repo).
+    try:
+        from importlib import resources as _res
+
+        _pkg = _res.files("sunstack") / "_data" / "locations.yaml"
+        if _pkg.is_file():
+            return Path(str(_pkg))
+    except (ImportError, TypeError, ValueError):
+        pass
     return Path("locations.yaml")
 
 def load_sites(registry: Path | None = None) -> list[Site]:
@@ -216,7 +226,8 @@ REQUIRE_CANONICAL_SPECTRUM = (
 # silently scoring as Tier C while labeled otherwise.
 TIERB_MANIFEST_PATH = os.getenv("SUNSTACK_TIERB_MANIFEST") or None
 # TanDose integration: gaps larger than this split the integral (never silent).
-TANDOSE_MAX_INTERP_GAP_S = float(os.getenv("SUNSTACK_TANDOSE_MAX_GAP_S", "10800"))
+# Audit: 3h bridged half the morning for UV doses. 1h default; override via env.
+TANDOSE_MAX_INTERP_GAP_S = float(os.getenv("SUNSTACK_TANDOSE_MAX_GAP_S", "3600"))
 # CAMS/Open-Meteo UVI disagreement: fractional disagreement above this reduces
 # confidence (physics untouched).
 UVI_DISAGREEMENT_WARN_FRAC = float(os.getenv("SUNSTACK_UVI_DISAGREE_FRAC", "0.35"))

@@ -4,6 +4,7 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -268,9 +269,12 @@ def write_raw(results: list[FetchResult], raw_dir: Path) -> None:
         }
         manifest.append(entry)
         if result.payload is not None:
-            (raw_dir / f"{result.name}.json").write_text(
-                json.dumps(result.payload, indent=2, allow_nan=True), encoding="utf-8"
-            )
+            _raw_text = json.dumps(result.payload, indent=2, allow_nan=True)
+            (raw_dir / f"{result.name}.json").write_text(_raw_text, encoding="utf-8")
+            import hashlib as _hashlib
+
+            entry["sha256"] = _hashlib.sha256(_raw_text.encode("utf-8")).hexdigest()[:16]
+            entry["retrieved_at"] = datetime.now(UTC).isoformat()
     (raw_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2), encoding="utf-8"
     )
