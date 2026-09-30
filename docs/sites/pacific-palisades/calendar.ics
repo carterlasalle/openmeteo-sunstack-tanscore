@@ -5,185 +5,184 @@ CALSCALE:GREGORIAN
 METHOD:PUBLISH
 X-WR-CALNAME:SunStack best sun windows
 BEGIN:VEVENT
-UID:sunstack-best-pacific-palisades-2026-09-29@pacific-palisades
-DTSTAMP:20260930T042743Z
-SEQUENCE:0
-DTSTART:20260929T183000Z
-DTEND:20260929T220000Z
-SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.55\, overall 69)
-DESCRIPTION:Overall 69/100. Abs 65/100. Peak UV 6.55 at 1:00 PM. UVA 48.246
-  W/m2. UVB 1.4229 W/m2. TanDose window 12417.3 J/m2 mel. TanDose day 22326
- .6 J/m2 mel. SED window 19.423. SED day 37.26. UVA day 1.17452e+06 J/m2. U
- VB day 28490.7 J/m2. Confidence 65. VERY GOOD. Times refresh with each Sun
- Stack run.
-END:VEVENT
-BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-09-30@pacific-palisades
-DTSTAMP:20260930T042743Z
+DTSTAMP:20260930T070832Z
 SEQUENCE:0
-DTSTART:20260930T190000Z
-DTEND:20260930T220000Z
-SUMMARY:Best sun 12:00 PM-3:00 PM (UV 6.55\, overall 66)
-DESCRIPTION:Overall 66/100. Abs 64/100. Peak UV 6.55 at 1:00 PM. UVA 45.889
-  W/m2. UVB 1.345 W/m2. TanDose window 10220.8 J/m2 mel. TanDose day 20926.
- 2 J/m2 mel. SED window 16.662. SED day 37.173. UVA day 1.10133e+06 J/m2. U
- VB day 26699 J/m2. Confidence 57. VERY GOOD. Times refresh with each SunSt
- ack run.
+DTSTART:20260930T183000Z
+DTEND:20260930T213000Z
+SUMMARY:Best sun 11:30 AM-2:30 PM (UV 6.55\, overall 67)
+DESCRIPTION:Overall 67/100. Abs 65/100. Peak UV 6.55 at 1:00 PM. UVA 47.506
+  W/m2. UVB 1.3809 W/m2. TanDose window 10449.1 J/m2 mel. TanDose day 21210
+ .4 J/m2 mel. SED window 16.737. SED day 37.035. UVA day 1.11316e+06 J/m2. 
+ UVB day 27089.7 J/m2. Confidence 57. VERY GOOD. Times refresh with each Su
+ nStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-01@pacific-palisades
-DTSTAMP:20260930T042743Z
+DTSTAMP:20260930T070832Z
 SEQUENCE:0
 DTSTART:20261001T183000Z
 DTEND:20261001T220000Z
 SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.55\, overall 63)
 DESCRIPTION:Overall 63/100. Abs 61/100. Peak UV 6.55 at 1:00 PM. UVA 43.866
-  W/m2. UVB 1.3196 W/m2. TanDose window 11439.7 J/m2 mel. TanDose day 20861
- .6 J/m2 mel. SED window 19.063. SED day 37.575. UVA day 1.04958e+06 J/m2. 
- UVB day 27049.5 J/m2. Confidence 55. GOOD. Times refresh with each SunStac
- k run.
+  W/m2. UVB 1.3196 W/m2. TanDose window 11438.6 J/m2 mel. TanDose day 20856
+ .6 J/m2 mel. SED window 19.108. SED day 37.575. UVA day 1.0486e+06 J/m2. U
+ VB day 27049.6 J/m2. Confidence 55. GOOD. Times refresh with each SunStack
+  run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-02@pacific-palisades
-DTSTAMP:20260930T042743Z
+DTSTAMP:20260930T070832Z
 SEQUENCE:0
 DTSTART:20261002T183000Z
 DTEND:20261002T220000Z
 SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.55\, overall 68)
-DESCRIPTION:Overall 68/100. Abs 66/100. Peak UV 6.55 at 1:00 PM. UVA 48.163
-  W/m2. UVB 1.4109 W/m2. TanDose window 12155.5 J/m2 mel. TanDose day 22066
- .2 J/m2 mel. SED window 19.401. SED day 38.07. UVA day 1.16771e+06 J/m2. U
- VB day 28096.7 J/m2. Confidence 54. VERY GOOD. Times refresh with each Sun
- Stack run.
+DESCRIPTION:Overall 68/100. Abs 66/100. Peak UV 6.55 at 1:00 PM. UVA 48.014
+  W/m2. UVB 1.4042 W/m2. TanDose window 12134.8 J/m2 mel. TanDose day 22036
+ .4 J/m2 mel. SED window 19.378. SED day 38.025. UVA day 1.16663e+06 J/m2. 
+ UVB day 28053.9 J/m2. Confidence 54. VERY GOOD. Times refresh with each Su
+ nStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-03@pacific-palisades
-DTSTAMP:20260930T042743Z
+DTSTAMP:20260930T070832Z
 SEQUENCE:0
 DTSTART:20261003T183000Z
 DTEND:20261003T220000Z
 SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.55\, overall 68)
-DESCRIPTION:Overall 68/100. Abs 66/100. Peak UV 6.55 at 1:00 PM. UVA 48.6 W
- /m2. UVB 1.3957 W/m2. TanDose window 12125.6 J/m2 mel. TanDose day 21856.3
-  J/m2 mel. SED window 19.378. SED day 37.935. UVA day 1.17433e+06 J/m2. UV
- B day 27670.8 J/m2. Confidence 54. VERY GOOD. Times refresh with each SunS
- tack run.
+DESCRIPTION:Overall 68/100. Abs 65/100. Peak UV 6.55 at 1:00 PM. UVA 48.589
+  W/m2. UVB 1.3925 W/m2. TanDose window 12072.9 J/m2 mel. TanDose day 21768
+ .8 J/m2 mel. SED window 19.378. SED day 37.89. UVA day 1.17109e+06 J/m2. U
+ VB day 27546.8 J/m2. Confidence 53. VERY GOOD. Times refresh with each Sun
+ Stack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-04@pacific-palisades
-DTSTAMP:20260930T042743Z
+DTSTAMP:20260930T070832Z
 SEQUENCE:0
 DTSTART:20261004T183000Z
 DTEND:20261004T220000Z
-SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.5\, overall 67)
-DESCRIPTION:Overall 67/100. Abs 61/100. Peak UV 6.5 at 1:00 PM. UVA 48.124 
- W/m2. UVB 1.2863 W/m2. TanDose window 11391.6 J/m2 mel. TanDose day 20534.
- 1 J/m2 mel. SED window 19.029. SED day 36.9. UVA day 1.15769e+06 J/m2. UVB
-  day 25509.4 J/m2. Confidence 80. VERY GOOD. Times refresh with each SunSt
+SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.5\, overall 66)
+DESCRIPTION:Overall 66/100. Abs 61/100. Peak UV 6.5 at 1:00 PM. UVA 47.976 
+ W/m2. UVB 1.2792 W/m2. TanDose window 11368 J/m2 mel. TanDose day 20477.1 
+ J/m2 mel. SED window 19.153. SED day 37.395. UVA day 1.15542e+06 J/m2. UVB
+  day 25430.3 J/m2. Confidence 80. VERY GOOD. Times refresh with each SunSt
  ack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-05@pacific-palisades
-DTSTAMP:20260930T042743Z
+DTSTAMP:20260930T070832Z
 SEQUENCE:0
 DTSTART:20261005T183000Z
 DTEND:20261005T220000Z
 SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.35\, overall 67)
 DESCRIPTION:Overall 67/100. Abs 61/100. Peak UV 6.35 at 1:00 PM. UVA 47.83 
- W/m2. UVB 1.2783 W/m2. TanDose window 11252.1 J/m2 mel. TanDose day 20177.
- 6 J/m2 mel. SED window 18.664. SED day 36.766. UVA day 1.14403e+06 J/m2. U
- VB day 25009.2 J/m2. Confidence 83. VERY GOOD. Times refresh with each Sun
+ W/m2. UVB 1.2783 W/m2. TanDose window 11259.4 J/m2 mel. TanDose day 20192.
+ 8 J/m2 mel. SED window 18.647. SED day 36.811. UVA day 1.14647e+06 J/m2. U
+ VB day 25013.8 J/m2. Confidence 83. VERY GOOD. Times refresh with each Sun
  Stack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-06@pacific-palisades
-DTSTAMP:20260930T042743Z
+DTSTAMP:20260930T070832Z
 SEQUENCE:0
 DTSTART:20261006T183000Z
 DTEND:20261006T220000Z
-SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.3\, overall 66)
-DESCRIPTION:Overall 66/100. Abs 60/100. Peak UV 6.3 at 1:00 PM. UVA 47.248 
- W/m2. UVB 1.2575 W/m2. TanDose window 11154.8 J/m2 mel. TanDose day 19926.
- 8 J/m2 mel. SED window 18.506. SED day 36.495. UVA day 1.13436e+06 J/m2. U
- VB day 24657.6 J/m2. Confidence 82. VERY GOOD. Times refresh with each Sun
- Stack run.
-END:VEVENT
-BEGIN:VEVENT
-UID:sunstack-best-pacific-palisades-2026-10-07@pacific-palisades
-DTSTAMP:20260930T042743Z
-SEQUENCE:0
-DTSTART:20261007T183000Z
-DTEND:20261007T220000Z
-SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.3\, overall 65)
-DESCRIPTION:Overall 65/100. Abs 60/100. Peak UV 6.3 at 1:00 PM. UVA 46.946 
- W/m2. UVB 1.2441 W/m2. TanDose window 11054 J/m2 mel. TanDose day 19717.9 
- J/m2 mel. SED window 18.506. SED day 36.09. UVA day 1.12724e+06 J/m2. UVB 
- day 24356.6 J/m2. Confidence 81. VERY GOOD. Times refresh with each SunSta
- ck run.
-END:VEVENT
-BEGIN:VEVENT
-UID:sunstack-best-pacific-palisades-2026-10-08@pacific-palisades
-DTSTAMP:20260930T042743Z
-SEQUENCE:0
-DTSTART:20261008T183000Z
-DTEND:20261008T220000Z
-SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.25\, overall 66)
-DESCRIPTION:Overall 66/100. Abs 60/100. Peak UV 6.25 at 1:00 PM. UVA 47.297
-  W/m2. UVB 1.256 W/m2. TanDose window 11052.5 J/m2 mel. TanDose day 19727.
- 8 J/m2 mel. SED window 18.349. SED day 35.73. UVA day 1.13289e+06 J/m2. UV
- B day 24323.1 J/m2. Confidence 79. VERY GOOD. Times refresh with each SunS
+SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.35\, overall 66)
+DESCRIPTION:Overall 66/100. Abs 60/100. Peak UV 6.35 at 1:00 PM. UVA 47.519
+  W/m2. UVB 1.2646 W/m2. TanDose window 11202.5 J/m2 mel. TanDose day 20057
+  J/m2 mel. SED window 18.664. SED day 36.811. UVA day 1.14024e+06 J/m2. UV
+ B day 24832.6 J/m2. Confidence 82. VERY GOOD. Times refresh with each SunS
  tack run.
 END:VEVENT
 BEGIN:VEVENT
-UID:sunstack-best-pacific-palisades-2026-10-09@pacific-palisades
-DTSTAMP:20260930T042743Z
+UID:sunstack-best-pacific-palisades-2026-10-07@pacific-palisades
+DTSTAMP:20260930T070832Z
 SEQUENCE:0
-DTSTART:20261009T183000Z
-DTEND:20261009T220000Z
-SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.2\, overall 65)
-DESCRIPTION:Overall 65/100. Abs 59/100. Peak UV 6.2 at 1:00 PM. UVA 46.609 
- W/m2. UVB 1.2269 W/m2. TanDose window 10845.3 J/m2 mel. TanDose day 19259.
- 9 J/m2 mel. SED window 18.191. SED day 35.415. UVA day 1.10795e+06 J/m2. U
- VB day 23728.9 J/m2. Confidence 84. VERY GOOD. Times refresh with each Sun
+DTSTART:20261007T183000Z
+DTEND:20261007T220000Z
+SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.4\, overall 65)
+DESCRIPTION:Overall 65/100. Abs 60/100. Peak UV 6.4 at 1:00 PM. UVA 47.278 
+ W/m2. UVB 1.2459 W/m2. TanDose window 11071.9 J/m2 mel. TanDose day 19767.
+ 3 J/m2 mel. SED window 18.686. SED day 36.316. UVA day 1.13166e+06 J/m2. U
+ VB day 24403.2 J/m2. Confidence 80. VERY GOOD. Times refresh with each Sun
  Stack run.
 END:VEVENT
 BEGIN:VEVENT
+UID:sunstack-best-pacific-palisades-2026-10-08@pacific-palisades
+DTSTAMP:20260930T070832Z
+SEQUENCE:0
+DTSTART:20261008T183000Z
+DTEND:20261008T220000Z
+SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.35\, overall 65)
+DESCRIPTION:Overall 65/100. Abs 59/100. Peak UV 6.35 at 1:00 PM. UVA 46.689
+  W/m2. UVB 1.2298 W/m2. TanDose window 10900.6 J/m2 mel. TanDose day 19386
+ .3 J/m2 mel. SED window 18.529. SED day 36.001. UVA day 1.10999e+06 J/m2. 
+ UVB day 23931.8 J/m2. Confidence 78. VERY GOOD. Times refresh with each Su
+ nStack run.
+END:VEVENT
+BEGIN:VEVENT
+UID:sunstack-best-pacific-palisades-2026-10-09@pacific-palisades
+DTSTAMP:20260930T070832Z
+SEQUENCE:0
+DTSTART:20261009T183000Z
+DTEND:20261009T220000Z
+SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.2\, overall 60)
+DESCRIPTION:Overall 60/100. Abs 59/100. Peak UV 6.2 at 1:00 PM. UVA 46.377 
+ W/m2. UVB 1.2225 W/m2. TanDose window 10833.7 J/m2 mel. TanDose day 19226.
+ 9 J/m2 mel. SED window 18.169. SED day 34.965. UVA day 1.09326e+06 J/m2. U
+ VB day 23802.7 J/m2. Confidence 79. GOOD. Times refresh with each SunStack
+  run.
+END:VEVENT
+BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-10@pacific-palisades
-DTSTAMP:20260930T042743Z
+DTSTAMP:20260930T070832Z
 SEQUENCE:0
 DTSTART:20261010T183000Z
 DTEND:20261010T220000Z
-SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.15\, overall 65)
-DESCRIPTION:Overall 65/100. Abs 58/100. Peak UV 6.15 at 1:00 PM. UVA 46.414
-  W/m2. UVB 1.206 W/m2. TanDose window 10763.2 J/m2 mel. TanDose day 19039.
- 4 J/m2 mel. SED window 18.039. SED day 35.235. UVA day 1.10058e+06 J/m2. U
- VB day 23410 J/m2. Confidence 84. VERY GOOD. Times refresh with each SunSt
- ack run.
+SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.1\, overall 64)
+DESCRIPTION:Overall 64/100. Abs 58/100. Peak UV 6.1 at 1:00 PM. UVA 46.256 
+ W/m2. UVB 1.206 W/m2. TanDose window 10769.8 J/m2 mel. TanDose day 19117.1
+  J/m2 mel. SED window 17.904. SED day 34.965. UVA day 1.10242e+06 J/m2. UV
+ B day 23529.1 J/m2. Confidence 82. GOOD. Times refresh with each SunStack 
+ run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-11@pacific-palisades
-DTSTAMP:20260930T042743Z
+DTSTAMP:20260930T070832Z
 SEQUENCE:0
 DTSTART:20261011T183000Z
-DTEND:20261011T220000Z
-SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.15\, overall 64)
-DESCRIPTION:Overall 64/100. Abs 58/100. Peak UV 6.15 at 1:00 PM. UVA 46.096
-  W/m2. UVB 1.1951 W/m2. TanDose window 10664.8 J/m2 mel. TanDose day 18755
- .6 J/m2 mel. SED window 18.034. SED day 35.055. UVA day 1.09549e+06 J/m2. 
- UVB day 22959.3 J/m2. Confidence 85. GOOD. Times refresh with each SunStac
- k run.
+DTEND:20261011T213000Z
+SUMMARY:Best sun 11:30 AM-2:30 PM (UV 6.15\, overall 66)
+DESCRIPTION:Overall 66/100. Abs 59/100. Peak UV 6.15 at 1:00 PM. UVA 46.651
+  W/m2. UVB 1.2311 W/m2. TanDose window 9435.2 J/m2 mel. TanDose day 17942.
+ 2 J/m2 mel. SED window 15.587. SED day 32.715. UVA day 1.01347e+06 J/m2. U
+ VB day 22272.6 J/m2. Confidence 86. VERY GOOD. Times refresh with each Sun
+ Stack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-12@pacific-palisades
-DTSTAMP:20260930T042743Z
+DTSTAMP:20260930T070832Z
 SEQUENCE:0
 DTSTART:20261012T183000Z
-DTEND:20261012T220000Z
-SUMMARY:Best sun 11:30 AM-3:00 PM (UV 6.1\, overall 63)
-DESCRIPTION:Overall 63/100. Abs 56/100. Peak UV 6.1 at 1:00 PM. UVA 45.489 
- W/m2. UVB 1.1689 W/m2. TanDose window 10438.9 J/m2 mel. TanDose day 18275.
- 2 J/m2 mel. SED window 17.882. SED day 34.47. UVA day 1.08114e+06 J/m2. UV
- B day 22248.8 J/m2. Confidence 83. GOOD. Times refresh with each SunStack 
- run.
+DTEND:20261012T213000Z
+SUMMARY:Best sun 11:30 AM-2:30 PM (UV 5.35\, overall 57)
+DESCRIPTION:Overall 57/100. Abs 52/100. Peak UV 5.35 at 1:00 PM. UVA 39.347
+  W/m2. UVB 1.1009 W/m2. TanDose window 8326.5 J/m2 mel. TanDose day 16386.
+ 3 J/m2 mel. SED window 13.674. SED day 30.375. UVA day 912266 J/m2. UVB da
+ y 20460.2 J/m2. Confidence 67. GOOD. Times refresh with each SunStack run.
+END:VEVENT
+BEGIN:VEVENT
+UID:sunstack-best-pacific-palisades-2026-10-13@pacific-palisades
+DTSTAMP:20260930T070832Z
+SEQUENCE:0
+DTSTART:20261013T183000Z
+DTEND:20261013T220000Z
+SUMMARY:Best sun 11:30 AM-3:00 PM (UV 5.95\, overall 61)
+DESCRIPTION:Overall 61/100. Abs 56/100. Peak UV 5.95 at 1:00 PM. UVA 44.763
+  W/m2. UVB 1.1646 W/m2. TanDose window 10250.5 J/m2 mel. TanDose day 17912
+ .7 J/m2 mel. SED window 17.432. SED day 33.57. UVA day 1.05171e+06 J/m2. U
+ VB day 21878.6 J/m2. Confidence 78. GOOD. Times refresh with each SunStack
+  run.
 END:VEVENT
 END:VCALENDAR
