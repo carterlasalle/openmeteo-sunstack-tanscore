@@ -934,6 +934,11 @@ def _publish_site(site: config.Site) -> None:
         ["git", "commit", "-m", f"Scheduled run {slug} {stamp}"], check=False
     )
     _ = committed
+    # Stash any regenerated-but-uncommitted files (other site's docs, run
+    # state) so the rebase never wedges on "unstaged changes" between the two
+    # per-site publishes. Restored right after, before the push.
+    subprocess.run(["git", "stash", "push", "-m", f"publish-{slug}",
+                    "--", "docs", "data"], check=False)
     pulled = subprocess.run(["git", "pull", "--rebase", "-X", "ours"], check=False)
     if pulled.returncode != 0:
         subprocess.run(["git", "rebase", "--abort"], check=False)
@@ -942,7 +947,9 @@ def _publish_site(site: config.Site) -> None:
         )
         if second.returncode != 0:
             subprocess.run(["git", "rebase", "--abort"], check=False)
+            subprocess.run(["git", "stash", "pop"], check=False)
             raise RuntimeError(f"publish rebase failed for {slug}")
+    subprocess.run(["git", "stash", "pop"], check=False)
     pushed = subprocess.run(["git", "push"], check=False)
     if pushed.returncode != 0:
         raise RuntimeError(f"publish push failed for {slug}")
