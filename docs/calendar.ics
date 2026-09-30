@@ -5,33 +5,20 @@ CALSCALE:GREGORIAN
 METHOD:PUBLISH
 X-WR-CALNAME:SunStack best sun windows
 BEGIN:VEVENT
-UID:sunstack-best-south-bend-2026-09-29@south-bend
-DTSTAMP:20260930T035219Z
-SEQUENCE:0
-DTSTART:20260929T160000Z
-DTEND:20260929T200000Z
-SUMMARY:Best sun 12:00 PM-4:00 PM (UV 5.25\, overall 63)
-DESCRIPTION:Overall 63/100. Abs 51/100. Peak UV 5.25 at 2:00 PM. UVA 41.612
-  W/m2. UVB 1.0603 W/m2. TanDose window 10879.5 J/m2 mel. TanDose day 17436
- .7 J/m2 mel. SED window 17.415. SED day 29.814. UVA day 1.02059e+06 J/m2. 
- UVB day 21325.4 J/m2. Confidence 83. GOOD. Times refresh with each SunStac
- k run.
-END:VEVENT
-BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-09-30@south-bend
-DTSTAMP:20260930T035219Z
+DTSTAMP:20260930T042714Z
 SEQUENCE:0
 DTSTART:20260930T150000Z
 DTEND:20260930T180000Z
-SUMMARY:Best sun 11:00 AM-2:00 PM (UV 0.73\, overall 26)
-DESCRIPTION:Overall 26/100. Abs 26/100. Peak UV 0.73 at 10:00 AM. UVA 18.27
- 5 W/m2. UVB 0.5098 W/m2. TanDose window 3554.8 J/m2 mel. TanDose day 6317.
- 9 J/m2 mel. SED window 1.218. SED day 3.35. UVA day 351754 J/m2. UVB day 7
- 888.53 J/m2. Confidence 27. POOR. Times refresh with each SunStack run.
+SUMMARY:Best sun 11:00 AM-2:00 PM (UV 0.73\, overall 24)
+DESCRIPTION:Overall 24/100. Abs 26/100. Peak UV 0.73 at 10:00 AM. UVA 18.27
+ 5 W/m2. UVB 0.5098 W/m2. TanDose window 3554.8 J/m2 mel. TanDose day 6299.
+ 7 J/m2 mel. SED window 1.218. SED day 3.339. UVA day 349493 J/m2. UVB day 
+ 7877.05 J/m2. Confidence 27. POOR. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-10-01@south-bend
-DTSTAMP:20260930T035219Z
+DTSTAMP:20260930T042714Z
 SEQUENCE:0
 DTSTART:20261001T150000Z
 DTEND:20261001T200000Z
@@ -39,35 +26,35 @@ SUMMARY:Best sun 11:00 AM-4:00 PM (UV 2.05\, overall 20)
 DESCRIPTION:Overall 20/100. Abs 21/100. Peak UV 2.05 at 3:00 PM. UVA 15.935
   W/m2. UVB 0.4469 W/m2. TanDose window 4854.5 J/m2 mel. TanDose day 5808.4
   J/m2 mel. SED window 7.965. SED day 11.07. UVA day 299372 J/m2. UVB day 7
- 467.5 J/m2. Confidence 26. POOR. Times refresh with each SunStack run.
+ 467.5 J/m2. Confidence 22. POOR. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-10-02@south-bend
-DTSTAMP:20260930T035219Z
+DTSTAMP:20260930T042714Z
 SEQUENCE:0
 DTSTART:20261002T170000Z
-DTEND:20261002T203000Z
-SUMMARY:Best sun 1:00 PM-4:30 PM (UV 5.1\, overall 48)
-DESCRIPTION:Overall 48/100. Abs 48/100. Peak UV 5.1 at 2:00 PM. UVA 41.121 
- W/m2. UVB 1.0289 W/m2. TanDose window 8766.7 J/m2 mel. TanDose day 13371.5
-  J/m2 mel. SED window 14.608. SED day 23.49. UVA day 768405 J/m2. UVB day 
- 16481.5 J/m2. Confidence 51. FAIR. Times refresh with each SunStack run.
+DTEND:20261002T200000Z
+SUMMARY:Best sun 1:00 PM-4:00 PM (UV 5.1\, overall 49)
+DESCRIPTION:Overall 49/100. Abs 48/100. Peak UV 5.1 at 2:00 PM. UVA 41.121 
+ W/m2. UVB 1.0289 W/m2. TanDose window 7890.1 J/m2 mel. TanDose day 13371.5
+  J/m2 mel. SED window 12.915. SED day 23.49. UVA day 768405 J/m2. UVB day 
+ 16481.5 J/m2. Confidence 49. FAIR. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-10-03@south-bend
-DTSTAMP:20260930T035219Z
+DTSTAMP:20260930T042714Z
 SEQUENCE:0
 DTSTART:20261003T163000Z
 DTEND:20261003T200000Z
-SUMMARY:Best sun 12:30 PM-4:00 PM (UV 5.05\, overall 55)
-DESCRIPTION:Overall 55/100. Abs 50/100. Peak UV 5.05 at 2:00 PM. UVA 40.629
+SUMMARY:Best sun 12:30 PM-4:00 PM (UV 5.05\, overall 57)
+DESCRIPTION:Overall 57/100. Abs 50/100. Peak UV 5.05 at 2:00 PM. UVA 40.629
   W/m2. UVB 1.022 W/m2. TanDose window 9136 J/m2 mel. TanDose day 16065 J/m
  2 mel. SED window 14.721. SED day 28.08. UVA day 933200 J/m2. UVB day 1971
  1.9 J/m2. Confidence 68. GOOD. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-10-04@south-bend
-DTSTAMP:20260930T035219Z
+DTSTAMP:20260930T042714Z
 SEQUENCE:0
 DTSTART:20261004T160000Z
 DTEND:20261004T193000Z
@@ -75,83 +62,83 @@ SUMMARY:Best sun 12:00 PM-3:30 PM (UV 4.85\, overall 47)
 DESCRIPTION:Overall 47/100. Abs 40/100. Peak UV 4.85 at 2:00 PM. UVA 39.217
   W/m2. UVB 0.7806 W/m2. TanDose window 7201.6 J/m2 mel. TanDose day 12477.
  7 J/m2 mel. SED window 13.342. SED day 25.74. UVA day 862331 J/m2. UVB day
-  14079.3 J/m2. Confidence 53. FAIR. Times refresh with each SunStack run.
+  14079.3 J/m2. Confidence 56. FAIR. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-10-05@south-bend
-DTSTAMP:20260930T035219Z
+DTSTAMP:20260930T042714Z
 SEQUENCE:0
 DTSTART:20261005T160000Z
-DTEND:20261005T210000Z
-SUMMARY:Best sun 12:00 PM-5:00 PM (UV 4.5\, overall 31)
-DESCRIPTION:Overall 31/100. Abs 38/100. Peak UV 4.5 at 2:00 PM. UVA 38.69 W
- /m2. UVB 0.7158 W/m2. TanDose window 9232.1 J/m2 mel. TanDose day 12703.9 
- J/m2 mel. SED window 17.775. SED day 26.64. UVA day 912985 J/m2. UVB day 1
- 4021.3 J/m2. Confidence 58. POOR. Times refresh with each SunStack run.
+DTEND:20261005T203000Z
+SUMMARY:Best sun 12:00 PM-4:30 PM (UV 4.5\, overall 36)
+DESCRIPTION:Overall 36/100. Abs 38/100. Peak UV 4.5 at 2:00 PM. UVA 38.69 W
+ /m2. UVB 0.7158 W/m2. TanDose window 8685.6 J/m2 mel. TanDose day 12703.9 
+ J/m2 mel. SED window 16.498. SED day 26.64. UVA day 912985 J/m2. UVB day 1
+ 4021.3 J/m2. Confidence 60. FAIR. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-10-06@south-bend
-DTSTAMP:20260930T035219Z
+DTSTAMP:20260930T042714Z
 SEQUENCE:0
 DTSTART:20261006T160000Z
-DTEND:20261006T210000Z
-SUMMARY:Best sun 12:00 PM-5:00 PM (UV 4.6\, overall 35)
-DESCRIPTION:Overall 35/100. Abs 37/100. Peak UV 4.6 at 2:00 PM. UVA 39.062 
- W/m2. UVB 0.725 W/m2. TanDose window 9390.8 J/m2 mel. TanDose day 12796.9 
- J/m2 mel. SED window 17.955. SED day 26.73. UVA day 914619 J/m2. UVB day 1
- 4168.9 J/m2. Confidence 56. FAIR. Times refresh with each SunStack run.
+DTEND:20261006T203000Z
+SUMMARY:Best sun 12:00 PM-4:30 PM (UV 4.6\, overall 39)
+DESCRIPTION:Overall 39/100. Abs 38/100. Peak UV 4.6 at 2:00 PM. UVA 39.062 
+ W/m2. UVB 0.725 W/m2. TanDose window 8841.1 J/m2 mel. TanDose day 12796.9 
+ J/m2 mel. SED window 16.695. SED day 26.73. UVA day 914619 J/m2. UVB day 1
+ 4168.9 J/m2. Confidence 58. FAIR. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-10-07@south-bend
-DTSTAMP:20260930T035219Z
+DTSTAMP:20260930T042714Z
 SEQUENCE:0
-DTSTART:20261007T163000Z
+DTSTART:20261007T160000Z
 DTEND:20261007T203000Z
-SUMMARY:Best sun 12:30 PM-4:30 PM (UV 4.45\, overall 42)
-DESCRIPTION:Overall 42/100. Abs 35/100. Peak UV 4.45 at 2:00 PM. UVA 36.502
-  W/m2. UVB 0.7239 W/m2. TanDose window 7660.2 J/m2 mel. TanDose day 12381.
- 2 J/m2 mel. SED window 14.574. SED day 26.055. UVA day 869983 J/m2. UVB da
- y 13842.2 J/m2. Confidence 44. FAIR. Times refresh with each SunStack run.
+SUMMARY:Best sun 12:00 PM-4:30 PM (UV 4.45\, overall 41)
+DESCRIPTION:Overall 41/100. Abs 37/100. Peak UV 4.45 at 2:00 PM. UVA 36.502
+  W/m2. UVB 0.7239 W/m2. TanDose window 8571.2 J/m2 mel. TanDose day 12381.
+ 2 J/m2 mel. SED window 16.267. SED day 26.055. UVA day 869983 J/m2. UVB da
+ y 13842.2 J/m2. Confidence 43. FAIR. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-10-08@south-bend
-DTSTAMP:20260930T035219Z
+DTSTAMP:20260930T042714Z
 SEQUENCE:0
 DTSTART:20261008T160000Z
 DTEND:20261008T200000Z
-SUMMARY:Best sun 12:00 PM-4:00 PM (UV 4.45\, overall 47)
-DESCRIPTION:Overall 47/100. Abs 39/100. Peak UV 4.45 at 2:00 PM. UVA 38.429
+SUMMARY:Best sun 12:00 PM-4:00 PM (UV 4.45\, overall 46)
+DESCRIPTION:Overall 46/100. Abs 39/100. Peak UV 4.45 at 2:00 PM. UVA 38.429
   W/m2. UVB 0.7423 W/m2. TanDose window 8055.8 J/m2 mel. TanDose day 12530.
  9 J/m2 mel. SED window 14.805. SED day 25.965. UVA day 896118 J/m2. UVB da
  y 13869.6 J/m2. Confidence 46. FAIR. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-10-09@south-bend
-DTSTAMP:20260930T035219Z
+DTSTAMP:20260930T042714Z
 SEQUENCE:0
 DTSTART:20261009T160000Z
-DTEND:20261009T210000Z
-SUMMARY:Best sun 12:00 PM-5:00 PM (UV 4.5\, overall 33)
-DESCRIPTION:Overall 33/100. Abs 37/100. Peak UV 4.5 at 2:00 PM. UVA 37.648 
- W/m2. UVB 0.6946 W/m2. TanDose window 8851.1 J/m2 mel. TanDose day 11999.2
-  J/m2 mel. SED window 17.528. SED day 25.875. UVA day 874876 J/m2. UVB day
-  13131.4 J/m2. Confidence 51. POOR. Times refresh with each SunStack run.
+DTEND:20261009T203000Z
+SUMMARY:Best sun 12:00 PM-4:30 PM (UV 4.5\, overall 37)
+DESCRIPTION:Overall 37/100. Abs 37/100. Peak UV 4.5 at 2:00 PM. UVA 37.648 
+ W/m2. UVB 0.6946 W/m2. TanDose window 8355.6 J/m2 mel. TanDose day 11999.2
+  J/m2 mel. SED window 16.313. SED day 25.875. UVA day 874876 J/m2. UVB day
+  13131.4 J/m2. Confidence 51. FAIR. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-10-10@south-bend
-DTSTAMP:20260930T035219Z
+DTSTAMP:20260930T042714Z
 SEQUENCE:0
-DTSTART:20261010T163000Z
-DTEND:20261010T210000Z
-SUMMARY:Best sun 12:30 PM-5:00 PM (UV 4.4\, overall 38)
-DESCRIPTION:Overall 38/100. Abs 37/100. Peak UV 4.4 at 2:00 PM. UVA 37.255 
- W/m2. UVB 0.7113 W/m2. TanDose window 7969.2 J/m2 mel. TanDose day 11960.6
-  J/m2 mel. SED window 15.542. SED day 25.425. UVA day 861230 J/m2. UVB day
+DTSTART:20261010T160000Z
+DTEND:20261010T203000Z
+SUMMARY:Best sun 12:00 PM-4:30 PM (UV 4.4\, overall 41)
+DESCRIPTION:Overall 41/100. Abs 37/100. Peak UV 4.4 at 2:00 PM. UVA 37.255 
+ W/m2. UVB 0.7113 W/m2. TanDose window 8360.9 J/m2 mel. TanDose day 11960.6
+  J/m2 mel. SED window 16.043. SED day 25.425. UVA day 861230 J/m2. UVB day
   13185.7 J/m2. Confidence 56. FAIR. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-10-11@south-bend
-DTSTAMP:20260930T035219Z
+DTSTAMP:20260930T042714Z
 SEQUENCE:0
 DTSTART:20261011T160000Z
 DTEND:20261011T203000Z
@@ -163,14 +150,26 @@ DESCRIPTION:Overall 38/100. Abs 37/100. Peak UV 4.45 at 2:00 PM. UVA 37.377
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-10-12@south-bend
-DTSTAMP:20260930T035219Z
+DTSTAMP:20260930T042714Z
 SEQUENCE:0
 DTSTART:20261012T153000Z
-DTEND:20261012T203000Z
-SUMMARY:Best sun 11:30 AM-4:30 PM (UV 4.1\, overall 30)
-DESCRIPTION:Overall 30/100. Abs 35/100. Peak UV 4.1 at 2:00 PM. UVA 35.356 
- W/m2. UVB 0.6567 W/m2. TanDose window 8345.7 J/m2 mel. TanDose day 10910.7
-  J/m2 mel. SED window 16.436. SED day 23.895. UVA day 788616 J/m2. UVB day
+DTEND:20261012T200000Z
+SUMMARY:Best sun 11:30 AM-4:00 PM (UV 4.1\, overall 32)
+DESCRIPTION:Overall 32/100. Abs 35/100. Peak UV 4.1 at 2:00 PM. UVA 35.356 
+ W/m2. UVB 0.6567 W/m2. TanDose window 7830.2 J/m2 mel. TanDose day 10910.7
+  J/m2 mel. SED window 15.143. SED day 23.895. UVA day 788616 J/m2. UVB day
   12001.6 J/m2. Confidence 35. POOR. Times refresh with each SunStack run.
+END:VEVENT
+BEGIN:VEVENT
+UID:sunstack-best-south-bend-2026-10-13@south-bend
+DTSTAMP:20260930T042714Z
+SEQUENCE:0
+DTSTART:20261013T160000Z
+DTEND:20261013T203000Z
+SUMMARY:Best sun 12:00 PM-4:30 PM (UV 4.25\, overall 33)
+DESCRIPTION:Overall 33/100. Abs 35/100. Peak UV 4.25 at 2:00 PM. UVA 35.629
+  W/m2. UVB 0.6485 W/m2. TanDose window 7874.1 J/m2 mel. TanDose day 11199.
+ 4 J/m2 mel. SED window 15.463. SED day 24.345. UVA day 821110 J/m2. UVB da
+ y 12215.3 J/m2. Confidence 36. POOR. Times refresh with each SunStack run.
 END:VEVENT
 END:VCALENDAR
