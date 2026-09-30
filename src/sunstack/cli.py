@@ -602,6 +602,12 @@ def _run_live_inner(
         summary.update(_emulator_manifest())
     except (ImportError, ValueError, RuntimeError) as exc:
         summary["photobiology_metadata_error"] = str(exc)
+    # Provenance split: forecast identity (what generated these rows) vs
+    # renderer identity (what last touched the static page). A UI-only reskin
+    # must update renderer_* only — never forecast_code_sha. See output.py.
+    from .ui import build_sha as _build_sha
+    summary["forecast_code_sha"] = _build_sha()
+    summary["fusion_version"] = "om-weighted-median-v1"
     (run_dir / "summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8"
     )

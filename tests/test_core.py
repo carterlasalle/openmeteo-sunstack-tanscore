@@ -261,6 +261,50 @@ def test_30min_interpolation_forward_fills_boolean_flags():
     assert out["outdoor_blocked"].tolist() == [True] * 5
 
 
+def test_30min_keeps_object_typed_weather_and_feasibility_agrees():
+    # P0 regression: production feeds deliver temperature/wind/precip as
+    # object/string dtype. The transformer must coerce (not drop) them, and
+    # exact-hour 30-min Overall must match hourly Overall when no subhour
+    # correction applies. Pre-fix: 161/196 exact hours disagreed (avg 4.5pts).
+    from sunstack.opportunity import apply_outdoor_feasibility, build_30min_forecast
+
+    hourly = pd.DataFrame(
+        {
+            "time": ["2026-09-29T08:00", "2026-09-29T09:00", "2026-09-29T10:00"],
+            "temperature_2m": ["48.6", "55.0", "60.0"],
+            "apparent_temperature": ["47.0", "54.0", "59.0"],
+            "precipitation_probability": ["5", "5", "5"],
+            "wind_speed_10m": ["9.0", "9.0", "9.0"],
+            "wind_gusts_10m": ["16.0", "16.0", "16.0"],
+            "weather_code": ["2", "2", "2"],
+            "rain": ["0.0", "0.0", "0.0"],
+            "showers": ["0.0", "0.0", "0.0"],
+            "snowfall": ["0.0", "0.0", "0.0"],
+            "relative_humidity_2m": ["63", "60", "58"],
+            "shortwave_radiation_instant": [100.0, 300.0, 500.0],
+            "uv_index": [1.0, 2.0, 3.0],
+            "tan_score_absolute_0_100": [10.0, 40.0, 60.0],
+            "local_tan_score_0_100": [10.0, 40.0, 60.0],
+            "atmospheric_quality_percentile_0_100": [50.0, 50.0, 50.0],
+            "tan_forecast_confidence_0_100": [80.0, 80.0, 80.0],
+            "overall_tan_opportunity_0_100": [10.0, 40.0, 60.0],
+        }
+    )
+    out = build_30min_forecast(hourly, None)
+    for col in ("temperature_2m", "precipitation_probability",
+                "wind_speed_10m", "weather_code"):
+        assert col in out.columns, f"{col} must survive hourly->30min"
+    ref = apply_outdoor_feasibility(hourly.copy())
+    merged = out[out["time"].isin(ref["time"])].merge(
+        ref[["time", "overall_tan_opportunity_0_100"]].rename(
+            columns={"overall_tan_opportunity_0_100": "hourly_overall"}),
+        on="time", how="left",
+    )
+    assert (merged["temperature_2m"].notna()).all()
+    assert abs(merged.iloc[0]["overall_tan_opportunity_0_100"]
+               - merged.iloc[0]["hourly_overall"]) < 0.5
+
+
 def test_circular_doy_distance_wraps_year_boundary():
     dist = _circular_doy_distance(pd.Series([1.0, 2.0, 180.0, 364.0, 365.0]), 1)
     assert dist.tolist() == [0.0, 1.0, 179.0, 3.0, 2.0]
@@ -658,6 +702,91 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path):
     ics = (tmp_path / "site" / "calendar.ics").read_text()
     assert ics.count("BEGIN:VEVENT") == 1
     assert "UID:sunstack-best-sunstack-2026-09-15@sunstack" in ics
+
+def test_fusion_recomputed_after_subhour_correction():
+    # P1 regression: 30-min geometry/HRRR corrections must recompute fusion
+    # from corrected sources. Interpolating consensus + sources independently
+    # leaves consensus outside the visible source range (115/392 rows in prod).
+    from sunstack.opportunity import build_30min_forecast
+
+    hourly = pd.DataFrame(
+        {
+            "time": ["2026-09-24T12:00", "2026-09-24T13:00", "2026-09-24T14:00"],
+            "uv_index": [4.0, 5.0, 4.5],
+            "uvi_cams": [3.0, 3.2, 3.1],
+            "uvi_epa": [4.0, 4.0, 4.0],
+            "uvi_consensus": [4.0, 4.0, 4.0],
+            "uvi_source_spread": [1.0, 1.8, 1.4],
+            "uvi_sunny": [4.0, 5.0, 4.5],
+            "uvi_cloudy": [3.0, 3.2, 3.1],
+            "uvi_source_disagree": [True, True, True],
+            "temperature_2m": [70.0, 72.0, 71.0],
+            "precipitation_probability": [0.0, 0.0, 0.0],
+            "wind_speed_10m": [5.0, 5.0, 5.0],
+            "weather_code": [1, 1, 1],
+            "shortwave_radiation_instant": [500.0, 600.0, 550.0],
+        }
+    )
+    out = build_30min_forecast(hourly, None)
+    for _, r in out.iterrows():
+        vs = [v for v in (r.get("uv_index"), r.get("uvi_cams"), r.get("uvi_epa"))
+              if pd.notna(v)]
+        if len(vs) >= 2 and pd.notna(r.get("uvi_consensus")):
+            assert min(vs) - 0.01 <= r["uvi_consensus"] <= max(vs) + 0.01, (
+                f"consensus {r['uvi_consensus']} outside sources {vs} at {r['time']}")
+        if pd.notna(r.get("uvi_source_spread")) and len(vs) >= 2:
+            assert abs(r["uvi_source_spread"] - (max(vs) - min(vs))) < 0.02, (
+                f"spread {r['uvi_source_spread']} != range at {r['time']}")
+
+
+def test_reskin_never_rewrites_forecast_identity(tmp_path):
+    # P0 regression: reskin_static_dir must update renderer identity only.
+    # Pre-fix it overwrote build_sha, stamping new code onto old rows.
+    import json as _json
+
+    from sunstack.output import export_static_site, reskin_static_dir
+
+    latest = tmp_path / "latest"
+    (latest / "tables").mkdir(parents=True)
+    hourly = pd.DataFrame(
+        {
+            "time": ["2026-09-15T12:00"],
+            "temperature_2m": [80.0],
+            "overall_tan_opportunity_0_100": [50.0],
+            "tan_score_absolute_0_100": [40.0],
+            "local_tan_score_0_100": [80.0],
+            "atmospheric_quality_percentile_0_100": [60.0],
+            "tan_forecast_confidence_0_100": [50.0],
+        }
+    )
+    half = pd.DataFrame(
+        {
+            "dt": pd.to_datetime(["2026-09-15 12:00"]),
+            "time": ["2026-09-15T12:00"],
+            "temperature_2m": [80.0],
+            "overall_tan_opportunity_0_100": [50.0],
+            "tan_score_absolute_0_100": [40.0],
+            "local_tan_score_0_100": [80.0],
+            "atmospheric_quality_percentile_0_100": [60.0],
+            "tan_forecast_confidence_0_100": [50.0],
+        }
+    )
+    hourly.to_parquet(latest / "tables" / "tan_forecast_hourly.parquet", index=False)
+    half.to_parquet(latest / "tables" / "tan_forecast_30min.parquet", index=False)
+    (latest / "summary.json").write_text(
+        '{"run": "oldrun", "created_at": "2026-09-15T00:00:00-04:00",'
+        ' "forecast_code_sha": "aaa1111"}'
+    )
+    export_static_site(tmp_path, tmp_path / "site")
+    before = _json.loads((tmp_path / "site" / "data.json").read_text())
+    assert before["summary"]["forecast_code_sha"] == "aaa1111"
+    reskin_static_dir(tmp_path / "site")
+    after = _json.loads((tmp_path / "site" / "data.json").read_text())
+    assert after["summary"]["forecast_code_sha"] == "aaa1111", (
+        "reskin must never rewrite forecast identity")
+    assert after["summary"].get("renderer_code_sha"), "reskin stamps renderer"
+    assert after["build_sha"] == "aaa1111", "top-level SHA tracks forecast"
+
 
 
 def test_reskin_static_dir_needs_no_run_data(tmp_path):

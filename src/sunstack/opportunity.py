@@ -377,25 +377,53 @@ def build_30min_forecast(
     # never affect windows. Dedupe so the resample below cannot abort the run.
     h = h.loc[~h["dt"].duplicated(keep="first")].copy()
     h = h.sort_values("dt").set_index("dt")
-    numeric = h.select_dtypes(include=[np.number, "bool"]).copy()
-    # Some feeds deliver numeric-looking columns as strings/None, which the
-    # dtype filter silently drops (the UI then falls back to a different
-    # product for those cells). Coerce the display-critical ones explicitly.
-    for _col in (
+    # Schema contract for the hourly->subhour transformer: every numeric
+    # column the downstream pipeline needs must survive here, regardless of
+    # the dtype the feed happened to deliver (object/string/None). Missing
+    # weather must NEVER silently read as perfect weather downstream.
+    _SUBHOUR_NUMERIC_COLUMNS = (
+        # UV / scoring
         "uv_index",
+        "uvi_openmeteo",
         "uvi_consensus",
         "uvi_epa",
         "uvi_cams",
         "uvi_source_spread",
         "uvi_consensus_sources",
+        "uvi_sunny",
+        "uvi_cloudy",
         "predicted_uva_wm2",
         "predicted_uvb_wm2",
         "shortwave_radiation_instant",
         "overall_tan_opportunity_0_100",
         "tan_score_absolute_0_100",
-    ):
+        # weather / feasibility (P0: these were silently dropped when
+        # object-typed, so 30-min rows read as comfortable and dry)
+        "temperature_2m",
+        "apparent_temperature",
+        "relative_humidity_2m",
+        "precipitation_probability",
+        "precipitation",
+        "rain",
+        "showers",
+        "snowfall",
+        "wind_speed_10m",
+        "wind_gusts_10m",
+        "weather_code",
+    )
+    numeric = h.select_dtypes(include=[np.number, "bool"]).copy()
+    for _col in _SUBHOUR_NUMERIC_COLUMNS:
         if _col in h.columns and _col not in numeric.columns:
             numeric[_col] = pd.to_numeric(h[_col], errors="coerce")
+    # Loud invariant: feasibility inputs absent from the hourly frame stay
+    # absent downstream (feasibility treats missing temp as NaN->blocked, but
+    # missing rain/wind as 0). Warn so a silently-dropped column can never
+    # again read as perfect weather without anyone noticing.
+    _missing = [c for c in ("temperature_2m", "precipitation_probability",
+                            "wind_speed_10m", "weather_code")
+                if c not in numeric.columns]
+    if _missing and not h.empty:
+        LOG.warning("30-min transformer missing feasibility columns: %s", _missing)
     idx = pd.date_range(h.index.min(), h.index.max(), freq="30min")
     union_idx = numeric.index.union(idx)
     # Boolean flags cannot hold reindex gaps (numpy bool upcasts to object and
@@ -568,7 +596,12 @@ def build_30min_forecast(
         )
         mask = out["dt"].isin(native.index.tolist())
         for col in solar_cols:
-            if col in native and col in out:
+            # Native HRRR may reintroduce a column the hourly transformer
+            # dropped (e.g. object-typed weather rescued above keeps it, but
+            # a column absent from hourly entirely must still come through).
+            if col in native:
+                if col not in out:
+                    out[col] = np.nan
                 out.loc[mask, col] = out.loc[mask, "dt"].map(native[col])
         out.loc[mask, "subhour_source"] = (
             "native_HRRR_radiation_weather_plus_interpolated_UV"
@@ -604,6 +637,29 @@ def build_30min_forecast(
                             "tan_score_model_version"):
                     if col in sub:
                         out.loc[is_native, col] = sub[col].to_numpy()
+            # Fusion is derived state: recompute it from the corrected
+            # individual sources so headline/range/spread/flags describe the
+            # same state (never interpolate ingredients and statistics
+            # independently). OM keeps its double weight (see tanscore).
+            _vote_cols = ["uv_index", "uv_index", "uvi_cams"]
+            if "uvi_epa" in out.columns:
+                _vote_cols.append("uvi_epa")
+            _vote_cols = [c for c in _vote_cols if c in out.columns]
+            if _vote_cols:
+                _stack = np.vstack([
+                    pd.to_numeric(out[c], errors="coerce").to_numpy(dtype=float)
+                    for c in _vote_cols
+                ])
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    out["uvi_consensus"] = np.round(
+                        np.nanmedian(_stack, axis=0), 3)
+                    out["uvi_source_spread"] = np.round(
+                        np.nanmax(_stack, axis=0) - np.nanmin(_stack, axis=0), 3)
+                    out["uvi_sunny"] = np.round(np.nanmax(_stack, axis=0), 3)
+                    out["uvi_cloudy"] = np.round(np.nanmin(_stack, axis=0), 3)
+                _spread = pd.to_numeric(
+                    out["uvi_source_spread"], errors="coerce").fillna(0)
+                out["uvi_source_disagree"] = (_spread >= 1.0).to_numpy(dtype=bool)
 
     # Reapply merged opportunity after sub-hour corrections.
     out = apply_outdoor_feasibility(out)

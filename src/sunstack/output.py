@@ -91,7 +91,16 @@ def reskin_static_dir(
     run_tag = summary.get("run", "") if isinstance(summary, dict) else ""
     site = _resolve_site(site_slug)
     (page / "index.html").write_text(render_static_html(run_tag), encoding="utf-8")
-    payload["build_sha"] = build_sha()
+    # Provenance guard: a reskin renders UI only. It must NEVER rewrite the
+    # forecast identity stamped at generation time. The old code overwrote
+    # build_sha here, letting a page claim a code revision that never
+    # generated its rows (shipped bug: ed14cad stamp on old-median rows).
+    if isinstance(summary, dict):
+        summary["renderer_code_sha"] = build_sha()
+        summary.setdefault("forecast_code_sha",
+                           summary.get("forecast_generated_by", "unknown"))
+    payload["build_sha"] = (summary.get("forecast_code_sha")
+                            if isinstance(summary, dict) else build_sha())
     (page / "data.json").write_text(json.dumps(payload), encoding="utf-8")
     (page / "locations.json").write_text(
         json.dumps({"locations": _site_nav(site.slug)}), encoding="utf-8"
@@ -147,13 +156,17 @@ def export_static_site(
     hourly_ui = hourly.loc[(ht.dt.hour >= 7) & (ht.dt.hour <= 20)].copy()
     qt = pd.to_datetime(scol(half, "time"))
     half_ui = half.loc[(qt.dt.hour >= 7) & (qt.dt.hour <= 20)].copy()
+    if isinstance(summary, dict):
+        summary.setdefault("forecast_code_sha", build_sha())
+        summary["renderer_code_sha"] = build_sha()
     payload: dict[str, object] = {
         "run": str(run),
         "daily": _records(daily),
         "hourly": _records(hourly_ui),
         "half_hour": _records(half_ui),
         "summary": summary,
-        "build_sha": build_sha(),
+        "build_sha": (summary.get("forecast_code_sha")
+                      if isinstance(summary, dict) else build_sha()),
     }
     html = render_static_html(summary.get("run", ""), min_temp_f)
     out_dir.mkdir(parents=True, exist_ok=True)
