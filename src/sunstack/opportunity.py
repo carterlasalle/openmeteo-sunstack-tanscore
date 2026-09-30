@@ -192,6 +192,15 @@ def apply_outdoor_feasibility(
         reasons.append("; ".join(rs))
         flags.append("; ".join(fs))
 
+    _comfort = pd.Series("perfect", index=out.index)
+    _comfort = _comfort.mask(temp < min_temp, "too cold")
+    _comfort = _comfort.mask(cold_band, "cool")
+    try:
+        _comfort = _comfort.mask((temp >= config.HEAT_WARNING_TEMP_F) & (temp < config.MAX_TAN_TEMP_F), "warm")
+        _comfort = _comfort.mask(temp >= config.MAX_TAN_TEMP_F, "too hot")
+    except (TypeError, ValueError):
+        pass
+    out["comfort_band"] = _comfort.where(~hard_block.fillna(False), _comfort)
     out["outdoor_feasibility_0_100"] = np.round(multiplier * 100, 1)
     out["outdoor_blocked"] = hard_block.to_numpy()
     out["outdoor_block_reason"] = reasons
@@ -724,8 +733,31 @@ def build_30min_forecast(
     return out
 
 
+# Weekly class blocks, minutes since midnight ET, Mon=0..Fri=4 (mirrors UI CLASSES).
+# South-Bend (Eastern) only; other sites get no constraint.
+_CLASS_BLOCKS = {
+    0: [(660, 735), (770, 820), (840, 950)],
+    1: [(570, 620), (660, 735)],
+    2: [(660, 735), (770, 820), (840, 950)],
+    3: [(660, 735)],
+    4: [(770, 820)],
+}
+
+
+def _in_class(dt: pd.Timestamp) -> bool:
+    try:
+        wd = int(dt.dayofweek)
+    except (AttributeError, TypeError, ValueError):
+        return False
+    if wd > 4:
+        return False
+    mins = int(dt.hour) * 60 + int(dt.minute)
+    return any(a <= mins < b for a, b in _CLASS_BLOCKS.get(wd, []))
+
+
 def _best_contiguous_window(
-    day: pd.DataFrame, threshold_delta: float = 12.0
+    day: pd.DataFrame, threshold_delta: float = 12.0,
+    skip_class: bool = False,
 ) -> tuple[pd.Timestamp, pd.Timestamp, float] | None:
     if day.empty:
         return None
@@ -738,6 +770,8 @@ def _best_contiguous_window(
         (score >= max(10.0, peak - threshold_delta))
         & (~d["outdoor_blocked"].fillna(False))
     ].copy()
+    if skip_class:
+        eligible = eligible.loc[~eligible["dt"].map(_in_class)].copy()
     if eligible.empty:
         return None
     groups, cur, last = [], [], None
@@ -815,6 +849,9 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                 best_hour_score = avg
                 best_hour = s.loc[i, "dt"]
         window = _best_contiguous_window(daylight)
+        # Class-aware window: same ranking, class blocks excluded (south-bend
+        # Eastern schedule; None when the whole window is in class).
+        avail = _best_contiguous_window(daylight, skip_class=True)
         # Window ranking stays intensity/opportunity/confidence based (see
         # _best_contiguous_window): TanDose is reported as a consequence of the
         # chosen window length, never as the ranking objective. Formula
@@ -885,6 +922,9 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                 "best_window_start": window[0].isoformat() if window else None,
                 "best_window_end": window[1].isoformat() if window else None,
                 "best_window_mean_0_100": round(window[2], 1) if window else np.nan,
+                "best_available_window_start": avail[0].isoformat() if avail else None,
+                "best_available_window_end": avail[1].isoformat() if avail else None,
+                "best_available_window_mean_0_100": round(avail[2], 1) if avail else np.nan,
                 "best_window_rank_formula": "window-rank-v1 (mean overall opportunity over contiguous eligible half-hours; dose reported, not ranked)",
                 "tan_dose_best_window_j_m2": float(_win_doses.get("tan_dose_best_window_j_m2", float("nan"))),
                 "tan_dose_best_window_complete": bool(_win_doses.get("tan_dose_best_window_complete", False)),

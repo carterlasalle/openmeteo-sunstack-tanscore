@@ -578,3 +578,42 @@ def test_literature_gates_pass_on_shipped_spectra(tmp_path, monkeypatch):
     text = report.read_text(encoding="utf-8")
     assert text.count("[PASS]") == 6
     assert "[FAIL]" not in text
+
+
+def test_tierB_clear_sky_fallback_is_physical():
+    # Tier-B fallback: monotonic in sun (higher sza -> less UV), ozone
+    # suppresses UVB more than UVA, night is zero, honest error recorded.
+    import numpy as np
+
+    from sunstack.spectral import tierB_clear_sky_uv
+
+    sza = np.array([20.0, 60.0, 85.0])
+    uva, uvb = tierB_clear_sky_uv(sza, 300.0, 0.1, 0.2)
+    assert uva[0] > uva[1] > uva[2] > 0
+    assert uvb[0] > uvb[1] > uvb[2] > 0
+    _, uvb_hi_o3 = tierB_clear_sky_uv(np.array([40.0]), 450.0, 0.1, 0.2)
+    _, uvb_lo_o3 = tierB_clear_sky_uv(np.array([40.0]), 200.0, 0.1, 0.2)
+    assert uvb_lo_o3[0] > uvb_hi_o3[0]
+    uva_n, uvb_n = tierB_clear_sky_uv(np.array([95.0]), 300.0, 0.1, 0.2)
+    assert uva_n[0] == 0.0 and uvb_n[0] == 0.0
+
+
+def test_predictor_uses_tierB_when_bundle_missing(tmp_path):
+    # No joblib bundle -> tierB-clear-sky-v1 rows (not uncalibrated), with
+    # per-row fallback to heuristic only where physics inputs miss.
+    import pandas as pd
+
+    from sunstack.tanscore import predict_uva_uvb
+
+    f = pd.DataFrame({
+        "sza": [40.0, 40.0],
+        "ozone_du": [300.0, float("nan")],
+        "aod340": [0.1, 0.1],
+        "albedo": [0.2, 0.2],
+        "ghi": [800.0, 800.0],
+        "uv_index": [5.0, 5.0],
+        "is_day": [1, 1],
+    })
+    uva, uvb, tier = predict_uva_uvb(f, tmp_path)
+    assert list(tier) == ["tierB-clear-sky-v1", "uncalibrated_fallback"]
+    assert uva[0] > 0 and uvb[0] > 0

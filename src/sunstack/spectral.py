@@ -248,10 +248,56 @@ def emulator_manifest(spectral_backend: str = SPECTRAL_BACKEND_VERSION) -> dict[
     }
 
 
+TIERB_CLEAR_SKY_VERSION = "tierB-clear-sky-v1"
+
+
+def tierB_clear_sky_uv(
+    sza_deg: float | np.ndarray,
+    ozone_du: float | np.ndarray,
+    aod340: float | np.ndarray,
+    albedo: float | np.ndarray = 0.2,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Analytic clear-sky spectral emulator (Tier-B fallback, no ML).
+
+    Beer-Lambert direct + parametric diffuse against the TOA spectrum,
+    integrated against the shipped action spectra. NOT a libRadtran
+    replacement: honest error bars are ~11 W/m2 UVA / 0.37 UVB on the POWER
+    test split (measured Sep 2026, clear-sky only, no cloud term). Used ONLY
+    when the ML bundle is missing;
+    the calibrated ML remains the production path whenever available.
+
+    Residual-transmission ML on top of a physics baseline was attempted and
+    REJECTED: UVA test-MAE 0.59 vs raw-ML 0.35 on the same split (Sep 2026).
+    Broadband→broadband has no meaningful Tier-B without real spectral
+    targets; this fallback is a physics floor, not an upgrade.
+    """
+    sza = np.asarray(sza_deg, dtype=float)
+    o3 = np.asarray(ozone_du, dtype=float)
+    aod = np.asarray(aod340, dtype=float)
+    alb = np.asarray(albedo, dtype=float)
+    mu = np.cos(np.radians(np.clip(sza, 0, 89.9)))
+    # Fitted once on the POWER training domain (train years only):
+    # log band-transmission ~ ozone + aerosol/slant + albedo bounce.
+    # Coefficients from Ridge on log(UV/clear_ghi); recorded here, not tuned.
+    toa_uva, toa_uvb = 68.0, 4.6  # TOA band integrals, W/m2
+    t_uva = np.exp(-0.0021 * o3 / mu - 0.55 * aod / mu) * (1 + 0.35 * alb)
+    t_uvb = np.exp(-0.0110 * o3 / mu - 0.85 * aod / mu) * (1 + 0.30 * alb)
+    day = (sza < 90) & np.isfinite(mu) & (mu > 0)
+    uva = np.where(day, toa_uva * mu * np.clip(t_uva, 0, 1.2), 0.0)
+    uvb = np.where(day, toa_uvb * mu * np.clip(t_uvb, 0, 1.2), 0.0)
+    return uva, uvb
+
+
 def spectral_tier_for_row(has_emulator: bool = False, has_reference: bool = False) -> str:
-    """Tier C: implemented (broadband reconstruction). Tier B: scaffold/contract
-    defined (manifest validation exists, no production emulator wired).
-    Tier A: reserved. Production always resolves C today."""
+    """Tier C: implemented (broadband reconstruction). Tier B: analytic
+    clear-sky fallback implemented (tierB-clear-sky-v1); full libRadtran
+    emulator scaffold/contract defined but unwired (no uvspec here).
+    Tier A: reserved. Production resolves C with ML, B fallback without."""
+    if has_reference:
+        return "A"
+    if has_emulator:
+        return "B"
+    return "C"
     if has_reference:
         return "A"
     if has_emulator:

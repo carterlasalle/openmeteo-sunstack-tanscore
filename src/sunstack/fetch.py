@@ -253,6 +253,36 @@ def probe_live(timeout: int = 20) -> list[FetchResult]:
         return list(pool.map(_one, probes))
 
 
+_FEED_USE = {
+    # Core scoring inputs (actually consumed at runtime).
+    "deterministic__best_match": "scoring core (weather/radiation/UVI)",
+    "profile__best_match": "scoring core (profiles)",
+    "hrrr_15min": "subhour radiation/weather correction",
+    "air_quality": "AOD550 + UV fallback/context",
+    "ensemble_members__ncep_gefs025": "confidence (support)",
+    "ensemble_members__ncep_aigefs025": "confidence (support)",
+    "ensemble_members__ecmwf_ifs025_ensemble": "confidence (support)",
+    "ensemble_members__ecmwf_aifs025_ensemble": "confidence (support)",
+}
+_FEED_USE_PREFIX = (
+    ("deterministic__", "confidence (deterministic agreement)"),
+    ("profile__", "diagnostic-only (persisted, unscored)"),
+    ("ensemble_members__", "confidence (support)"),
+    ("ensemble_mean__", "diagnostic-only (persisted, unscored)"),
+)
+
+
+def _feed_use(name: str) -> str:
+    if name in _FEED_USE:
+        return _FEED_USE[name]
+    for prefix, use in _FEED_USE_PREFIX:
+        if name.startswith(prefix):
+            return use
+    if name in ("air_quality",):
+        return _FEED_USE["air_quality"]
+    return "diagnostic-only (persisted, unscored)"
+
+
 def write_raw(results: list[FetchResult], raw_dir: Path) -> None:
     raw_dir.mkdir(parents=True, exist_ok=True)
     manifest = []
@@ -267,6 +297,7 @@ def write_raw(results: list[FetchResult], raw_dir: Path) -> None:
             "status_code": result.status_code,
             "ok": result.payload is not None,
         }
+        entry["consumed_by"] = _feed_use(result.name)
         manifest.append(entry)
         if result.payload is not None:
             _raw_text = json.dumps(result.payload, indent=2, allow_nan=True)

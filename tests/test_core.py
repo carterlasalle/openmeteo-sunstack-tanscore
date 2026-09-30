@@ -2039,3 +2039,33 @@ def test_local_scores_widen_on_thin_reference():
     out = add_local_scores(forecast, ref)
     assert out["local_tan_score_0_100"].notna().all()
     assert out["atmospheric_quality_percentile_0_100"].notna().all()
+
+
+def test_class_aware_window_excludes_class_blocks():
+    # Server-side class window: same ranking minus Mon-Fri class blocks.
+    import pandas as pd
+
+    from sunstack.opportunity import build_daily_summary
+
+    rows = []
+    for h in range(9, 17):
+        for m in (0, 30):
+            rows.append({
+                "dt": pd.Timestamp(f"2026-09-28 {h:02d}:{m:02d}"),
+                "time": f"2026-09-28T{h:02d}:{m:02d}",
+                "overall_tan_opportunity_0_100": 60.0,
+                "is_day": 1,
+                "outdoor_blocked": False,
+                "temperature_2m": 70.0,
+                "apparent_temperature": 70.0,
+                "wind_speed_10m": 5.0,
+                "wind_gusts_10m": 8.0,
+                "precipitation_probability": 0.0,
+            })
+    daily = build_daily_summary(pd.DataFrame(rows))
+    assert len(daily) == 1
+    row = daily.iloc[0]
+    # Monday 11:00-12:15 is class: available window must not start inside it.
+    assert row["best_available_window_start"] is not None
+    assert not ("11:00" <= row["best_available_window_start"][11:16] < "12:15"), (
+        f"available window starts in class: {row['best_available_window_start']}")

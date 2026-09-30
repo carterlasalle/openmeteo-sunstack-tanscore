@@ -648,6 +648,14 @@ def _run_live_inner(
     from .ui import build_sha as _build_sha
     summary["forecast_code_sha"] = _build_sha()
     summary["fusion_version"] = "om-weighted-median-v1"
+    summary["input_manifest"] = {
+        "run_dir": str(run_dir),
+        "raw_dir": str(raw_dir),
+        "manifest_file": str(raw_dir / "manifest.json"),
+        "retention": ("CI artifact sunstack-data-<run_id> (90 days) + "
+                      "committed docs/data.json product; raw provider payloads "
+                      "are local-only and NOT in git"),
+    }
     (run_dir / "summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8"
     )
