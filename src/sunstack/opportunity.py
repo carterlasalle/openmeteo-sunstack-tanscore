@@ -689,6 +689,8 @@ def build_30min_forecast(
                 _spread = pd.to_numeric(
                     out["uvi_source_spread"], errors="coerce").fillna(0)
                 out["uvi_source_disagree"] = (_spread >= 1.0).to_numpy(dtype=bool)
+                out["uvi_consensus_sources"] = np.sum(
+                    np.isfinite(_stack), axis=0).astype(int)
     # Local/Atmospheric recompute: Absolute changed under HRRR/kt correction
     # above, but Local/Atmo still percentile the OLD physics (audit: composite
     # of two physical states). Recompute against the calibration reference
@@ -714,6 +716,10 @@ def build_30min_forecast(
                 _ref_ok = False
             if _ref_ok and _ref_path.exists():
                 _ref = _pd.read_parquet(_ref_path)
+                # add_local_scores keys on time_utc; the 30-min frame carries
+                # dt/time. Alias (not rename) so downstream keeps both.
+                if "time_utc" not in out.columns and "dt" in out.columns:
+                    out["time_utc"] = _pd.to_datetime(out["dt"], utc=True)
                 out = _add_local(out, _ref)
         except (ImportError, ValueError, OSError):
             pass

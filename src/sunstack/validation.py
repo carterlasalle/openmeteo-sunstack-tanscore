@@ -164,9 +164,12 @@ def validate_final_products(
             g = daylight[daylight["date"] == day]
             if g.empty:
                 continue
+            # peak_uv_index is the true daylight max; peak_30m_* are true
+            # maxima. best_30m_* is the dose AT the opportunity peak (product
+            # semantics, not a max) and must NOT be compared to the column max.
             for col, dcol in (("uvi_consensus", "peak_uv_index"),
-                              ("tan_dose_30m_j_m2", "best_30m_tan_dose_j_m2"),
-                              ("sed_30m", "best_30m_sed")):
+                              ("tan_dose_30m_j_m2", "peak_30m_tan_dose_j_m2"),
+                              ("sed_30m", "peak_30m_sed")):
                 if col in g.columns and dcol in d and pd.notna(d[dcol]):
                     actual = pd.to_numeric(g[col], errors="coerce").max()
                     if pd.notna(actual) and abs(float(actual) - float(d[dcol])) > 0.05 * max(1.0, abs(float(actual))):
