@@ -913,6 +913,9 @@ def _publish_site(site: config.Site) -> None:
     )
     slug = site.slug
     stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M")
+    # Audit: the runner's checkout has uv-sync side effects (uv.lock churn)
+    # that must never wedge publish. Reset tracked-only churn first.
+    subprocess.run(["git", "checkout", "--", "uv.lock"], check=False)
     if slug == config.default_site().slug:
         subprocess.run(["git", "add", "docs", "-f", "data/calibration"], check=False)
     else:
