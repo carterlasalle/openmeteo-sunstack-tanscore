@@ -716,3 +716,15 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   daily rows carry all eight window/hour flags, and
   `&personal_mmd=2000&personal_mmd_basis=MEASURED` yields 392/392 finite
   half-hour fractions. Serve path needs no code change.
+
+## 2026-10-01 - Workstream T — published surface and ranking semantics converged
+
+- UI, API, CLI, calendar, and static export now carry the same surface selector,
+  local/broad extent, and tilt/azimuth contract; horizontal runs remain
+  environmental while skin-plane values remain context.
+- The hero distinguishes strongest from best-usable fixed-duration exposure;
+  calendar follows the usable window, and daylight export and Fit share one
+  exact mask. Overall is demoted to a legacy composite, while the semantics
+  export supplies the published versions, weights, and provenance.
+- Evidence is maintained in `tests/test_v5_ui_surface.py`,
+  `tests/test_v5_contract.py`, and the publication validator checks.

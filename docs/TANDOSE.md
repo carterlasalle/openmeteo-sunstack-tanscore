@@ -1,33 +1,31 @@
 # TanDose
 
 **TanDose is not an internationally standardized dose. It is SunStack's
-action-spectrum-weighted cumulative delayed-melanogenesis exposure metric**
-using `parrish_delayed_melanogenesis` version `action-spectrum-v1`
-(tier: provisional; see `docs/ACTION_SPECTRA.md`).
+action-spectrum-weighted cumulative delayed-pigmentation exposure metric** using
+`parrish-fda-3630-v1`. It represents exposure, not measured melanin synthesis
+or a melanin-color prediction.
 
 ## Definitions
 
 ```text
-TanDose(t1,t2) = integral[E_mel(t) dt]   [melanogenic-effective J/m^2]
-E_mel(t) = integral[E_lambda(t,lambda) S_mel(lambda) dlambda]  [W/m^2]
+TanDose(t1,t2) = integral[E_DP(t) dt]   [delayed-pigmentation-effective J/m^2]
+E_DP(t) = integral[E_lambda(t,lambda) S_DP(lambda) dlambda]  [W/m^2]
 ```
 
-Canonical column: `tan_dose_melanogenic_j_m2`. Also exposed:
-`tan_dose_15m_j_m2`, `tan_dose_30m_j_m2`, `tan_dose_1h_j_m2`,
-`tan_dose_best_window_j_m2`, `tan_dose_day_j_m2`.
-
-Column mapping: the `integrate_tandose` primitive returns the canonical
-`tan_dose_melanogenic_j_m2` key; forecast frames carry the suffixed interval
-(`tan_dose_15m/30m/1h_j_m2`), window (`tan_dose_best_window_j_m2`), and daily
-(`tan_dose_day_j_m2`) variants of the same melanogenic-effective J/m^2
-quantity.
+The canonical v5 fields are
+`delayed_pigmentation_dose_15m_j_m2`,
+`delayed_pigmentation_dose_30m_j_m2`,
+`delayed_pigmentation_dose_1h_j_m2`,
+`delayed_pigmentation_dose_day_j_m2`, and
+`delayed_pigmentation_dose_best_window_j_m2`. `tan_dose_*` names remain
+migration aliases for the same endpoint.
 
 ## Integration rules
 
-- Trapezoidal time integration over **actual timestamps**, never
-  value * nominal interval. Samples are instantaneous: window ends are
-  inclusive, so a one-hour window on a 30-minute grid integrates two full
-  legs (E × 3600 s at constant irradiance).
+- `interval-contract-v1` distinguishes interval means from point samples:
+  interval-mean irradiance integrates over declared support; point samples use
+  trapezoidal integration over actual timestamps, never value × a nominal
+  interval. Window end stamps bound the final supported interval.
 - Integration is order-invariant (inputs sort stably by timestamp) and a
   single unparseable timestamp degrades only its own row, never the frame.
 - Gaps larger than `SUNSTACK_TANDOSE_MAX_GAP_S` (default 10800 s) split the
@@ -66,9 +64,10 @@ Presentation only. Do not call it MMD or a standardized tanning dose.
 
 ## Assumptions and limitations
 
-- Tier-C spectral reconstruction (uniform intra-band) pending a validated
-  libRadtran emulator; band weights derive from the action spectrum itself.
-- Provisional delayed-melanogenesis shape (Parrish-approximated); strict
-  canonical mode refuses it until CIE 103/3 is obtained in usable form.
-- Horizontal environmental reference unless a skin-plane tilt is configured
-  (direct incidence + isotropic diffuse + albedo bounce; diffuse never dropped).
+- Tier B is `tierB-libradtran-emulator-v1` only after its manifest gates pass.
+  Tier C is the explicitly labeled degraded proxy `tierC-broadband-proxy-v2`;
+  it is never a silent spectral fallback.
+- `erythemal_irradiance_wm2 = uvi_consensus / 40` is derived from final UVI
+  consensus, and SED integrates that final-consensus field independently.
+- Environmental horizontal exposure is canonical. Optional skin-plane exposure
+  is surface/geometry context and never a future-color prediction.

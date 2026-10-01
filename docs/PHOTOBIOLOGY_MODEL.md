@@ -1,32 +1,29 @@
-# Photobiology model (v4, action-spectrum-v1)
+# Photobiology model (v5 delayed-pigmentation endpoint)
 
-Production TanScore is a normalized instantaneous melanogenic-effective
-irradiance. TanDose is its time integral. No hand weights. No square-root
-interaction.
+Production TanScore is normalized delayed-pigmentation-weighted irradiance and
+TanDose is its time integral. This is an action-spectrum-weighted exposure
+endpoint, not measured melanin synthesis or a melanin-color prediction.
+No hand weights. No square-root interaction.
 
 ## Core equations
 
-Spectral surface irradiance on the configured skin plane:
+The canonical exposure base is environmental horizontal:
 
 ```text
-E_lambda(t, lambda)  [W m^-2 nm^-1], 280-400 nm at ~1 nm
+E_DP,h(t) = integral E_lambda,h(t,lambda) S_DP(lambda) dlambda
 ```
 
-Melanogenic effective irradiance (delayed-melanogenesis endpoint):
+The optional skin-plane counterpart is built from direct, diffuse, and local
+reflected components under the selected surface/geometry context; it never
+overwrites the horizontal environmental quantity.
 
 ```text
-E_mel(t) = integral E_lambda(t,lambda) S_mel(lambda) dlambda
+score = clip(100 * E_DP,h / E_mel_global_reference, 0, 100)
 ```
 
-Absolute TanScore:
-
-```text
-score = clip(100 * E_mel / E_mel_global_reference, 0, 100)
-```
-
-Reference: `global-mel-ref-v1-provisional`, E_mel = 1.6 W/m^2 (99.9th
-percentile of the provisional stratified natural-sun corpus). Recalibration
-creates a new score model version; the reference is never silently changed.
+`parrish-fda-3630-v1` identifies the delayed-pigmentation action spectrum.
+`global-mel-ref-v1-provisional`, E_mel = 1.6 W/m^2, remains the fixed reference;
+recalibration creates a new score model version rather than silently changing it.
 
 ## Why the interaction term was removed
 
@@ -58,16 +55,19 @@ rescale photons inside TanDose.
 - PigmentDarkeningDose = separate UVA-dominant existing-pigment endpoint.
 - TanResponse = modeled final biological response to exposure history (interface-only).
 
-## Tiers and failure modes
+## Tiers, support, and SED hierarchy
 
-- Spectral tiers A (reference) / B (validated emulator) / C (calibrated
-  broadband approximation, current production) / D (unavailable).
-- Strict mode fails loudly on missing spectra, domain gaps, negative
-  effectiveness, non-monotonic wavelengths, unphysical irradiance, and (when
-  `SUNSTACK_REQUIRE_CANONICAL_SPECTRUM=1`) provisional-tier spectra.
-- `--allow-degraded` may permit tier C with every output exposing the tier;
-  it never silently falls back to the legacy 55/30/15 formula.
-- `sunstack debug --photobiology` prints model version, spectrum checksums,
-  backend/tier, global reference, current E_mel, both UVI sources,
-  disagreement, TanScore, interval TanDose, SED, UVA/UVB/pigment-darkening
-  doses, and fallbacks.
+- Tier A is reserved reference reconstruction. Tier B is
+  `tierB-libradtran-emulator-v1` and is usable only after its version,
+  training-manifest SHA, libRadtran provenance, parameter ranges, and non-empty
+  held-out validation metrics pass the manifest gate.
+- Tier C is the explicitly labeled degraded broadband proxy
+  `tierC-broadband-proxy-v2`; `--allow-degraded` may permit it, but it is never
+  a silent substitute for Tier B. Strict mode fails loudly when its required
+  spectral tier/data are unavailable.
+- `interval-contract-v1` distinguishes interval-mean radiation from point
+  samples: means integrate over declared support; point samples integrate over
+  actual timestamps.
+- `erythemal_irradiance_wm2 = uvi_consensus / 40` is derived after final UVI
+  consensus. SED integrates that final-consensus erythemal field, never raw or
+  pre-fusion UVI.

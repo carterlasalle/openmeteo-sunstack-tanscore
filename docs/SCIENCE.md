@@ -12,9 +12,12 @@
 > it never rescales photons. Skin type changes *interpretation*; it never multiplies the
 > environment. Every place an older version violated one of these, the log entry is cited.
 >
-> Model identity: `tan_score_model_version = action-spectrum-v1`, spectral backend
-> `tierC-broadband-v1`, fusion `om-weighted-median-v1`, window rank `window-rank-v1`,
-> global reference `global-mel-ref-v1-provisional` ($E_{\mathrm{ref}} = 1.6\ \mathrm{W\,m^{-2}}$).
+> **v5 model identity.** `schema_version = sunstack-output-v5`; temporal support
+> `interval-contract-v1`; photobiology `delayed-pigmentation-v2`; action spectrum
+> `parrish-fda-3630-v1`; surface `uv-surface-v1`; fusion `calibrated-uvi-fusion-v2`;
+> confidence `calibrated-error-v1`; window rank `fixed-duration-dose-v2`. Strict,
+> gate-passing spectra identify `tierB-libradtran-emulator-v1`; explicitly degraded
+> spectra identify `tierC-broadband-proxy-v2`.
 
 ---
 
@@ -37,7 +40,7 @@ feasibility cannot change $E_{\mathrm{mel}}$, Absolute, or any dose.
 - `tan_forecast_confidence_0_100` — trust in the forecast. Uncertainty, not physics.
 - `outdoor_feasibility_0_100` — usability multiplier (1.0 = perfect, 0.0 = hard-blocked).
 - `overall_components_unblocked_0_100` — geometric merge of the four above, *before* feasibility.
-- `overall_tan_opportunity_0_100` — the published headline: merge × feasibility. The only number that mixes physics with weather comfort.
+- `overall_tan_opportunity_0_100` — LEGACY composite (deprecated product heuristic), not the recommendation ranking.
 
 ---
 
@@ -167,35 +170,30 @@ Open-Meteo history within ±35 min (`merge_asof`, single `datetime64[ns, UTC]` u
 
 ---
 
-## 2. Photobiology core (v4 action-spectrum model)
+## 2. Photobiology core (v5 delayed-pigmentation endpoint)
 
-Production TanScore is a **normalized instantaneous melanogenic-effective irradiance**.
+Production TanScore normalizes the canonical environmental-horizontal
+`delayed_pigmentation_effective_irradiance_horizontal_wm2`. It is an
+action-spectrum-weighted exposure endpoint, not measured melanin synthesis or a
+prediction of future skin color. Optional `skin_plane_*` values are separately
+reported geometry/surface context; they never overwrite the environmental field.
 No hand weights. No square-root interaction. (`docs/PHOTOBIOLOGY_MODEL.md`.)
 
 ### 2.1 The master equations
 
-Skin-plane spectral irradiance $E_\lambda(t,\lambda)$ [$\mathrm{W\,m^{-2}\,nm^{-1}}$],
-280–400 nm at 1 nm, convolved with the delayed-melanogenesis action spectrum
-$S_{\mathrm{mel}}(\lambda)$:
+Environmental-horizontal spectral irradiance $E_{\lambda,h}(t,\lambda)$
+[$\mathrm{W\,m^{-2}\,nm^{-1}}$], 280–400 nm at 1 nm, is convolved with the
+delayed-pigmentation action spectrum $S_{\mathrm{DP}}(\lambda)$:
 
-$$E_{\mathrm{mel}}(t) = \int_{280}^{400} E_\lambda(t,\lambda)\, S_{\mathrm{mel}}(\lambda)\, d\lambda$$
+$$E_{\mathrm{DP},h}(t) = \int_{280}^{400} E_{\lambda,h}(t,\lambda)\, S_{\mathrm{DP}}(\lambda)\, d\lambda$$
 
-$$ \mathrm{Absolute}(t) = \mathrm{clip}\!\left(100\,\frac{E_{\mathrm{mel}}(t)}{E_{\mathrm{ref}}},\, 0,\, 100\right), \qquad E_{\mathrm{ref}} = 1.6\ \mathrm{W\,m^{-2}} $$
+$$ \mathrm{Absolute}(t) = \mathrm{clip}\!\left(100\,\frac{E_{\mathrm{DP},h}(t)}{E_{\mathrm{ref}}},\, 0,\, 100\right), \qquad E_{\mathrm{ref}} = 1.6\ \mathrm{W\,m^{-2}} $$
 
-Reference: `global-mel-ref-v1-provisional`. Provenance: pooled daylight Tier-C
-$E_{\mathrm{mel}}$ 99.9th percentile = **1.522** $\mathrm{W\,m^{-2}}$ across both
-sites' POWER climatology; 1.6 adopted with ~5% headroom for unsampled
-equatorial/high-altitude extremes. Recalibration mints a new score-model version;
-the value is never silently changed, and an env-override without a version bump
-trips the local-reference staleness gate (§5).
-
-The action spectrum is Parrish et al. 1982 (PMID 7122713), provisional anchor
-digitization (`data/research/action_spectra/parrish_delayed_melanogenesis.*`,
-sha256 `0eccdc6f…b73e`), evaluated by **log-space** interpolation
-($\log_{10}$ effectiveness; linear interpolation across orders of magnitude is
-documented INVALID), trapezoidal in wavelength. Strict-Canonical gate
-(`SUNSTACK_REQUIRE_CANONICAL_SPECTRUM=1`) refuses provisional spectra loudly;
-`--allow-degraded` permits Tier-C with the tier stamped on every row.
+The optional skin-plane counterpart is built from direct, diffuse, and local
+reflected components before the same action-spectrum convolution. The action
+spectrum identity is `parrish-fda-3630-v1`; strict canonical gates fail loudly
+when its required source/backend is unavailable, while degraded output remains
+explicitly labeled.
 
 **Why no interaction term.** Keong et al. 1990 (PMID 2103131) exposed humans at
 290 + 360 nm: fractional UVA/UVB minimal-pigmentation doses combine by
@@ -205,7 +203,7 @@ wavelength-additive, $\sum E_\lambda \cdot w_\lambda$, not $\sqrt{\mathrm{UVA}\c
 quarantined in the interface-only `tan_response.py`, never allowed to rescale
 photons inside TanDose.
 
-### 2.2 Tier-C runtime mapping (current production, `tierC-broadband-v1`)
+### 2.2 Tier-C degraded broadband proxy (`tierC-broadband-proxy-v2`)
 
 The estimator predicts broadband UVA (315–400) and UVB (280–315); Tier-C spreads
 each uniformly within its band and convolves with $S_{\mathrm{mel}}$. The band
@@ -225,13 +223,15 @@ broadband yields a ratio flat at ~7.4 across SZA 0–80°, so the live-run SZA f
 (§11.3) is attributed to forecast-UVI bias, not band shape. Full libRadtran
 emulation (Tier-B) must reproduce the SZA-ratio curve against real spectra.
 
-**Tiers:** A = reference reconstruction (reserved), B = validated emulator
-(requires manifest contract: version + training-manifest SHA + libRadtran
-provenance + parameter ranges + non-empty held-out metrics; `spectral.validate_tierB_manifest`),
-**C = production**, D = unavailable (strict fails). Any A/B claim without
-`SUNSTACK_TIERB_MANIFEST` raises instead of mislabeling Tier-C physics.
+**Tiers:** A = reference reconstruction (reserved); B =
+`tierB-libradtran-emulator-v1`, usable only after the manifest gates version,
+training-manifest SHA, libRadtran provenance, parameter ranges, and held-out
+metrics; C = explicitly degraded `tierC-broadband-proxy-v2`; D = unavailable
+(strict fails). A/B can never be claimed without their manifest gate, and C is
+never a silent fallback.
 
-**Tier-B clear-sky fallback** (`tierB-clear-sky-v1`, used only with no ML bundle):
+**Degraded parametric clear-sky path** (`degraded_clear_sky_parametric_v1`;
+legacy alias `tierB-clear-sky-v1`, used only with no ML bundle):
 Beer–Lambert direct + parametric diffuse against TOA band integrals (UVA 68,
 UVB 4.6 $\mathrm{W\,m^{-2}}$), Ridge-fitted once on POWER train years:
 
@@ -297,51 +297,21 @@ errors); predictions reindex to the bundle's feature list and clip at 0.
 
 ## 4. UVI fusion, disagreement, and confidence
 
-### 4.1 Headline UVI: OM-double-weighted median (`fusion_version = om-weighted-median-v1`)
+### 4.1 Calibrated UVI fusion (`fusion_version = calibrated-uvi-fusion-v2`)
 
-Votes per row: Open-Meteo ×2, CAMS ×1, EPA ×1; median of finite votes (missing
-sources add no votes). Rationale, with receipts: 65-snapshot Sep-2026
-verification at 1-day lead gives OM MAE 0.57 vs CAMS 1.49 with a −1.4 systematic
-low bias (thin-cloud over-attenuation) — a plain median let the systematically-low
-source drag the headline down; double weight resists a single bad feed without
-surrender. Lone-OM rows stay OM; OM ties break toward OM. Retrospective
-reference (previous-runs best-match, shared-DNA caveat): OM 0.49/−0.11,
-CAMS 1.22/−1.12, consensus 0.66/−0.58 (MAE/bias, n = 321/147/135).
+`uvi_consensus` is finalized only after the contributing source values and
+sub-hour corrections are final; source counts identify unique providers, not
+weighted votes. `erythemal_irradiance_wm2 = uvi_consensus / 40` is then derived
+from that final consensus. SED integrates this final-consensus erythemal field,
+never a raw provider value or a pre-fusion intermediate.
 
-Display-only range: `uvi_sunny = max`, `uvi_cloudy = min` across sources
-(second line under the consensus when spread ≥ 1.0); `uvi_source_spread = max −
-min`. Median stays the headline and the sole SED input; the range never scores.
+### 4.2 Confidence (`confidence_version = calibrated-error-v1`)
 
-### 4.2 Two disagreement detectors (confidence only — physics untouched)
-
-1. **UV/broadband incoherence** (`tanscore._uv_ghi_disagree`): best-match is
-   per-variable, so convective rows can read GHI 641 + cloud 100% + UVI 0.65.
-   Flags when the sun is well up (TOA > 100, SZA < 65°) and clear-sky indices
-   disagree hard ($kt_G > 0.5 \wedge kt_U < 0.3$ or $kt_G < 0.25 \wedge kt_U > 0.6$,
-   $kt = \mathrm{value}/\mathrm{clear\text{-}sky}$). Halves confidence; values
-   untouched; visible note in both tables. Twilight/night/NaN never flag.
-2. **All-source spread** (absolute UVI, not fractional — a 3-UVI split matters at
-   any level; fractional thresholds go blind at low sun): mild (spread ≥ 1.0)
-   ×0.85, strong (≥ 2.0) ×0.65. Env knobs `SUNSTACK_UVI_DISAGREE_FRAC` (0.35) /
-   `..._STRONG_FRAC` (0.60) scale the 1.0/2.0 defaults. Legacy pairwise
-   `uvi_difference_percent` (0–100, the old 0–1 storage rendered 35% as 0.4% —
-   audit 100× bug) kept for back-compat only.
-
-### 4.3 Confidence assembly (`derive.best_windows` → `tan_forecast_confidence_0_100`)
-
-- Deterministic agreement: per-metric cross-model std across the raw component
-  models (best-match excluded — it must not vote for itself), normalized
-  (cloud/35, GHI/180, DNI/250, temp/8) and averaged:
-  $\mathrm{agreement} = 100(1 - \overline{\mathrm{std}/\mathrm{scale}})$.
-- Ensemble strong-sun support (renormalized over available fields, never zeroed):
-  $0.35\,P(\mathrm{DNI}_i\ge600) + 0.30\,P(\mathrm{GHI}_i\ge700) +
-  0.20\,P(\mathrm{cloud}<60) + 0.15\,(1 - P(\mathrm{precip}>0.01"))$.
-- `sun_window_confidence = (0.65·support + 0.35·agreement) / (available weights)`.
-- Feature-coverage audit: `atmospheric_feature_coverage` (0–15) degrades trust
-  past CAMS/AQ horizons; the score table also carries heuristic `sun_score_0_100`
-  (UV/6 .30, transmission .15, DNI/850 .20, clearness/0.78 .15, directness .10,
-  sunshine .10; penalties pop .18, low-cloud .05, active precip .12, CAPE .04)
-  used for window sorting, **not** for TanScore.
+`tan_forecast_confidence_0_100` is calibrated reliability/error context, never
+sun strength and never a multiplier on photons. Source disagreement, coverage,
+and forecast error affect confidence; they do not alter delayed-pigmentation
+irradiance, SED, or dose. `strong_sun_probability_0_100` remains a separate
+useful-sun probability.
 
 ---
 
@@ -370,67 +340,64 @@ low. Local grades: 98 exceptional · 90 excellent · 75 good · 50 typical-to-go
 
 ---
 
-## 6. Outdoor feasibility → Overall opportunity
+## 6. Outdoor feasibility and legacy Overall
 
-### 6.1 The merge (tanning weather leads)
+`overall_tan_opportunity_0_100` is retained only as a **LEGACY composite
+(deprecated product heuristic)**. It can summarize weather usability beside
+physical scores, but it is not the fixed-duration recommendation objective.
 
-Weighted geometric mean over available components (missing components
-renormalize — never silent zeros; log floor 0.25; coverage count exposed as
-`overall_component_coverage` so "3/4 components" renders instead of a quiet
-redefinition), capped so interpretation can never outrun physics:
+### 6.1 Legacy merge
+
+The available-component weighted geometric mean uses
+`OVERALL_SCORE_WEIGHTS = {absolute: 0.70, local: 0.15, atmosphere: 0.05,
+confidence: 0.10}` and is capped at `Absolute+20`:
 
 $$G = \exp\!\sum_{k} \hat{w}_k \ln\!\max(v_k, 0.25), \qquad G \leftarrow \min(G,\, \mathrm{Absolute} + 20)$$
 
 $$ \mathrm{Overall_{unblocked}} = \mathrm{clip}(G,0,100), \qquad \mathrm{Overall} = \mathrm{clip}(\mathrm{Overall_{unblocked}} \times m_{\mathrm{wx}}, 0, 100) $$
 
-weights `OVERALL_SCORE_WEIGHTS = {absolute: 0.70, local: 0.15, atmosphere: 0.05,
-confidence: 0.10}` (`OVERALL_ABSOLUTE_HEADROOM = 20`), $m_{\mathrm{wx}}$ the
-usability multiplier below. Night (SZA ≥ 90°) forces both to 0 (kills the
-log-floor ~1). So a 65°F scorcher-sun day stays GOOD while 75°F overcast cannot
-buy one — proven by regression test.
+Missing components renormalize with explicit coverage; this legacy composite
+does not make Local part of the dose objective.
 
-### 6.2 Hard blocks ($m_{\mathrm{wx}} = 0$) vs soft penalties
+### 6.2 Hard blocks vs soft penalties
 
-Hard blocks (user/product rules, **not** melanocyte claims): active rain
-(> 0.001″ rain/showers or WMO 51–67/80–82), active snow (> 0.001″ or 71–78/85–86),
-thunder (95/96/99), heat ≥ 110°F (`MAX_TAN_TEMP_F`), cold < 50°F (`MIN_TAN_TEMP_F`,
-per-request overridable). Soft, multiplicative: cold-band shallowness
-($0.65 + 0.35\times$feels-fraction — feels, not thermometer, so calm sun is
-forgiven and wind is not), heat ramp ($1 - 0.45\times$fraction from 100→110°F),
-rain-risk ($1 - 0.55\,(\mathrm{pop}/100)^{1.2}$ — reliability, not biology),
-wind ≥ 25 mph ×0.80, ≥ 35 mph ×0.65. Snow albedo still raises radiation
-quantities while snow cover blocks lying outside — the two facts live in
-different layers, as they should.
+Hard blocks are practical rules, not melanocyte claims: active rain
+(> 0.001″ rain/showers or WMO 51–67/80–82), active snow (> 0.001″ or
+71–78/85–86), thunder (95/96/97/99), heat ≥ 110°F, cold < 50°F, and declared
+missing hard-block inputs. Soft usability penalties cover cold comfort,
+100–110°F heat, precipitation probability, wind, and hot/humid conditions.
+Snow may raise reflected radiation while snow cover blocks lying outside; the
+two layers stay separate.
 
-### 6.3 Sun-adjusted feels-like (bare-skin model)
+### 6.3 Demoted sun-warming heuristic
 
-Tuned for the actual user: shirtless + shorts, lying still on grass/sand
-(maximum skin exposure, zero metabolic heat, wind does 100% of cooling):
+`sun_adjusted_feels_like_f` is retained as the deprecated alias of
+`sun_warming_heuristic_f`, with
+`comfort_model_version=sun-warming-heuristic-v1 (demoted: not a validated feels-like)`.
+It frames a resting/reclining user with resting metabolic rate and does not use
+an absent-metabolism assumption. UVI is not thermal loading: this is a comfort
+heuristic, not a validated thermal model, and it never affects ranking: the
+fixed-duration dose objective does.
+Comfort bands use the heuristic; hard blocks use the air-temperature
+thermometer.
 
-$$F = T_{\mathrm{air}} + \underbrace{18\,\mathrm{clip}\!\left(\tfrac{\mathrm{UVI}}{10},0,1.2\right) T}_{\mathrm{bare\text{-}skin\ sun\ gain,\ \sim 1.5\times\ clothed}} + \underbrace{0.6\,\mathrm{clip}(T_{\mathrm{dew}}-65,0,15)}_{\mathrm{muggy:\ sweat\ can't\ evaporate}} - \underbrace{8\,\mathrm{clip}\!\left(\tfrac{W}{25},0,1.5\right)}_{\mathrm{wind\ strip}}$$
-
-$T = \mathrm{clip}(\mathrm{UVI}/\mathrm{UVI_{clear}}, 0, 1)$ transmission; $W$ in
-mph. E.g. 68°F calm sun → feels ~75.5 (`sun-warmed`); same +20 mph wind → ~69.8;
-muggy dew-75 → +9. Hard blocks still use the thermometer; only the comfort band
-and cold penalty use $F$. Bands: `too cold` / `cool` / `sun-warmed` (the band
-that fixed the "65°F sunburn weather labeled cool" bug) / `perfect` / `warm` /
-`too hot`. Shown in every Temp cell as `sun-feels XX°` next to air temp.
-
-Day status from peak Overall: 80 EXCELLENT · 65 VERY GOOD · 50 GOOD · 35 FAIR ·
->0 POOR · else NO OUTDOOR WINDOW.
+The retained arithmetic is
+$$F = T_{\mathrm{air}} + 18\,\mathrm{clip}\!\left(\tfrac{\mathrm{UVI}}{10},0,1.2\right)T + 0.6\,\mathrm{clip}(T_{\mathrm{dew}}-65,0,15) - 8\,\mathrm{clip}\!\left(\tfrac{W}{25},0,1.5\right),$$
+where $T=\mathrm{clip}(\mathrm{UVI}/\mathrm{UVI_{clear}},0,1)$ and $W$ is mph.
+A 75°F dew point contributes +6°F: $(75-65)\times0.6$. A 20 mph wind subtracts
+6.4°F: $8\times20/25$.
 
 ---
 
 ## 7. Doses — TanDose, SED, and the unknown-vs-zero contract
 
-All doses are trapezoidal time integrals with gap splitting
-(`photobiology._trapezoidal_dose`): gaps over `TANDOSE_MAX_INTERP_GAP_S`
-(default **3600 s**; primitives default 3 h) split the integral; coverage =
-covered seconds / full stamp-span; endpoints must be valid or the window is
-incomplete. **No valid samples → NaN/False/0.0 (UNKNOWN, never zero)**; one lone
-sample → 0.0/False/0.0; only genuinely measured zeros (night rows) integrate as
-zero; interior NaNs are skipped, never zeroed. Every dose at every level carries
-`(complete, coverage_fraction)`.
+All doses follow `interval-contract-v1`: an interval-mean radiation value is
+integrated over its declared `interval_start_utc`/`interval_end_utc` support;
+point samples use trapezoidal integration over actual timestamps, never a
+nominal interval. Gaps over `TANDOSE_MAX_INTERP_GAP_S` (default **3600 s**)
+split coverage. Missing input is UNKNOWN, never zero: no valid or lone sample
+over a nonzero window is `NaN`/incomplete; only measured night zeros integrate
+as complete zeros. Every dose level carries `(complete, coverage_fraction)`.
 
 | Dose | Integral | Unit | Levels |
 |------|----------|------|--------|
@@ -448,14 +415,14 @@ $[t, t{+}30m)$ lives on the row at $t{+}30m$. Day totals group by **local** date
 
 ---
 
-## 8. Sub-hour engine — HRRR truth + clear-sky-index interpolation
+## 8. Sub-hour engine — native HRRR forecast + clear-sky-index interpolation
 
 `build_30min_forecast` resamples hourly → 30-min on the union grid with
 time-interpolation **inside** each column's observed span only (past-horizon
-stamps revert to NaN — pandas forward-fill once flatlined every CAMS column 9
-days past the 5-day horizon); booleans/codes forward-fill; run-constant
-metadata (tiers, versions, `cams_cycle`) carries; time-varying CAMS never does.
-Solar geometry is recomputed exactly per :30 stamp (pvlib), never interpolated.
+stamps revert to NaN); booleans/codes forward-fill; run-constant metadata
+(tiers, versions, `cams_cycle`) carries; time-varying CAMS never does. Solar
+geometry is recomputed per :30 stamp. Native HRRR values are native HRRR
+**forecast** inputs, not observation truth.
 
 - **Clear-sky-index GHI** (measured quantity only): $kt = \mathrm{GHI}/\mathrm{TOA}$
   ($\mathrm{TOA} = 1361.1\cos\mathrm{SZA}$, exact astronomy) interpolated, then
@@ -468,13 +435,11 @@ Solar geometry is recomputed exactly per :30 stamp (pvlib), never interpolated.
 - **Native-HRRR override** (`:00/:30` stamps): same pattern against the
   kt-improved baseline, bounds $[0.45, 1.55]$, single compounding (a stacked
   0.7×0.45 → 0.31 double-correction was found in production data and fixed).
-- After either correction: v4 channels recomputed in place (never an
-  interpolated spectral value presented as native — `subhour_source` retained),
-  UVI fusion recomputed from corrected sources (never interpolate statistics
-  independently), Local/Atmosphere re-percentiled against the reference (never a
-  composite of two physics states), feasibility re-applied with the requested
-  temp floor, trailing doses integrated. Pre-sunrise ghost test pins the night
-  zero; a mocked-TOA test pins the kt plumbing (312.5, not linear 250.0).
+- After either correction, final derived channels recompute in place (an
+  interpolated spectral value is never presented as native; `subhour_source`
+  is retained), then final UVI fusion, percentiles, feasibility, and trailing
+  doses are recomputed from those final parents. Pre-sunrise ghost-light and
+  clear-sky-index plumbing remain independently checked.
 
 ---
 
@@ -503,53 +468,67 @@ with null-safe max filtering (a null-coercion bug once rendered absent as
 facultative), melanin index, L*, pigment-protection factor, measured MED (SED)
 — objective inputs outrank Fitzpatrick by construction.
 
-**Sun posture** (context, never scored): 16-point compass from pvlib azimuth,
-`torso_lift = 90 − elevation`, three bands (≥55° lay flat; 30–55° flat-or-lift;
-<30° face-and-lift with compass direction), half-hours recomputed from exact
-geometry, sun-arc SVG + stick figure in the UI.
+**Sun posture** is context, never a default ranking input: the UI can render
+solar geometry and a selected plane, but it must not confuse guidance with an
+actual selected pose.
 
-**Skin plane** (`spectral.apply_skin_plane`): configured tilt/azimuth
-(`SUNSTACK_SKIN_TILT_DEG=0`, `AZIMUTH=180`; validated 0–180/0–360) scales direct
-by incidence cosine and diffuse by isotropic sky-view $(1+\cos\tau)/2$ plus
-albedo ground-bounce $\alpha(1-\cos\tau)/2$; tilt 0 returns exactly 1.0, and
-environmental columns are never overwritten — tilted exposure is additional
-`skin_plane_*` context. (Sand reflects ~25% more UV than grass through this
-albedo path.)
+**Surface profiles and the skin plane.** Local `surface` presets describe the
+material immediately around the user. Each context row identifies the selected
+profile with `surface_material_slug` and `surface_reflectance_source`. Regional
+CAMS `forecast_albedo` remains an atmospheric/RT input and is never substituted
+for local reflection.
+
+`surface_extent_mode = local|broad` defaults to `local`. In local mode,
+changing surface leaves horizontal environmental radiation, dose, and ranking
+bit-identical; it changes only local reflected/skin-plane context. `broad`
+declares broad homogeneity and may enter the Tier-B backend RT boundary
+condition. Without backend RT it is backend-only: static export explains that
+it cannot rerun broad-mode RT.
+
+The defaults are `SUNSTACK_SKIN_TILT_DEG=0` and
+`SUNSTACK_SKIN_AZIMUTH_DEG=180`; an explicit azimuth of 360 normalizes to 0, and
+omitted values fall back to these defaults. A flat horizontal plane has
+ground-view factor 0, so local ground reflection is exactly zero. At fixed
+nonzero tilt, Lambertian reflected components rise monotonically with profile
+reflectance;
+`open_water` instead uses geometry-dependent Fresnel reflection, not a flat
+Lambertian scalar. `unknown` asserts no local correction; it never silently
+becomes 0.20. The dry-sand proxy is 0.1650 and summer-grass proxy is 0.0285,
+but their modeled effect remains material/state/wavelength/geometry dependent.
+
+`/api/data`, `/api/refresh`, and `/api/calendar.ics` accept `surface`,
+`surface_extent`, `skin_tilt_deg`, and `skin_azimuth_deg`; invalid values return
+400. CLI equivalents are `--surface`, `--surface-extent`, `--skin-tilt-deg`,
+and `--skin-azimuth-deg`. Persisted runs and static exports retain
+`exposure_basis=environmental_horizontal`; `skin_plane_*` columns are context.
 
 ---
 
-## 10. Windows, days, and predictions served
+## 10. Windows, calendar, export, and provenance
 
-- **Hourly `best_tan_windows`:** daylight rows ranked by Overall (fallback
-  $0.9\times\mathrm{Absolute} + 0.1\times\mathrm{confidence}$); Absolute-first
-  so Local can never inflate weaker physics; confidence breaks near-ties only.
-- **Daily `_best_contiguous_window` (`window-rank-v1`):** eligible = unblocked,
-  within 12 of the day peak and ≥ 10; longest run wins, mean breaks ties;
-  **TanDose is reported as a consequence of the chosen window, never the
-  ranking objective** (dose-invariant: ×10 photon scaling selects identical
-  windows). Plus best-30 m, best-hour (rolling pair), class-aware
-  `best_available_window_*` (Mon–Fri ET blocks excluded; server-side so calendar
-  and API share it), and `peak_*` true maxima kept separate from
-  `*_at_best` values-at-peak after the old fields conflated them.
-- **Every prediction row carries:** predicted UVA/UVB, $E_{\mathrm{mel}}$,
-  Absolute + label/version/tier, consensus UVI + votes/spread/sunny/cloudy,
-  Local/Atmo + labels + reference version/staleness, confidence + disagree
-  flags, feasibility + reasons + comfort + sun-feels, Overall pair + coverage,
-  trailing doses + flags, personalization, posture, skin-plane, provenance
-  (`forecast_code_sha` vs `renderer_code_sha` — a reskin restamps only the
-  renderer — `fusion_version`, `cams_cycle(s)`, model/tier metadata, raw-payload
-  manifest, `validation_issues`).
-- **Served as:** live API (`GET /`, `/api/data`, `/api/refresh`,
-  `/api/calendar.ics`, `/api/locations`; per-request `skin_type`, `min_temp`,
-  `personal_mmd{,_basis}`, `location`), multi-site static export
-  (`data.json` + `index.html` + daily + 30-min daylight-filtered ICS + 3 CSVs),
-  per-site scheduled runs (alternating publish so one slow site can't take down
-  the other). Validation gates twice: live sources/photobiology/hourly, then
-  the **published** artifacts (cross-product invariants) — bad data fails
-  loudly instead of going live. The dashboard renders hero, day strip
-  (Int/Fit/Conf triple + class overlay), hourly + half-hour tables, sun
-  figure, dose row, provenance, and debug dump; the full render path is proven
-  headlessly against live-v4, pre-v4, and MMD payloads.
+- `strongest_30m_*` is the maximum expected 30-minute
+  delayed-pigmentation dose regardless of comfort. `best_usable_30m_*` is the
+  maximum such dose among hard-usable windows. The primary selector is
+  `fixed-duration-dose-v2`: Local never enters its objective, and confidence
+  breaks only defined dose ties before deterministic ordering.
+- `best_window_*` remains the legacy contiguous Overall stretch. It is kept for
+  continuity, not used as the dose objective. The hero presents strongest
+  physical versus best-usable windows separately.
+- Calendar DTSTART/DTEND and SUMMARY derive from the physical window
+  (`best_usable_30m_*` → `strongest_30m_*` → legacy `best_window_*`), with
+  UID/SEQUENCE stability unchanged; when best-usable and strongest differ, the
+  description names both and which is blocked. It does not imply a safety
+  recommendation.
+- Static export and `/api/data` served rows use one astronomical daylight mask:
+  `is_day` when it supplies a signal, otherwise positive `solar_elevation_deg`;
+  fixtures without either signal retain all rows, and source parquet/CSV tables
+  keep every row. Fit is the share of half-hours on exactly that daylight mask
+  which are not hard-blocked.
+- Reskin is renderer-only: `forecast_code_sha` remains the forecast identity
+  while `renderer_code_sha` records the renderer revision. Static export writes
+  `surfaces.json` from `surface.PRESETS` and labels the client-side
+  reflected-context line (`GHI × proxy × (1 − cos tilt)/2`) as `(client-side)`;
+  the page fetches `data.json` run-stamped.
 
 ---
 

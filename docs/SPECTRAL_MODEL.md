@@ -1,9 +1,11 @@
 # Spectral model
 
-`src/sunstack/spectral.py` produces skin-plane spectral irradiance over
-~280-400 nm. `src/sunstack/photobiology.py` convolves it with the action
-spectrum. `src/sunstack/doses.py` integrates; `src/sunstack/tan_response.py`
-is the (interface-only) downstream response model.
+`src/sunstack/spectral.py` reconstructs the environmental-horizontal spectrum
+over ~280-400 nm and attaches optional skin-plane direct/diffuse/local-reflected
+context. `src/sunstack/photobiology.py` convolves each exposure basis with the
+action spectrum; `src/sunstack/doses.py` integrates it; `tan_response.py` is
+the interface-only downstream response model. Neither spectrum is a
+melanin-color prediction.
 
 ## Reference backend and emulator plan
 
@@ -20,33 +22,37 @@ is the (interface-only) downstream response model.
 ## Runtime tiers
 
 - **A** direct/reference-quality reconstruction (reserved; never silently claimed).
-- **B** validated spectral emulator (reserved; requires training manifest).
-  The Tier-B manifest contract (`spectral.validate_tierB_manifest`) requires
-  `spectral_emulator_version`, `spectral_training_manifest_sha256`,
-  `libradtran_version`, `parameter_ranges`, and non-empty held-out
-  `validation_metrics`, enforced before any Tier-B output is trusted.
-  Generate the offline design with
-  `python3 scripts/build_spectral_corpus.py --samples 2000`
-  (runs uvspec per sample only when libRadtran is installed; otherwise the
-  deterministic design + manifest is the artifact, never fake spectra).
-- **C** calibrated broadband approximation (**current production**,
-  `tierC-broadband-v1`): distributes predicted UVA/UVB uniformly within
-  315-400 / 280-315 nm and convolves with S_mel. Band weights
-  (w_uvb >> w_uva) derive from the spectrum itself, not hand tuning.
-  Wavelength-additive by construction.
+- **B** validated spectral emulator, `tierB-libradtran-emulator-v1`. Its
+  manifest must contain `spectral_emulator_version`,
+  `spectral_training_manifest_sha256`, `libradtran_version`, `parameter_ranges`,
+  and non-empty held-out `validation_metrics`; those gates pass before Tier-B
+  output is trusted.
+- **C** explicitly degraded broadband proxy, `tierC-broadband-proxy-v2`. It
+  distributes predicted UVA/UVB uniformly within 315-400 / 280-315 nm and
+  convolves with the action spectrum; it is wavelength-additive, but it is not
+  a validated spectral emulator.
 - **D** unavailable (strict mode fails).
 
-Strict mode requires A/B once production-ready; `--allow-degraded` may permit
-C with the tier exposed on every output. The legacy 55/30/15 formula is never
-a silent fallback.
+Strict mode requires a gate-passing backend; `--allow-degraded` may permit C
+with its tier on every output. The legacy 55/30/15 formula is never a silent
+fallback.
+
+## Temporal and erythemal hierarchy
+
+`interval-contract-v1` distinguishes interval means from point samples: an
+interval mean is integrated over its declared support, while point samples use
+actual timestamps. Final UVI consensus precedes
+`erythemal_irradiance_wm2 = uvi_consensus / 40`; SED integrates that final
+consensus-derived erythemal field, never a raw provider or pre-fusion value.
 
 ## Skin-plane exposure
 
-Configured via `SUNSTACK_SKIN_TILT_DEG` / `SUNSTACK_SKIN_AZIMUTH_DEG`
-(plus horizontal/lying-flat, standing, and user tilt/azimuth presets in the
-UI roadmap). Direct uses incidence angle; diffuse uses isotropic sky-view
-plus albedo ground bounce and is never discarded. Snow blocking stays an
-outdoor-feasibility rule; snow albedo still raises the radiation quantities.
+`SUNSTACK_SKIN_TILT_DEG` / `SUNSTACK_SKIN_AZIMUTH_DEG` configure the optional
+plane. Direct uses incidence angle; diffuse uses isotropic sky view; local
+reflected context uses the selected local surface profile. CAMS
+`forecast_albedo` remains a regional RT input and never becomes local surface
+reflectance. Environmental-horizontal fields remain immutable; the plane is
+additional context.
 
 ## Known Tier-C limitation: uniform intra-band shape
 
