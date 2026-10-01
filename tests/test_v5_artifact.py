@@ -171,8 +171,7 @@ def test_validator_passes_clean_fixture(tmp_path: Path) -> None:
     assert out["passed"] is True, out["failures"]
     checks = out["checks"]
     assert isinstance(checks, list)
-    assert len(cast(list[object], checks)) == 19
-
+    assert len(cast(list[object], checks)) == 20
 
 def test_validator_fails_diverged_fixture(tmp_path: Path) -> None:
     module = _load_validator()
@@ -187,7 +186,13 @@ def test_validator_fails_diverged_fixture(tmp_path: Path) -> None:
     assert "source_counts_bounded" in failures or "unique_uvi_source_count" in failures
 
 
-def test_validator_fails_twin_mismatch(tmp_path: Path) -> None:
+def test_validator_fails_night_row_in_daylight_payload(tmp_path: Path) -> None:
+    module = _load_validator()
+    bad = _good_artifact()
+    _row(bad, 1)["is_day"] = 0  # night row would enter Fit's denominator
+    out = _validate(module, tmp_path, bad, "night.json")
+    assert out["passed"] is False
+    assert "daylight_fit_denominator" in _failures(out)
     module = _load_validator()
     bad = _good_artifact()
     _row(bad, 1)["delayed_pigmentation_dose_30m_j_m2"] = 123.0

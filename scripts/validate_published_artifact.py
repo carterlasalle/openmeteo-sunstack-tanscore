@@ -34,6 +34,7 @@ FATAL_CHECKS = [
     "confidence_contract",
     "source_counts_bounded",
     "surface_local_mode_invariant",
+    "daylight_fit_denominator",
     "no_deprecated_ranking_key",
     "row_summary_version_agreement",
     "no_stale_local_reference",
@@ -451,6 +452,21 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
     for r in rows:
         if "surface_material_slug" in r and "melanogenic_effective_irradiance_wm2" not in r:
             failures["surface_local_mode_invariant"].append("surface context without horizontal E_mel")
+            break
+
+    # §22.16 static Fit denominator: every published half-hour row must be a
+    # daylight row under the export mask (is_day>0 else solar_elevation>0).
+    # Night rows in the served payload would silently enter Fit's denominator.
+    for r in half_rows or rows:
+        _is_day = r.get("is_day")
+        _elev = r.get("solar_elevation_deg")
+        _daylit = (_is_finite(_is_day) and _num(_is_day) > 0) or (
+            _is_finite(_elev) and _num(_elev) > 0)
+        # Frames without either signal retain all rows (same rule as export).
+        _has_signal = _is_finite(_is_day) or _is_finite(_elev)
+        if _has_signal and not _daylit:
+            failures["daylight_fit_denominator"].append(
+                f"{r.get('time')}: night row in daylight payload")
             break
 
     failed = {k: v for k, v in failures.items() if v}
