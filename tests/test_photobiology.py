@@ -284,13 +284,13 @@ def test_personalization_never_alters_environmental_physics():
     assert out.loc[0, "tan_dose_1h_j_m2"] == 1000.0
     assert pd.isna(out.loc[0, "personal_mmd_fraction"])
     assert out.loc[0, "personalization_basis"] == "not personalized"
-    measured = attach_personalization(df, personal_mmd_j_m2=2000.0, basis="MEASURED")
+    measured = attach_personalization(df, personal_mmd_j_m2=2000.0, basis="SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     assert measured.loc[0, "personal_mmd_fraction"] == 0.5
     # Fitzpatrick alone never yields a precise MMD.
     ctx = personalization_context(fitzpatrick_type=3)
     assert "COARSE_ESTIMATE" in str(ctx["personalization_basis"])
     assert personalization_context(
-        measured_mmd=500.0)["personalization_basis"] == "MEASURED"
+        measured_mmd=500.0)["personalization_basis"] == "SUNSTACK_EFFECTIVE_DOSE_MEASURED"
 
 
 def _write_spectrum(tmpdir, stem, waves, effs):

@@ -1062,9 +1062,9 @@ def test_cli_personal_mmd_flags_and_threading():
         assert "personal_mmd_j_m2" in params, fn.__name__
         assert "personal_mmd_basis" in params, fn.__name__
     ns = _cli._build_parser().parse_args(
-        ["run", "--personal-mmd", "2500", "--personal-mmd-basis", "MEASURED"])
+        ["run", "--personal-mmd", "2500", "--personal-mmd-basis", "SUNSTACK_EFFECTIVE_DOSE_MEASURED"])
     assert ns.personal_mmd == 2500.0
-    assert ns.personal_mmd_basis == "MEASURED"
+    assert ns.personal_mmd_basis == "SUNSTACK_EFFECTIVE_DOSE_MEASURED"
     plain = _cli._build_parser().parse_args(["run"])
     assert plain.personal_mmd is None and plain.personal_mmd_basis is None
     import pytest
@@ -1084,7 +1084,7 @@ def test_personal_mmd_fraction_on_live_shaped_frame():
     if not src.exists():
         pytest.skip("needs a local live run (gitignored data/)")
     h = pd.read_parquet(src)
-    out = attach_personalization(h, personal_mmd_j_m2=12000.0, basis="MEASURED")
+    out = attach_personalization(h, personal_mmd_j_m2=12000.0, basis="SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     frac = pd.to_numeric(out["personal_mmd_fraction"], errors="coerce")
     assert float(frac.notna().mean()) > 0.9
     for col in ("tan_score_absolute_0_100", "tan_dose_1h_j_m2",
@@ -1101,16 +1101,16 @@ def test_parse_personal_mmd_is_loud():
 
     assert _parse_personal_mmd("", "") == (None, None)
     assert _parse_personal_mmd(None, None) == (None, None)
-    assert _parse_personal_mmd("12000", "MEASURED") == (12000.0, "MEASURED")
+    assert _parse_personal_mmd("12000", "SUNSTACK_EFFECTIVE_DOSE_MEASURED") == (12000.0, "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     with pytest.raises(ValueError, match="provenance|basis"):
         _parse_personal_mmd("12000", "")
     with pytest.raises(ValueError, match="one of"):
         _parse_personal_mmd("12000", "FOLKLORE")
     with pytest.raises(ValueError, match="number"):
-        _parse_personal_mmd("a lot", "MEASURED")
+        _parse_personal_mmd("a lot", "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     for bad in ("0", "-5", "nan", "inf"):
         with pytest.raises(ValueError, match="positive finite"):
-            _parse_personal_mmd(bad, "MEASURED")
+            _parse_personal_mmd(bad, "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
 
 
 def _payload_fixture(tmp_path):
@@ -1155,10 +1155,10 @@ def test_filtered_payload_personal_mmd(tmp_path):
     from sunstack.ui import _filtered_payload
 
     root = _payload_fixture(tmp_path)
-    _, hourly, half, _, _ = _filtered_payload(root, None, None, None, 2000.0, "MEASURED")
+    _, hourly, half, _, _ = _filtered_payload(root, None, None, None, 2000.0, "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     assert (hourly["personal_mmd_fraction"].to_numpy() ==
             np.array([0.5, 1.0, 0.75])).all()
-    assert (hourly["personalization_basis"] == "MEASURED").all()
+    assert (hourly["personalization_basis"] == "SUNSTACK_EFFECTIVE_DOSE_MEASURED").all()
     assert (half["personal_mmd_fraction"].to_numpy()[:3] ==
             np.array([0.25, 0.4, 0.5])).all()
     _, plain_hourly, _, _, _ = _filtered_payload(root, None, None, None)
@@ -1223,11 +1223,11 @@ def test_api_data_personal_mmd(tmp_path):
     assert plain.json()["hourly"][0]["personal_mmd_fraction"] is None
     mmd = client.get("/api/data", params={
         "location": "south-bend", "personal_mmd": "2000",
-        "personal_mmd_basis": "MEASURED"})
+        "personal_mmd_basis": "SUNSTACK_EFFECTIVE_DOSE_MEASURED"})
     assert mmd.status_code == 200, mmd.text
     rows = mmd.json()["hourly"]
     assert [r["personal_mmd_fraction"] for r in rows] == [0.5, 1.0, 0.75]
-    assert {r["personalization_basis"] for r in rows} == {"MEASURED"}
+    assert {r["personalization_basis"] for r in rows} == {"SUNSTACK_EFFECTIVE_DOSE_MEASURED"}
     bad = client.get("/api/data", params={
         "location": "south-bend", "personal_mmd": "2000",
         "personal_mmd_basis": "FOLKLORE"})
@@ -1268,10 +1268,10 @@ def test_export_bakes_personal_mmd_when_asked(tmp_path):
     payload = _json.loads((tmp_path / "plain" / "data.json").read_text())
     assert payload["hourly"][0]["personal_mmd_fraction"] is None
     export_static_site(root, tmp_path / "pers", personal_mmd_j_m2=2000.0,
-                       personal_mmd_basis="MEASURED")
+                       personal_mmd_basis="SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     payload = _json.loads((tmp_path / "pers" / "data.json").read_text())
     assert [r["personal_mmd_fraction"] for r in payload["hourly"]] == [0.5, 1.0, 0.75]
-    assert payload["half_hour"][0]["personalization_basis"] == "MEASURED"
+    assert payload["half_hour"][0]["personalization_basis"] == "SUNSTACK_EFFECTIVE_DOSE_MEASURED"
 
 
 def test_rescore_gate_exits_on_validation_errors(tmp_path, monkeypatch):
@@ -1425,7 +1425,7 @@ def test_attach_rejects_unlabeled_mmd():
     df = pd.DataFrame({"tan_dose_1h_j_m2": [1000.0]})
     with pytest.raises(ValueError, match="explicit basis"):
         attach_personalization(df, personal_mmd_j_m2=2000.0)
-    ok = attach_personalization(df, personal_mmd_j_m2=2000.0, basis="MEASURED")
+    ok = attach_personalization(df, personal_mmd_j_m2=2000.0, basis="SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     assert ok.loc[0, "personal_mmd_fraction"] == 0.5
 
 
@@ -1444,14 +1444,14 @@ def test_export_preserves_run_attached_fractions(tmp_path):
     half_path = root / "latest" / "tables" / "tan_forecast_30min.parquet"
     half = pd.read_parquet(half_path)
     half["personal_mmd_fraction"] = 0.25
-    half["personalization_basis"] = "MEASURED"
+    half["personalization_basis"] = "SUNSTACK_EFFECTIVE_DOSE_MEASURED"
     half.to_parquet(half_path, index=False)
     export_static_site(root, tmp_path / "kept")
     payload = _json.loads((tmp_path / "kept" / "data.json").read_text())
     assert {r["personal_mmd_fraction"] for r in payload["half_hour"]} == {None}, (
         "stale run-attached fractions must not leak into exports")
     export_static_site(root, tmp_path / "pers", personal_mmd_j_m2=2000.0,
-                       personal_mmd_basis="MEASURED")
+                       personal_mmd_basis="SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     payload = _json.loads((tmp_path / "pers" / "data.json").read_text())
     assert {r["personal_mmd_fraction"] for r in payload["half_hour"]} != {None}
     with pytest.raises(ValueError, match="explicit basis"):
@@ -1738,9 +1738,9 @@ def test_personalization_without_dose_column_is_nan_not_crash():
     from sunstack.opportunity import attach_personalization
 
     out = attach_personalization(
-        pd.DataFrame({"a": [1.0]}), 2000.0, "MEASURED")
+        pd.DataFrame({"a": [1.0]}), 2000.0, "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     assert out["personal_mmd_fraction"].isna().all()
-    assert out["personalization_basis"].unique().tolist() == ["MEASURED"]
+    assert out["personalization_basis"].unique().tolist() == ["SUNSTACK_EFFECTIVE_DOSE_MEASURED"]
 
 
 def test_cli_hourly_personalization_uses_interval_doses(tmp_path):
@@ -1750,7 +1750,7 @@ def test_cli_hourly_personalization_uses_interval_doses(tmp_path):
 
     scored = score_forecast(_best_air(), Path(tmp_path), None, _confidence())
     dosed = add_interval_doses(scored)
-    out = attach_personalization(dosed, 2000.0, "MEASURED")
+    out = attach_personalization(dosed, 2000.0, "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     assert out["personal_mmd_fraction"].notna().any()
 
 

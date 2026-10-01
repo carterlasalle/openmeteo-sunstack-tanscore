@@ -162,7 +162,8 @@ def _filtered_payload(
     return run, hourly, half, daily, summary
 
 
-_PERSONAL_MMD_BASES = ("MEASURED", "OBJECTIVE_ESTIMATE", "COARSE_ESTIMATE")
+_PERSONAL_MMD_BASES = ("SUNSTACK_EFFECTIVE_DOSE_MEASURED", "SOURCE_SPECTRUM_MEASURED",
+                       "OBJECTIVE_ESTIMATE", "COARSE_ESTIMATE")
 
 
 def _parse_personal_mmd(personal_mmd: object,

@@ -1138,7 +1138,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--personal-mmd-basis",
         default=None,
-        choices=["MEASURED", "OBJECTIVE_ESTIMATE", "COARSE_ESTIMATE"],
+        choices=["SUNSTACK_EFFECTIVE_DOSE_MEASURED", "SOURCE_SPECTRUM_MEASURED",
+                 "OBJECTIVE_ESTIMATE", "COARSE_ESTIMATE"],
         help="Provenance label for --personal-mmd (Fitzpatrick-only estimates "
              "stay COARSE_ESTIMATE with wide uncertainty)",
     )
@@ -1187,7 +1188,7 @@ def main() -> None:
         # Same rule as the dashboard/API 400: an MMD without an explicit
         # basis would publish fractions with implied-but-absent provenance.
         parser.error("--personal-mmd requires --personal-mmd-basis "
-                     "(MEASURED, OBJECTIVE_ESTIMATE, or COARSE_ESTIMATE)")
+                     "(SUNSTACK_EFFECTIVE_DOSE_MEASURED, SOURCE_SPECTRUM_MEASURED, OBJECTIVE_ESTIMATE, or COARSE_ESTIMATE)")
     root = Path(args.out)
     _setup_logging(root, debug=args.verbose)
     strict = config.STRICT_DEFAULT and not args.allow_degraded

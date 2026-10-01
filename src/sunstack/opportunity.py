@@ -21,7 +21,10 @@ def _num(df: pd.DataFrame, name: str, default=np.nan) -> pd.Series:
 
 RAIN_CODES = set(range(51, 68)) | {80, 81, 82}
 SNOW_CODES = set(range(71, 78)) | {85, 86}
-THUNDER_CODES = {95, 96, 99}
+# Contract §14.2: Open-Meteo WMO semantics include 97 (thunderstorm with
+# hail); {95,96,99} alone is incomplete.
+THUNDER_CODES = {95, 96, 97, 99}
+SNOW_DEPTH_BLOCK_M = 0.05
 
 
 def _weighted_geometric(row: pd.Series) -> float:
@@ -64,12 +67,14 @@ def apply_outdoor_feasibility(
     out = scored.copy()
     min_temp = float(config.MIN_TAN_TEMP_F if min_temp_f is None else min_temp_f)
     temp = _num(out, "temperature_2m")
-    # Sun-adjusted feels-like for BARE SKIN lying still (user context:
-    # shirtless + shorts on grass/sand). Solar heating from headline UVI x
-    # clear-sky transmission (bare skin gains ~1.5x the clothed adult), plus a
-    # muggy penalty from dew point (sweat can't evaporate), minus wind strip
-    # (lying still = wind does all cooling). Used for the comfort band ONLY —
-    # hard blocks still use the thermometer.
+    # Sun-warming heuristic for BARE SKIN lying still (user context: shirtless
+    # + shorts on grass/sand). Contract §15: the old UVI-based "feels-like"
+    # is demoted — UVI is NOT thermal radiant loading, and the old formula
+    # applied UV transmission twice (attenuated UVI × UVI/UVI_clear). This
+    # column keeps the legacy values under an honest name for migration; it
+    # never affects radiation ranking. Morningdew: 75°F dew point contributes
+    # +6°F ((75-65)×0.6), 20 mph wind subtracts 6.4°F (8×20/25) — pinned by
+    # test, not documentation prose.
     _uvi = _num(out, "uvi_consensus" if "uvi_consensus" in out.columns else "uv_index")
     _clear = _num(out, "uv_index_clear_sky")
     _trans = (_uvi / _clear.replace(0, np.nan)).clip(0, 1.2).fillna(0.5)
@@ -79,6 +84,8 @@ def apply_outdoor_feasibility(
     _muggy = ((_dew - 65.0).clip(0, 15) * 0.6).fillna(0)
     _wind_cut = (8.0 * (_wind_f / 25.0).clip(0, 1.5)).fillna(0)
     out["sun_adjusted_feels_like_f"] = np.round((temp + _sun_add + _muggy - _wind_cut), 1)
+    out["sun_warming_heuristic_f"] = out["sun_adjusted_feels_like_f"]
+    out["comfort_model_version"] = "sun-warming-heuristic-v1 (demoted; not a validated feels-like)"
     _feel = temp + _sun_add + _muggy - _wind_cut
     feels = _num(out, "apparent_temperature")
     rain = _num(out, "rain", 0).fillna(0)
@@ -88,7 +95,6 @@ def apply_outdoor_feasibility(
     wind = _num(out, "wind_speed_10m", 0).fillna(0)
     rh = _num(out, "relative_humidity_2m")
     code = _num(out, "weather_code").fillna(-1).round().astype(int)
-
     rain_now = (
         (rain > config.ACTIVE_PRECIP_IN_THRESHOLD)
         | (showers > config.ACTIVE_PRECIP_IN_THRESHOLD)
@@ -98,7 +104,23 @@ def apply_outdoor_feasibility(
     thunder = code.isin(THUNDER_CODES)
     too_hot = temp >= config.MAX_TAN_TEMP_F
     too_cold = temp < min_temp
-    hard_block = rain_now | snow_now | thunder | too_hot | too_cold
+    # Contract §14.4: falling snow is not ground snow. snow_depth (m, where
+    # the provider supplies it) blocks lying-out usability separately from
+    # the radiation layer (fresh_snow surface still raises reflected UV).
+    snow_depth = _num(out, "snow_depth")
+    ground_snow = snow_depth.fillna(0) >= SNOW_DEPTH_BLOCK_M
+    # Contract §14.3: rain/showers/snowfall are preceding-interval sums, not
+    # instantaneous "active rain at timestamp" claims. Instantaneous WMO
+    # precipitating codes carry the current-condition block; interval sums
+    # block the interval as precipitation-exposed.
+    hard_block = rain_now | snow_now | thunder | too_hot | too_cold | ground_snow
+    # Contract §14.1: essential missing weather is UNKNOWN, never perfect.
+    missing_hard = temp.isna() | code.eq(-1)
+    out["outdoor_feasibility_complete"] = ~missing_hard.fillna(True)
+    out["outdoor_feasibility_missing_fields"] = [
+        ",".join([n for n, s in (("temperature_2m", temp.isna().loc[i]),
+                                 ("weather_code", code.eq(-1).loc[i])) if bool(s)])
+        for i in out.index]
 
     multiplier = pd.Series(1.0, index=out.index)
     # Cold/heat comfort penalties use sun-adjusted feels-like: 65F calm + high
@@ -127,11 +149,15 @@ def apply_outdoor_feasibility(
     for i in out.index:
         rs, fs = [], []
         if bool(rain_now.loc[i]):
-            rs.append("active rain/drizzle/showers")
+            rs.append("precipitation in interval/code")
         if bool(snow_now.loc[i]):
-            rs.append("active snow")
+            rs.append("snowfall in interval/code")
         if bool(thunder.loc[i]):
             rs.append("thunderstorm")
+        if bool(ground_snow.loc[i]):
+            rs.append("snow-covered ground")
+        if bool(missing_hard.loc[i]):
+            rs.append("unknown (missing weather)")
         if pd.notna(temp.loc[i]) and temp.loc[i] >= config.MAX_TAN_TEMP_F:
             rs.append(f"temperature >= {config.MAX_TAN_TEMP_F:.0f}F")
         if pd.notna(temp.loc[i]) and temp.loc[i] < min_temp:
@@ -250,7 +276,7 @@ def personalization_context(
     )
     has_measured = measured_med_sed is not None or measured_mmd is not None
     if has_measured:
-        basis = "MEASURED"
+        basis = "SUNSTACK_EFFECTIVE_DOSE_MEASURED"
     elif has_objective:
         basis = "OBJECTIVE_ESTIMATE"
     elif fitzpatrick_type is not None:
@@ -283,14 +309,25 @@ def attach_personalization(
 ) -> pd.DataFrame:
     """Add personal_mmd_fraction without touching environmental columns.
 
-    An MMD without an explicit basis is rejected: fractions with implied-but-
-    absent provenance are worse than no fractions. Callers that only forward
-    user input (CLI/API/export) enforce the same rule at their boundary.
+    Contract §18: a generic MEASURED label is insufficient — a measured MMD
+    from another lamp/source cannot be compared to SunStack
+    delayed-pigmentation-effective J/m² unless the basis is compatible.
+    Accepted: SUNSTACK_EFFECTIVE_DOSE_MEASURED (exact basis),
+    SOURCE_SPECTRUM_MEASURED (convertible with spectrum metadata),
+    OBJECTIVE_ESTIMATE, COARSE_ESTIMATE (wide uncertainty). Generic MEASURED
+    without compatibility metadata fails validation. The fraction is context
+    only, never safe-exposure allowance.
     """
+    _COMPATIBLE = ("SUNSTACK_EFFECTIVE_DOSE_MEASURED", "SOURCE_SPECTRUM_MEASURED",
+                   "OBJECTIVE_ESTIMATE", "COARSE_ESTIMATE")
     if personal_mmd_j_m2 is not None and basis is None:
         raise ValueError(
-            "personal_mmd_j_m2 requires an explicit basis (MEASURED, "
-            "OBJECTIVE_ESTIMATE, or COARSE_ESTIMATE)")
+            "personal_mmd_j_m2 requires an explicit basis (SUNSTACK_EFFECTIVE_DOSE_MEASURED, "
+            "SOURCE_SPECTRUM_MEASURED, OBJECTIVE_ESTIMATE, or COARSE_ESTIMATE)")
+    if personal_mmd_j_m2 is not None and basis not in _COMPATIBLE:
+        raise ValueError(
+            f"personal_mmd basis {basis!r} is not compatible with SunStack "
+            f"delayed-pigmentation-effective J/m²; allowed: {list(_COMPATIBLE)}")
     out = df.copy()
     out["personalization_basis"] = basis or "not personalized"
     if personal_mmd_j_m2 is not None and np.isfinite(personal_mmd_j_m2) and personal_mmd_j_m2 > 0:
