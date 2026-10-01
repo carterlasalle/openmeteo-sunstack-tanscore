@@ -555,6 +555,12 @@ def test_calendar_feed_lists_each_window_once_with_stable_uids():
                 "date": "2026-09-15",
                 "best_window_start": "2026-09-15T12:30:00",
                 "best_window_end": "2026-09-15T16:30:00",
+                "best_usable_30m_start": "2026-09-15T12:30:00",
+                "best_usable_30m_end": "2026-09-15T13:00:00",
+                "best_usable_30m_dose_j_m2": 800.0,
+                "strongest_30m_start": "2026-09-15T13:00:00",
+                "strongest_30m_end": "2026-09-15T13:30:00",
+                "strongest_30m_dose_j_m2": 1000.0,
                 "day_overall_peak_0_100": 51.0,
                 "peak_uv_index": 5.4,
                 "peak_predicted_uva_wm2": 42.9,
@@ -569,9 +575,10 @@ def test_calendar_feed_lists_each_window_once_with_stable_uids():
     second = build_calendar_ics(daily, "20260915_010000")
     assert first.count("BEGIN:VEVENT") == 1
     assert "UID:sunstack-best-sunstack-2026-09-15@sunstack" in first
-    # 12:30 PM Indiana daylight time is 16:30 UTC.
+    # The usable physical 30-minute window, not the legacy broad window,
+    # defines the subscription time.
     assert "DTSTART:20260915T163000Z" in first
-    assert "DTEND:20260915T203000Z" in first
+    assert "DTEND:20260915T170000Z" in first
     assert "SEQUENCE:0" in first
     # Same date UID across reruns: subscribed calendars update in place.
     # SEQUENCE stays 0 (immutable events; audit: run-tag digits overflowed).
@@ -591,7 +598,8 @@ def test_calendar_feed_lists_each_window_once_with_stable_uids():
     assert "Peak UV 5.4 at 1:00 PM" in flat
     assert "UVA 42.9 W/m2" in flat
     assert "UVB 1 W/m2" in flat
-    assert "Best sun 12:30 PM-4:30 PM (UV 5.4\\, overall 51)" in flat
+    assert "Best usable sun 12:30 PM-1:00 PM (dose 800 J/m2 E_mel)" in flat
+    assert "Strongest 30m 1:00 PM-1:30 PM (dose 1000 J/m2 E_mel) is blocked" in flat
 
 
 def test_30min_handles_fall_back_duplicate_hours():
@@ -629,6 +637,7 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path):
     hourly = pd.DataFrame(
         {
             "time": ["2026-09-15T12:00", "2026-09-15T13:00", "2026-09-15T20:00"],
+            "is_day": [1, 1, 0],
             "temperature_2m": [80.0, 82.0, 70.0],
             "overall_tan_opportunity_0_100": [50.0, 60.0, 5.0],
             "tan_score_absolute_0_100": [40.0, 45.0, 4.0],
@@ -645,6 +654,7 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path):
                     "2026-09-15 12:30",
                     "2026-09-15 13:00",
                     "2026-09-15 13:30",
+                    "2026-09-15 20:00",
                 ]
             ),
             "time": [
@@ -652,13 +662,15 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path):
                 "2026-09-15T12:30",
                 "2026-09-15T13:00",
                 "2026-09-15T13:30",
+                "2026-09-15T20:00",
             ],
-            "temperature_2m": [80.0, 81.0, 82.0, 81.0],
-            "overall_tan_opportunity_0_100": [50.0, 55.0, 60.0, 58.0],
-            "tan_score_absolute_0_100": [40.0, 42.0, 45.0, 44.0],
-            "local_tan_score_0_100": [80.0, 82.0, 85.0, 84.0],
-            "atmospheric_quality_percentile_0_100": [60.0, 62.0, 65.0, 64.0],
-            "tan_forecast_confidence_0_100": [50.0, 52.0, 55.0, 54.0],
+            "is_day": [1, 1, 1, 1, 0],
+            "temperature_2m": [80.0, 81.0, 82.0, 81.0, 70.0],
+            "overall_tan_opportunity_0_100": [50.0, 55.0, 60.0, 58.0, 5.0],
+            "tan_score_absolute_0_100": [40.0, 42.0, 45.0, 44.0, 4.0],
+            "local_tan_score_0_100": [80.0, 82.0, 85.0, 84.0, 10.0],
+            "atmospheric_quality_percentile_0_100": [60.0, 62.0, 65.0, 64.0, 20.0],
+            "tan_forecast_confidence_0_100": [50.0, 52.0, 55.0, 54.0, 30.0],
         }
     )
     hourly.to_parquet(latest / "tables" / "tan_forecast_hourly.parquet", index=False)
@@ -677,6 +689,11 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path):
     )
     payload = _json.loads((tmp_path / "site" / "data.json").read_text())
     assert payload["build_sha"], "data.json must carry the code SHA"
+    assert [row["time"] for row in payload["hourly"]] == [
+        "2026-09-15T12:00",
+        "2026-09-15T13:00",
+    ]
+    assert {row["is_day"] for row in payload["half_hour"]} == {1}
     import subprocess as _sp
 
     want = _sp.run(
@@ -700,6 +717,12 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path):
     skin = _json.loads((tmp_path / "site" / "skin.json").read_text())
     assert sorted(skin) == ["1", "2", "3", "4", "5", "6"]
     assert "may burn" in skin["3"]["fitzpatrick_label"]
+    surfaces = _json.loads((tmp_path / "site" / "surfaces.json").read_text())
+    assert set(surfaces["grass_summer"]) == {
+        "display_name", "proxy_reflectance", "reflectance_low",
+        "reflectance_high", "spectral_quality", "optical_model",
+    }
+    assert "surfaces.json" in html and "reflected context" in html
     ics = (tmp_path / "site" / "calendar.ics").read_text()
     assert ics.count("BEGIN:VEVENT") == 1
     assert "UID:sunstack-best-south-bend-2026-09-15@south-bend" in ics
@@ -825,6 +848,7 @@ def test_reskin_static_dir_needs_no_run_data(tmp_path):
     assert (
         _json.loads((page / "data.json").read_text())["build_sha"] == info["build_sha"]
     )
+    assert "dry_beach_sand" in _json.loads((page / "surfaces.json").read_text())
 
 
 def test_daily_summary_keeps_status_and_wind_peaks():
@@ -1988,7 +2012,7 @@ def test_render_static_html_falls_back_to_loaddata_anchor(monkeypatch):
     assert "loadData();\n</script>" in variant
     monkeypatch.setattr(_ui, "HTML", variant)
     html = render_static_html("20260923_000000")
-    assert "loadData();initSkin();\n</script>" in html
+    assert "loadData().then(initSkin);\n</script>" in html
 
 
 def test_percentile_helpers_reject_non_series_loudly():

@@ -539,12 +539,12 @@ def score_forecast(
     ]
 
     # UVI source fusion: EPA/NWS operational (US public product) + CAMS
-    # spectral + Open-Meteo Best Match (not GFS-only). OM gets double weight:
-    # 65-snapshot verification
-    # (Sep 2026) shows OM 1-day-lead MAE 0.57 vs CAMS 1.49 with a -1.4 systematic
-    # low bias (thin-cloud over-attenuation). Weighted median still resists a
-    # single bad feed but no longer lets a systematically-low source drag the
-    # headline down: OM ties break toward OM, lone-OM rows stay OM.
+    # spectral + Open-Meteo Best Match (not GFS-only), plain NaN-tolerant
+    # median over unique providers (state.fuse_uvi_unique_count). 65-snapshot
+    # verification (Sep 2026) showed OM 1-day-lead MAE 0.57 vs CAMS 1.49 with
+    # a -1.4 systematic low bias (thin-cloud over-attenuation); the plain
+    # median still resists a single bad feed, and lone-source rows stay that
+    # source. Legacy OMx2 vote count rides along as a migration diagnostic.
     out["uvi_openmeteo"] = num(out, "uv_index")
     if "cams_uv_index" in out:
         out["uvi_cams"] = num(out, "cams_uv_index")
@@ -554,32 +554,18 @@ def score_forecast(
         out["uvi_epa"] = num(out, "uvi_epa")
     else:
         out["uvi_epa"] = np.nan
-    with np.errstate(divide="ignore", invalid="ignore"):
-        om = out["uvi_openmeteo"].to_numpy(dtype=float)
-        cams = out["uvi_cams"].to_numpy(dtype=float)
-        epa = out["uvi_epa"].to_numpy(dtype=float)
-        stacked = np.vstack([om, cams, epa])
-        # OM x2 weighted median, NaN-tolerant: replicate each finite value by
-        # its weight, then take the median. Missing sources simply add no votes.
-        med = np.full(len(out), np.nan)
-        for i in range(len(out)):
-            votes: list[float] = []
-            if np.isfinite(om[i]):
-                votes.extend([float(om[i])] * 2)
-            if np.isfinite(cams[i]):
-                votes.append(float(cams[i]))
-            if np.isfinite(epa[i]):
-                votes.append(float(epa[i]))
-            if votes:
-                med[i] = float(np.median(votes))
-        out["uvi_consensus"] = np.round(med, 3)
-        out["uvi_consensus_sources"] = np.sum(np.isfinite(stacked), axis=0).astype(int)
-        out["uvi_source_spread"] = np.round(np.nanmax(stacked, axis=0) - np.nanmin(stacked, axis=0), 3)
-        # Sunny-case (max across sources) vs cloudy-case (min): the honest range
-        # when sources argue about clouds. Median stays the headline; the range
-        # is display-only context, never a score input.
-        out["uvi_sunny"] = np.round(np.nanmax(stacked, axis=0), 3)
-        out["uvi_cloudy"] = np.round(np.nanmin(stacked, axis=0), 3)
+    # Single fusion everywhere (contract §4): plain NaN-tolerant median over
+    # unique providers via state.fuse_uvi_unique_count. The old OMx2 vote
+    # median disagreed with the 30-min recompute on identical inputs
+    # (4.95/5.62/NaN fused 4.95 hourly but 5.1 at :30), faking a cross-product
+    # mismatch the gate correctly refused to publish.
+    from .state import fuse_uvi_unique_count as _fuse
+
+    _fused = _fuse(out)
+    for _col in ("uvi_consensus", "uvi_consensus_sources",
+                 "uvi_consensus_vote_count", "uvi_source_spread",
+                 "uvi_sunny", "uvi_cloudy", "fusion_version"):
+        out[_col] = _fused[_col].to_numpy()
     # Independent erythemal channel (SED input) from the consensus UVI. NEVER
     # added to TanScore. Consensus resists one bad source; raw OM UVI kept as
     # uvi_openmeteo for display/debug. Missing consensus stays missing: only

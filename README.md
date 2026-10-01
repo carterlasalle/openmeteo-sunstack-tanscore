@@ -12,12 +12,19 @@
 
 </div>
 
-SunStack answers two different questions without mixing them up:
-
-1. **How strong is the actual melanogenic radiation on an absolute global scale?**
-2. **How good is this outdoor tanning opportunity here, given local climatology, forecast confidence, rain/snow, and temperature?**
+SunStack estimates spectrally weighted delayed-pigmentation exposure from forecast atmospheric conditions, reports independent erythemal exposure, and separately evaluates outdoor usability. Strict mode uses a validated spectral backend; degraded mode is explicitly labeled.
 
 It fetches live Open-Meteo forecasts, full ensemble data, native HRRR sub-hourly radiation, CAMS air-quality data, **direct Copernicus CAMS spectral/ozone forecasts**, NASA POWER historical UVA/UVB, archived Open-Meteo forecasts, and previous runs for lead-time skill calibration.
+
+### Shipped v5 semantics
+
+| Contract | Value |
+|---|---|
+| Schema / temporal support | `sunstack-output-v5` · `interval-contract-v1` |
+| Exposure endpoint / action spectrum | `delayed-pigmentation-v2` · `parrish-fda-3630-v1` |
+| Spectral backend | strict, gate-passing `tierB-libradtran-emulator-v1`; explicitly degraded `tierC-broadband-proxy-v2` |
+| Surface / fusion / confidence / ranking | `uv-surface-v1` · `calibrated-uvi-fusion-v2` · `calibrated-error-v1` · `fixed-duration-dose-v2` |
+
 
 ## How it works
 
@@ -42,12 +49,13 @@ Every hour and 30-minute period exposes the components separately:
 
 | Score | What it means |
 |---|---|
-| `tan_score_absolute_0_100` | Globally anchored melanogenic intensity: 100 * E_mel / fixed global reference. **Not** graded on a South Bend curve |
-| `local_tan_score_0_100` | Percentile versus historical daylight around this location and season (rebuilt with v4 scores) |
-| `atmospheric_quality_percentile_0_100` | Local percentile after controlling for season and solar elevation |
-| `tan_forecast_confidence_0_100` | Trust in the window from deterministic/ensemble evidence + CAMS/Open-Meteo UVI agreement |
-| `outdoor_feasibility_0_100` | Practical outdoor usability only |
-| `overall_tan_opportunity_0_100` | The easy-to-read overall number |
+| `tan_score_absolute_0_100` | Globally anchored delayed-pigmentation intensity: 100 * E_mel / fixed global reference. **Not** graded on a South Bend curve |
+| `local_tan_score_0_100` | Percentile versus historical daylight around this location and season (serving-domain reference) |
+| `atmospheric_quality_percentile_0_100` | Geometry-conditioned transmission percentile (conditional comparison, not causal isolation) |
+| `tan_forecast_confidence_0_100` | Calibrated reliability from expected error (higher bins mean lower realized error, never sunnier skies) |
+| `strong_sun_probability_0_100` | Probability of useful sun (ensemble/DNI/GHI/cloud); product quantity, not confidence |
+| `outdoor_feasibility_0_100` | Practical outdoor usability only (with `outdoor_feasibility_complete` + missing-field reasons) |
+| `overall_tan_opportunity_0_100` | LEGACY composite (deprecated product heuristic); ranking uses fixed-duration delayed-pigmentation dose |
 
 Doses are reported separately from intensity (never ranked as intensity):
 
@@ -57,9 +65,9 @@ Doses are reported separately from intensity (never ranked as intensity):
 | `sed_*` | Independent erythemal channel; never increases TanScore or Opportunity |
 | `uva_dose_*` / `uvb_dose_*` | Diagnostic physical broadband doses, not biological endpoints |
 
-### Overall formula
+### Overall formula (legacy composite, deprecated)
 
-The unblocked composite is a weighted geometric mean — 60% Absolute, 15% Local, 10% Atmosphere, 15% Confidence — capped at `Absolute + 20`, so local rarity can never turn weak physical UV into a fake elite score. Then it is multiplied by outdoor feasibility.
+The unblocked composite is a weighted geometric mean — 70% Absolute, 15% Local, 5% Atmosphere, 10% Confidence — capped at `Absolute+20`, so local rarity can never turn weak physical UV into a fake elite score. Then it is multiplied by outdoor feasibility. It remains for migration only; the primary ranking is maximum expected 30-minute delayed-pigmentation dose (`fixed-duration-dose-v2`), with strongest vs best-usable variants.
 
 ```text
 Absolute    44
@@ -83,7 +91,7 @@ A `uv_input_disagree` flag fires when broadband and UV inputs describe different
 
 Dashboard and CLI accept optional Fitzpatrick I–VI (`uv run sunstack run --skin-type 2`, or the UI selector). It is **qualitative personal-response/risk context only** — it never multiplies environmental TanScore, because measured MED/MMD overlaps substantially within Fitzpatrick groups.
 
-For a measured or defensibly estimated personal MMD in melanogenic-effective J/m², `uv run sunstack run --personal-mmd 12000 --personal-mmd-basis MEASURED` adds `personal_mmd_fraction` (TanDose ÷ personal MMD) with its provenance label — still without touching environmental physics. The dashboard (My MMD + basis inputs) and `/api/data` + `/api/refresh` (`personal_mmd`/`personal_mmd_basis` query params, 400 on unlabeled or invalid values) expose the same fractions; the shared calendar stays environmental-only.
+For a measured or defensibly estimated personal MMD in melanogenic-effective J/m², `uv run sunstack run --personal-mmd 12000 --personal-mmd-basis SUNSTACK_EFFECTIVE_DOSE_MEASURED` adds `personal_mmd_fraction` (TanDose ÷ personal MMD) with its provenance label — still without touching environmental physics. The dashboard and CLI accept surface and skin-plane controls; `/api/data`, `/api/refresh`, and `/api/calendar.ics` accept `surface`, `surface_extent`, `skin_tilt_deg`, and `skin_azimuth_deg` (400 for invalid values). CLI equivalents are `--surface`, `--surface-extent`, `--skin-tilt-deg`, and `--skin-azimuth-deg`. The shared calendar and persisted runs remain `exposure_basis=environmental_horizontal`; skin-plane fields are context.
 
 ## Quick start
 
@@ -140,7 +148,7 @@ src/sunstack/
   validation.py    strict gates (sources, CAMS fields, photobiology, score ranges)
   output.py        static-site + calendar export
   ui.py            dashboard, data + refresh + calendar APIs
-  calibrate.py     training + local reference (v4 rebuilt) + skill
+  calibrate.py     training + serving-domain local reference + skill
 data/
   latest/          current snapshot (summary, raw manifests, tables)
   runs/            every run, timestamped
@@ -180,7 +188,7 @@ TanScore is an environmental/pigmentation-potential model, **not a safe exposure
 | [SECURITY.md](SECURITY.md) | Supported versions and vulnerability reporting |
 | [AGENTS.md](AGENTS.md) | Repository-specific instructions for coding agents |
 | [RESEARCH_NOTES.md](docs/RESEARCH_NOTES.md) | Dated calibration and incident evidence log |
-| [PHOTOBIOLOGY_MODEL.md](docs/PHOTOBIOLOGY_MODEL.md) | v4 action-spectrum model, equations, interaction-term evidence |
+| [PHOTOBIOLOGY_MODEL.md](docs/PHOTOBIOLOGY_MODEL.md) | v5 delayed-pigmentation model, equations, interaction-term evidence |
 | [TANDOSE.md](docs/TANDOSE.md) | TanDose definition (model-defined, not standardized) |
 | [ACTION_SPECTRA.md](docs/ACTION_SPECTRA.md) | Spectrum provenance, tiers, interpolation rules |
 | [SPECTRAL_MODEL.md](docs/SPECTRAL_MODEL.md) | Spectral layer, tiers A-D, skin-plane physics |

@@ -8,6 +8,28 @@ name: forecast-run
     - cron: "23 0,9,12,21 * * *"
       timezone: "America/Indiana/Indianapolis"
   workflow_dispatch:
+  push:
+    paths:
+      - "src/sunstack/**"
+      - "data/research/**"
+      - "scripts/build_spectral_corpus.py"
+      - "scripts/train_spectral_emulator.py"
+      - "scripts/rebuild_v4_references.py"
+      - "scripts/validate_published_artifact.py"
+      - "scripts/check_literature.py"
+      - "scripts/verify_uvi.py"
+      - "docs/SCIENCE.md"
+  pull_request:
+    paths:
+      - "src/sunstack/**"
+      - "data/research/**"
+      - "scripts/build_spectral_corpus.py"
+      - "scripts/train_spectral_emulator.py"
+      - "scripts/rebuild_v4_references.py"
+      - "scripts/validate_published_artifact.py"
+      - "scripts/check_literature.py"
+      - "scripts/verify_uvi.py"
+      - "docs/SCIENCE.md"
 
 permissions:
   contents: write
@@ -17,6 +39,35 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  science-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          version: "0.12.15"
+          python-version: "3.13"
+      - name: Install dependencies
+        run: uv sync --locked
+      # Contract §25.1: science correctness on pushes/PRs touching science
+      # code, research data, calibration/reference scripts, SCIENCE.md, or
+      # validation scripts. Scheduled publish needs no gate: Gate 3 inside
+      # the run aborts publication itself.
+      - name: Lint
+        run: uv run ruff check src tests scripts
+      - name: Tests
+        run: uv run pytest tests/ -q
+      - name: Type check
+        run: uv run basedpyright
+      - name: Literature-informed regression invariants
+        run: uv run python scripts/check_literature.py
+      - name: Validate committed published artifacts
+        run: |
+          uv run python scripts/validate_published_artifact.py docs/data.json
+          for site in docs/sites/*/data.json; do
+            [ -f "$site" ] && uv run python scripts/validate_published_artifact.py "$site"
+          done
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 60

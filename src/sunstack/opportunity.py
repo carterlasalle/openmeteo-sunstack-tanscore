@@ -529,6 +529,9 @@ def build_30min_forecast(
                 out.loc[changed, "predicted_uvb_wm2"] = _num(
                     out, "predicted_uvb_wm2"
                 ).to_numpy()[changed] * np.sqrt(ratio[changed])
+            # Same rule as the native-HRRR block: per-source UVI feeds keep
+            # their own skies; only broadband-derived UVA/UVB move, and the
+            # recompute below rebuilds consensus/spread off untouched sources.
             out.loc[changed, "uv_index"] = _num(out, "uv_index").to_numpy()[
                 changed
             ] * np.sqrt(ratio[changed])
@@ -665,10 +668,14 @@ def build_30min_forecast(
             out.loc[is_native, "predicted_uva_wm2"] *= ratio[is_native]
             if "predicted_uvb_wm2" in out:
                 out.loc[is_native, "predicted_uvb_wm2"] *= np.sqrt(ratio[is_native])
+            # Per-source UVI feeds (OM display value, CAMS spectral UVI) describe
+            # the source models' own skies and must NOT be rescaled by the local
+            # broadband ratio. Only broadband-derived UVA/UVB change here; the
+            # recompute below rebuilds consensus/spread off untouched sources
+            # (audit: sqrt-scaling uv_index + consensus then recomputing spread
+            # off unscaled CAMS/EPA faked a range mismatch).
             if "uv_index" in out:
                 out.loc[is_native, "uv_index"] *= np.sqrt(ratio[is_native])
-            if "uvi_consensus" in out:
-                out.loc[is_native, "uvi_consensus"] *= np.sqrt(ratio[is_native])
             if {"uv_index", "predicted_uva_wm2", "tan_score_absolute_0_100"}.issubset(
                 out.columns
             ):
@@ -726,6 +733,31 @@ def build_30min_forecast(
         except (ImportError, ValueError, OSError):
             pass
 
+    # Refuse to publish a mixed-state frame: GHI/UVA/UVB corrections above
+    # touch broadband-derived primitives on some rows only, while ALL rows
+    # carry time-interpolated consensus/spread from the pre-correction state.
+    # Re-fuse every row off its final per-source parents so consensus, spread,
+    # counts, erythemal, E_mel, and disagreement describe the same state
+    # (contract §4; audit: 30-min interpolated spread vs corrected source
+    # range faked a range mismatch on corrected rows AND hid drift on the
+    # rest). Local percentiles are NOT recomputed here (calibration-gated
+    # block above owns them); erythemal/E_mel children ride the same recompute.
+    if "tan_score_absolute_0_100" in out.columns:
+        from .state import recompute_derived_state as _recompute_final
+
+        _final = _recompute_final(out.copy())
+        for _col in ("melanogenic_effective_irradiance_wm2",
+                     "tan_score_absolute_0_100", "erythemal_irradiance_wm2",
+                     "pigment_darkening_effective_irradiance",
+                     "uvi_consensus", "uvi_consensus_sources",
+                     "uvi_consensus_vote_count", "uvi_source_spread",
+                     "uvi_sunny", "uvi_cloudy",
+                     "uvi_difference_absolute", "uvi_difference_percent",
+                     "fusion_version",
+                     "legacy_absolute_tan_score_55_30_15",
+                     "tan_score_model_version"):
+            if _col in _final:
+                out[_col] = _final[_col].to_numpy()
     # Reapply merged opportunity after sub-hour corrections, carrying the
     # requested temperature floor (audit: used to fall back to 50F default).
     out = apply_outdoor_feasibility(out, min_temp_f)

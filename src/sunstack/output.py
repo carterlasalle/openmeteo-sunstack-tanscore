@@ -13,6 +13,23 @@ def _swap_once(text: str, old: str, new: str) -> str:
     return text.replace(old, new)
 
 
+def _surface_payload() -> dict[str, dict[str, object]]:
+    from .surface import PRESETS
+
+    fields = (
+        "display_name",
+        "proxy_reflectance",
+        "reflectance_low",
+        "reflectance_high",
+        "spectral_quality",
+        "optical_model",
+    )
+    return {
+        slug: {field: getattr(profile, field) for field in fields}
+        for slug, profile in PRESETS.items()
+    }
+
+
 def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
     """Static index.html from the live template. Pure HTML: needs no run data.
 
@@ -24,20 +41,28 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
     html = HTML
     html = _swap_once(
         html,
-        "fetch(`/api/data?skin_type=${s}&min_temp=${m}&personal_mmd=${p}&personal_mmd_basis=${b}&location=${encodeURIComponent(LOC)}`)",
-        "fetch('./data.json')",
+        "/api/data?skin_type=${s}&min_temp=${m}&personal_mmd=${p}&personal_mmd_basis=${b}&surface=${encodeURIComponent(sf)}&skin_tilt_deg=${encodeURIComponent(t)}&skin_azimuth_deg=${encodeURIComponent(a)}&location=${encodeURIComponent(LOC)}",
+        "./data.json",
     )
     try:
-        html = _swap_once(html, "init();\n</script>", "init();initSkin();\n</script>")
+        html = _swap_once(
+            html, "init();\n</script>", "init().then(initSkin);\n</script>"
+        )
     except RuntimeError:
         html = _swap_once(
-            html, "loadData();\n</script>", "loadData();initSkin();\n</script>"
+            html,
+            "loadData();\n</script>",
+            "loadData().then(initSkin);\n</script>",
         )
     run_stamp = "".join(c for c in str(run_tag) if c.isdigit()) or "0"
+    # Run-stamped fetch: a republished page must not serve a cached data.json.
+    html = _swap_once(
+        html, "fetch(`./data.json`)", f"fetch(`./data.json?v={run_stamp}`)"
+    )
     html = _swap_once(
         html,
-        '<label>Min °F <input id="mintemp" type="number" min="32" max="80" step="1" value="50" style="width:64px"></label>\n',
-        "",
+        '<label>Min °F <input id="mintemp" type="number" min="32" max="80" step="1" value="50" style="width:64px"></label>',
+        f'<input id="mintemp" type="hidden" value="{min_temp_f:g}">',
     )
     html = _swap_once(
         html,
@@ -52,17 +77,40 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
     html = _swap_once(
         html,
         "async function loadData(){",
-        "let SKIN=null;async function initSkin(){try{const r=await fetch('./skin.json');SKIN=await r.json();}catch(e){SKIN=null;}const el=document.getElementById('skin');if(el){el.addEventListener('change',showSkin);showSkin();}}function showSkin(){const el=document.getElementById('skin');const box=document.getElementById('skinnote');if(!el||!box||!SKIN)return;const info=SKIN[el.value||''];if(!info){box.style.display='none';return;}box.textContent=info.fitzpatrick_label+': '+info.skin_response_note;box.style.display='';}async function loadData(){",
+        (
+            "let SKIN=null,SURFACES=null;"
+            "async function initSkin(){try{const r=await fetch('./skin.json');SKIN=await r.json();}catch(e){SKIN=null;}"
+            "try{const r=await fetch('./surfaces.json');SURFACES=await r.json();}catch(e){SURFACES=null;}"
+            "if(SURFACES)window.__staticSurface=true;"
+            "const skin=document.getElementById('skin');if(skin)skin.addEventListener('change',showSkin);"
+            "const surfaceSel=document.getElementById('surface');if(surfaceSel)surfaceSel.title=(surfaceSel.title||'')+' Static page: local client-side reflection only; broad/homogeneous extent needs backend RT.';"
+            "for(const id of ['surface','skintilt','skinaz']){const el=document.getElementById(id);if(el)el.addEventListener('change',showSurface);}"
+            "showSkin();showSurface();}"
+            "function showSkin(){const el=document.getElementById('skin'),box=document.getElementById('skinnote');if(!el||!box||!SKIN)return;"
+            "const info=SKIN[el.value||''];if(!info){box.style.display='none';return;}"
+            "box.textContent=info.fitzpatrick_label+': '+info.skin_response_note;box.style.display='';}"
+            "function surfaceBox(){const pv=document.getElementById('provenance');if(!pv)return null;let s=document.getElementById('surfacecontext');"
+            "if(!s){s=document.createElement('span');s.id='surfacecontext';pv.insertBefore(document.createTextNode(' · '),pv.firstChild);pv.insertBefore(s,pv.firstChild);}return s;}"
+            "function showSurface(){const box=surfaceBox(),el=document.getElementById('surface');if(!box||!el||!SURFACES||!DATA)return;"
+            "const info=SURFACES[el.value||''];if(!info)return;const row=rowsFor(DATA.hourly,SEL)[0]||((DATA.hourly||[])[0]||{}),name=info.display_name||el.value,s=DATA.summary||{};"
+            "const tail=' · spectral '+esc(row.spectral_backend||s.spectral_backend||'—')+' (tier '+esc(row.spectral_tier||s.photobiology_action_spectrum_tier||'—')+') · fusion '+esc(s.fusion_version||'—')+' · confidence '+esc(s.confidence_version||'—')+' · rank '+esc(s.window_rank_version||'—');"
+            "if(row.surface_extent_mode==='broad'){box.textContent='Surface '+name+' · broad extent requires backend RT'+tail;return;}"
+            "const rawTilt=+((document.getElementById('skintilt')||{}).value||0),tilt=Number.isFinite(rawTilt)?Math.max(0,Math.min(180,rawTilt)):0,azimuth=(document.getElementById('skinaz')||{}).value||'180';"
+            "let ghi=+row.shortwave_radiation;if(!Number.isFinite(ghi)){const direct=+row.direct_radiation,diffuse=+row.diffuse_radiation;ghi=(Number.isFinite(direct)?direct:0)+(Number.isFinite(diffuse)?diffuse:0);}"
+            "const reflected=ghi*(+info.proxy_reflectance)*((1-Math.cos(tilt*Math.PI/180))/2);"
+            "box.textContent='Surface '+name+' (client-side) · proxy '+((+info.proxy_reflectance)*100).toFixed(2)+'% · reflected context '+f2(reflected)+' W/m² broadband proxy · tilt '+tilt+'° azimuth '+azimuth+'°'+tail;}"
+            "async function loadData(){"
+        ),
     )
-    html = _swap_once(
-        html,
-        "const s=document.getElementById('skin').value,m=document.getElementById('mintemp').value,p=document.getElementById('mmd').value,b=document.getElementById('mmdbasis').value;const r=await fetch('./data.json');",
-        f"const s=document.getElementById('skin').value,m='50',p='',b='';const r=await fetch('./data.json?v={run_stamp}');",
-    )
+    # Static export keeps the live fetch shape (./data.json via the first
+    # anchor above); the surface selector stays visible and recomputes
+    # skin-plane reflection client-side from serialized components.
+    # Static surface controls only update the reflected-context provenance;
+    # broad homogeneous surfaces require backend radiative transfer.
     html = _swap_once(
         html,
         "document.getElementById('cal').href='webcal://'+location.host+'/api/calendar.ics"
-        "?skin_type='+document.getElementById('skin').value+'&min_temp='+document.getElementById('mintemp').value+'&location='+encodeURIComponent(LOC);",
+        "?skin_type='+document.getElementById('skin').value+'&min_temp='+document.getElementById('mintemp').value+'&surface='+encodeURIComponent((document.getElementById('surface')||{}).value||'unknown')+'&skin_tilt_deg='+encodeURIComponent((document.getElementById('skintilt')||{}).value||'0')+'&skin_azimuth_deg='+encodeURIComponent((document.getElementById('skinaz')||{}).value||'180')+'&location='+encodeURIComponent(LOC);",
         "var calEl=document.getElementById('cal');if(calEl){var p=location.pathname;"
         "p=p.slice(0,p.lastIndexOf('/')+1);calEl.href='webcal://'+location.host+p+'calendar.ics';}",
     )
@@ -109,6 +157,9 @@ def reskin_static_dir(
         json.dumps({str(i): fitzpatrick_context(i) for i in range(1, 7)}),
         encoding="utf-8",
     )
+    (page / "surfaces.json").write_text(
+        json.dumps(_surface_payload()), encoding="utf-8"
+    )
     return {"page": str(page), "run": run_tag, "build_sha": payload["build_sha"]}
 
 
@@ -130,9 +181,9 @@ def export_static_site(
     the default export carries no personal data.
     """
     from . import config
-    from .calibrate import scol
     from .opportunity import fitzpatrick_context
     from .ui import (
+        _daylight_payload_rows,
         _filtered_payload,
         _records,
         _resolve_site,
@@ -152,10 +203,8 @@ def export_static_site(
         )
     finally:
         entered.__exit__(None, None, None)
-    ht = pd.to_datetime(scol(hourly, "time"))
-    hourly_ui = hourly.loc[(ht.dt.hour >= 7) & (ht.dt.hour <= 20)].copy()
-    qt = pd.to_datetime(scol(half, "time"))
-    half_ui = half.loc[(qt.dt.hour >= 7) & (qt.dt.hour <= 20)].copy()
+    hourly_ui = _daylight_payload_rows(hourly)
+    half_ui = _daylight_payload_rows(half)
     if isinstance(summary, dict):
         summary.setdefault("forecast_code_sha", build_sha())
         summary["renderer_code_sha"] = build_sha()
@@ -179,6 +228,9 @@ def export_static_site(
         json.dumps({str(i): fitzpatrick_context(i) for i in range(1, 7)}),
         encoding="utf-8",
     )
+    (out_dir / "surfaces.json").write_text(
+        json.dumps(_surface_payload()), encoding="utf-8"
+    )
     (out_dir / "calendar.ics").write_text(
         build_calendar_ics(daily, str(summary.get("run", "")), hourly,
                            site_slug=site.slug, tz_name=site.timezone),
@@ -193,7 +245,9 @@ def export_static_site(
         def _col(name: str) -> pd.Series:
             if name not in half.columns:
                 return pd.Series(0.0, index=half.index, dtype="float64")
-            return pd.to_numeric(half[name], errors="coerce").fillna(0)
+            col = pd.to_numeric(half[name], errors="coerce")
+            assert isinstance(col, pd.Series)
+            return col.fillna(0)
 
         if {"is_day", "uv_index", "melanogenic_effective_irradiance_wm2"}.isdisjoint(half.columns):
             pass

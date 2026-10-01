@@ -167,6 +167,8 @@ def apply_skin_plane(
     azimuth_deg: float | None = None,
     surface_slug: str | None = None,
     surface_extent: str = "local",
+    uva_reflectance: float | None = None,
+    uvb_reflectance: float | None = None,
 ) -> pd.DataFrame:
     """Attach skin-plane E_mel alongside the horizontal environmental reference.
 
@@ -188,7 +190,7 @@ def apply_skin_plane(
     )
 
     plane = resolve_skin_plane(tilt_deg, azimuth_deg)
-    surface = _resolve_surface(surface_slug)
+    surface = _resolve_surface(surface_slug, uva_reflectance, uvb_reflectance)
     if surface_extent not in ("local", "broad"):
         raise ValueError(
             f"ERROR surface: surface_extent must be local|broad, got {surface_extent!r}")

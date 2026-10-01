@@ -104,7 +104,11 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
     rows = _rows_of(hourly if hourly else half)
     for row in rows:
         stamp = row.get("time")
-        vals = [row.get(c) for c in ("uv_index", "uvi_cams", "uvi_epa")]
+        # Same triple the fusion consumes (state._stack_sources): uvi_openmeteo
+        # when present else the OM display value uv_index, plus CAMS and EPA.
+        om_col = ("uvi_openmeteo" if _is_finite(row.get("uvi_openmeteo"))
+                  else "uv_index")
+        vals = [row.get(c) for c in (om_col, "uvi_cams", "uvi_epa")]
         finite = [_num(v) for v in vals if _is_finite(v)]
         cons = row.get("uvi_consensus")
         n_src = row.get("uvi_consensus_sources")
@@ -127,12 +131,19 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
                 failures["row_summary_version_agreement"].append(f"{stamp}: {key} {row[key]} != summary {summary[key]}")
 
     day_rows = _rows_of(daily)
+    half_rows = _rows_of(half)
     for day in day_rows:
+        date = str(day.get("date", ""))
+        # Peaks are built from the 30-min daylight frame (build_daily_summary
+        # over tan_forecast_30min); hourly rows are coarser and must never be
+        # the comparison set when half-hour rows exist for the date.
+        scoped_pool = ([r for r in half_rows if str(r.get("time", ""))[:10] == date]
+                       or [r for r in rows if str(r.get("time", ""))[:10] == date])
         for peak_col, src_col in (("day_absolute_peak_0_100", "tan_score_absolute_0_100"),
                                   ("day_local_peak_0_100", "local_tan_score_0_100")):
             if peak_col not in day:
                 continue
-            colmax = max((_num(r.get(src_col)) for r in rows if _is_finite(r.get(src_col))), default=float("nan"))
+            colmax = max((_num(r.get(src_col)) for r in scoped_pool if _is_finite(r.get(src_col))), default=float("nan"))
             if _is_finite(day.get(peak_col)) and _is_finite(colmax) and abs(_num(day[peak_col]) - colmax) > 0.15:
                 failures["peaks_are_true_maxima"].append(f"{day.get('date')}: {peak_col} != max")
 

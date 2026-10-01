@@ -129,8 +129,14 @@ def validate_final_products(
         if frame.empty:
             continue
         for _, r in frame.iterrows():
+            # Same triple the fusion consumes (state._stack_sources):
+            # uvi_openmeteo when present else the OM display value uv_index,
+            # plus CAMS and EPA. The gate must never compare a fused spread
+            # against a different triple than the one that produced it.
             try:
-                vs = [float(r[c]) for c in ("uv_index", "uvi_cams", "uvi_epa")
+                om_col = ("uvi_openmeteo" if r.get("uvi_openmeteo") is not None
+                          and pd.notna(r.get("uvi_openmeteo")) else "uv_index")
+                vs = [float(r[c]) for c in (om_col, "uvi_cams", "uvi_epa")
                       if r.get(c) is not None and pd.notna(r[c])]
             except (TypeError, ValueError):
                 continue

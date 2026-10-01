@@ -323,6 +323,12 @@ def run_live(
     personal_mmd_basis: str | None = None,
     fresh: bool = True,
     site: config.Site | None = None,
+    surface_slug: str = "unknown",
+    surface_extent: str = "local",
+    skin_tilt_deg: float | None = None,
+    skin_azimuth_deg: float | None = None,
+    surface_uva_reflectance: float | None = None,
+    surface_uvb_reflectance: float | None = None,
 ) -> Path:
     if site is not None:
         with config.use_site(site):
@@ -337,6 +343,12 @@ def run_live(
                 site=site,
                 personal_mmd_j_m2=personal_mmd_j_m2,
                 personal_mmd_basis=personal_mmd_basis,
+                surface_slug=surface_slug,
+                surface_extent=surface_extent,
+                skin_tilt_deg=skin_tilt_deg,
+                skin_azimuth_deg=skin_azimuth_deg,
+                surface_uva_reflectance=surface_uva_reflectance,
+                surface_uvb_reflectance=surface_uvb_reflectance,
             )
     return _run_live_inner(
         root,
@@ -348,6 +360,12 @@ def run_live(
         fresh=fresh,
         personal_mmd_j_m2=personal_mmd_j_m2,
         personal_mmd_basis=personal_mmd_basis,
+        surface_slug=surface_slug,
+        surface_extent=surface_extent,
+        skin_tilt_deg=skin_tilt_deg,
+        skin_azimuth_deg=skin_azimuth_deg,
+        surface_uva_reflectance=surface_uva_reflectance,
+        surface_uvb_reflectance=surface_uvb_reflectance,
     )
 
 
@@ -362,6 +380,12 @@ def _run_live_inner(
     personal_mmd_basis: str | None = None,
     fresh: bool = True,
     site: config.Site | None = None,
+    surface_slug: str = "unknown",
+    surface_extent: str = "local",
+    skin_tilt_deg: float | None = None,
+    skin_azimuth_deg: float | None = None,
+    surface_uva_reflectance: float | None = None,
+    surface_uvb_reflectance: float | None = None,
 ) -> Path:
     site_root = (
         root
@@ -470,6 +494,22 @@ def _run_live_inner(
     tan_hourly = attach_personalization(
         tan_hourly, personal_mmd_j_m2=personal_mmd_j_m2,
         basis=personal_mmd_basis)
+    from .spectral import apply_skin_plane, resolve_skin_plane
+    from .surface import resolve_surface
+
+    skin_plane = resolve_skin_plane(skin_tilt_deg, skin_azimuth_deg)
+    surface = resolve_surface(
+        surface_slug, surface_uva_reflectance, surface_uvb_reflectance
+    )
+    tan_hourly = apply_skin_plane(
+        tan_hourly,
+        skin_plane.tilt_deg,
+        skin_plane.azimuth_deg,
+        surface.slug,
+        surface_extent,
+        surface_uva_reflectance,
+        surface_uvb_reflectance,
+    )
     # Strict photobiology gate: spectrum resource must evaluate.
     from .validation import validate_action_spectra
 
@@ -498,11 +538,21 @@ def _run_live_inner(
     tan_30 = attach_personalization(
         tan_30, personal_mmd_j_m2=personal_mmd_j_m2,
         basis=personal_mmd_basis, dose_col="tan_dose_30m_j_m2")
+    tan_30 = apply_skin_plane(
+        tan_30,
+        skin_plane.tilt_deg,
+        skin_plane.azimuth_deg,
+        surface.slug,
+        surface_extent,
+        surface_uva_reflectance,
+        surface_uvb_reflectance,
+    )
     daily_tan = build_daily_summary(tan_30)
     tan_windows = best_tan_windows(tan_hourly)
     # Gate 2 (final products): strict validates the PUBLISHED artifacts, not
     # just the hourly frame. Cross-product invariants catch a broken final
     # product that hourly validation cannot see (audit P0).
+    final_issues: list[ValidationIssue] = []
     if strict:
         from .validation import validate_final_products
 
@@ -567,12 +617,8 @@ def _run_live_inner(
             "endpoint": "Copernicus ADS",
         }
     )
-    # Version strings are single-sourced from photobiology; a model bump must
-    # never require hunting literals across modules.
-    from .photobiology import PHOTOBIOLOGY_MODEL_VERSION as _PBV
-    from .photobiology import TAN_DOSE_MODEL_VERSION as _TDV
 
-    summary = {
+    summary: dict[str, object] = {
         "run": stamp,
         "created_at": datetime.now().astimezone().isoformat(),
         "coordinates": [config.LATITUDE, config.LONGITUDE],
@@ -583,6 +629,11 @@ def _run_live_inner(
         "skin_type": skin_type,
         "personal_mmd_j_m2": personal_mmd_j_m2,
         "personalization_basis": personal_mmd_basis,
+        "surface_material_slug": surface.slug,
+        "surface_extent_mode": surface_extent,
+        "skin_tilt_deg": skin_plane.tilt_deg,
+        "skin_azimuth_deg": skin_plane.azimuth_deg,
+        "exposure_basis": "environmental_horizontal",
         "min_tan_temperature_f": float(
             config.MIN_TAN_TEMP_F if min_temp_f is None else min_temp_f
         ),
@@ -596,8 +647,7 @@ def _run_live_inner(
         "calibration_tier": str(tan_hourly["tan_calibration_tier"].iloc[0]) if "tan_calibration_tier" in tan_hourly and len(tan_hourly) else None,
         "source_health": source_health,
         "validation_issues": _issue_dicts(
-            source_issues + cams_issues + photo_issues + score_issues
-            + (final_issues if "final_issues" in dir() else []),
+            source_issues + cams_issues + photo_issues + score_issues + final_issues,
         ),
         "schema_version": config.SCHEMA_VERSION,
         "temporal_semantics_version": config.TEMPORAL_SEMANTICS_VERSION,
@@ -605,25 +655,16 @@ def _run_live_inner(
         "tan_score_model_version": config.TAN_SCORE_MODEL_VERSION,
         "tan_dose_model_version": config.TAN_SCORE_MODEL_VERSION,
         "action_spectrum_version": config.ACTION_SPECTRUM_VERSION,
+        "spectral_backend_strict": config.SPECTRAL_BACKEND_VERSION_V5,
+        "spectral_backend_degraded": config.SPECTRAL_DEGRADED_BACKEND,
         "surface_model_version": config.SURFACE_MODEL_VERSION,
         "confidence_version": config.CONFIDENCE_VERSION,
         "window_rank_version": config.WINDOW_RANK_VERSION,
         "global_reference_version": config.GLOBAL_MELANOGENIC_REFERENCE_VERSION,
         "global_reference_e_mel_wm2": config.GLOBAL_MELANOGENIC_REFERENCE_WM2,
-        "score_semantics": {
-            "absolute": "global physical melanogenic intensity (100*E_mel/E_mel_global_ref); not locally normalized",
-            "local": "serving-domain historical local seasonal percentile (rebuilt with v5 scores)",
-            "atmospheric": "geometry-conditioned transmission percentile (conditional comparison, not causal isolation)",
-            "confidence": "calibrated reliability from expected error (calibrated-error-v1); higher bins mean lower realized error, never sunnier skies",
-            "strong_sun_probability": "probability of useful sun (ensemble/DNI/GHI/cloud); product quantity, not confidence",
-            "atmospheric_note": "transmission percentile = conditional comparison vs history, not a direct aerosol measurement",
-            "uvi_note": "Headline UVI is plain-median fusion over unique providers (drives SED only); TanScore/TanDose come from the UVA/UVB model, not from UVI",
-            "overall": "LEGACY composite (deprecated product heuristic, absolute-dominant/capped, then outdoor feasibility); ranking uses fixed-duration dose",
-            "overall_weights": config.OVERALL_SCORE_WEIGHTS,
-            "tandose": "model-defined action-spectrum-weighted cumulative delayed-melanogenesis exposure (melanogenic-effective J/m^2); NOT an internationally standardized dose",
-            "sed": "independent erythemal channel: integral(E_ery dt)/100; NEVER positively increases TanScore/Opportunity",
-            "uva_uvb_dose": "diagnostic physical broadband doses; NOT action-spectrum-weighted biological endpoints",
-        },
+        "deprecated_fields": config.DEPRECATED_FIELDS,
+        "deprecated_aliases": config.DEPRECATED_ALIASES,
+        "score_semantics": config.score_semantics(),
         "hard_blocks": {
             "active_rain": True,
             "active_snow": True,
@@ -979,6 +1020,12 @@ def run_one_site(
     fresh: bool = True,
     force_cams: bool = False,
     auto_calibrate: bool = True,
+    surface_slug: str = "unknown",
+    surface_extent: str = "local",
+    skin_tilt_deg: float | None = None,
+    skin_azimuth_deg: float | None = None,
+    surface_uva_reflectance: float | None = None,
+    surface_uvb_reflectance: float | None = None,
 ) -> Path:
     """Run, export, and publish a single site. One site = one commit.
 
@@ -993,7 +1040,10 @@ def run_one_site(
     with config.site_lock():
         return _run_one_site_locked(
             root, site, strict, skin_type, min_temp_f, personal_mmd_j_m2,
-            personal_mmd_basis, fresh, force_cams, auto_calibrate)
+            personal_mmd_basis, fresh, force_cams, auto_calibrate, surface_slug,
+            surface_extent, skin_tilt_deg, skin_azimuth_deg,
+            surface_uva_reflectance, surface_uvb_reflectance,
+        )
 
 
 def _run_one_site_locked(
@@ -1007,6 +1057,12 @@ def _run_one_site_locked(
     fresh: bool = True,
     force_cams: bool = False,
     auto_calibrate: bool = True,
+    surface_slug: str = "unknown",
+    surface_extent: str = "local",
+    skin_tilt_deg: float | None = None,
+    skin_azimuth_deg: float | None = None,
+    surface_uva_reflectance: float | None = None,
+    surface_uvb_reflectance: float | None = None,
 ) -> Path:
     from .output import export_static_site
 
@@ -1035,6 +1091,12 @@ def _run_one_site_locked(
         personal_mmd_basis=personal_mmd_basis,
         fresh=fresh,
         site=site,
+        surface_slug=surface_slug,
+        surface_extent=surface_extent,
+        skin_tilt_deg=skin_tilt_deg,
+        skin_azimuth_deg=skin_azimuth_deg,
+        surface_uva_reflectance=surface_uva_reflectance,
+        surface_uvb_reflectance=surface_uvb_reflectance,
     )
     dest = (
         Path("docs")
@@ -1050,6 +1112,42 @@ def _run_one_site_locked(
         site_slug=site.slug,
     )
     LOG.info("Site %s exported: %s events", site.slug, info["events"])
+    # Gate 3 (serialized artifact): validate the published data.json AS
+    # CONSUMERS SEE IT before any commit/publish step (contract §25.2). In
+    # strict mode a fatal science-contract failure aborts publication — the
+    # run tables stay on disk for inspection but never ship. This is the only
+    # gate that reads the serialized payload; Gates 1-2 validate frames.
+    if strict:
+        import importlib.util as _importlib_util
+        from pathlib import Path as _Path
+
+        # Loaded by path, not package import: scripts/validate_published_artifact
+        # imports sunstack.photobiology at call time, so a top-level
+        # `from scripts... import` would close an import cycle (cli ->
+        # scripts -> sunstack) that basedpyright flags and that risks
+        # partially-initialized modules at runtime.
+        _spec = _importlib_util.spec_from_file_location(
+            "validate_published_artifact",
+            _Path(__file__).resolve().parent.parent.parent
+            / "scripts" / "validate_published_artifact.py",
+        )
+        assert _spec is not None and _spec.loader is not None
+        _validator = _importlib_util.module_from_spec(_spec)
+        _spec.loader.exec_module(_validator)
+        _result = _validator.validate_artifact(_Path(dest) / "data.json")
+        _failures = _result.get("failures")
+        assert isinstance(_failures, dict)
+        _failed = {k: v for k, v in _failures.items() if v}
+        for _check, _msgs in _failed.items():
+            assert isinstance(_msgs, list)
+            for _msg in _msgs:
+                LOG.error("[artifact %s] %s", _check, _msg)
+        if not _result.get("passed"):
+            raise DataValidationError(
+                f"Serialized artifact validation failed for {site.slug}: "
+                + "; ".join(f"{k}: {len(v)}" for k, v in _failed.items()
+                            if isinstance(v, list))
+            )
     _publish_site(site)
     return run_dir
 
@@ -1065,6 +1163,12 @@ def _run_all_sites(
     force_cams: bool = False,
     auto_calibrate: bool = True,
     only_slug: str | None = None,
+    surface_slug: str = "unknown",
+    surface_extent: str = "local",
+    skin_tilt_deg: float | None = None,
+    skin_azimuth_deg: float | None = None,
+    surface_uva_reflectance: float | None = None,
+    surface_uvb_reflectance: float | None = None,
 ) -> None:
     sites = config.active_sites()
     if only_slug:
@@ -1084,6 +1188,12 @@ def _run_all_sites(
                 fresh=fresh,
                 force_cams=force_cams,
                 auto_calibrate=auto_calibrate,
+                surface_slug=surface_slug,
+                surface_extent=surface_extent,
+                skin_tilt_deg=skin_tilt_deg,
+                skin_azimuth_deg=skin_azimuth_deg,
+                surface_uva_reflectance=surface_uva_reflectance,
+                surface_uvb_reflectance=surface_uvb_reflectance,
             )
         except _SiteSkipped as exc:
             LOG.warning("Site skipped, continuing to next site: %s", exc)
@@ -1094,6 +1204,8 @@ class _SiteSkipped(RuntimeError):
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    from .surface import SURFACE_EXTENT_MODES
+
     parser = argparse.ArgumentParser(
         description="SunStack: calibrated absolute/local TanScore + outdoor opportunity UI"
     )
@@ -1133,6 +1245,46 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=range(1, 7),
         default=None,
         help="Optional Fitzpatrick I-VI context",
+    )
+    surface_context_help = (
+        "Skin-plane context only; ranking stays environmental_horizontal "
+        "fixed-duration dose. Export and reskin ignore this setting."
+    )
+    parser.add_argument(
+        "--surface",
+        default="unknown",
+        metavar="SLUG",
+        help=f"Local surface material slug. {surface_context_help}",
+    )
+    parser.add_argument(
+        "--surface-extent",
+        default="local",
+        choices=SURFACE_EXTENT_MODES,
+        help=f"Surface extent mode. {surface_context_help}",
+    )
+    parser.add_argument(
+        "--skin-tilt-deg",
+        type=float,
+        default=None,
+        help=f"Skin-plane tilt in degrees (0-180; default from config). {surface_context_help}",
+    )
+    parser.add_argument(
+        "--skin-azimuth-deg",
+        type=float,
+        default=None,
+        help=f"Skin-plane azimuth in degrees (0-360; default from config). {surface_context_help}",
+    )
+    parser.add_argument(
+        "--surface-uva-reflectance",
+        type=float,
+        default=None,
+        help=f"Custom surface UVA reflectance [0,1]; requires --surface custom. {surface_context_help}",
+    )
+    parser.add_argument(
+        "--surface-uvb-reflectance",
+        type=float,
+        default=None,
+        help=f"Custom surface UVB reflectance [0,1]; requires --surface custom. {surface_context_help}",
     )
     parser.add_argument(
         "--personal-mmd",
@@ -1196,6 +1348,41 @@ def main() -> None:
         # basis would publish fractions with implied-but-absent provenance.
         parser.error("--personal-mmd requires --personal-mmd-basis "
                      "(SUNSTACK_EFFECTIVE_DOSE_MEASURED, SOURCE_SPECTRUM_MEASURED, OBJECTIVE_ESTIMATE, or COARSE_ESTIMATE)")
+    surface_slug = args.surface.strip().lower()
+    if surface_slug == "custom":
+        if (
+            args.surface_uva_reflectance is None
+            or args.surface_uvb_reflectance is None
+        ):
+            parser.error(
+                "--surface custom requires --surface-uva-reflectance "
+                "and --surface-uvb-reflectance"
+            )
+    elif (
+        args.surface_uva_reflectance is not None
+        or args.surface_uvb_reflectance is not None
+    ):
+        parser.error(
+            "--surface-uva-reflectance and --surface-uvb-reflectance "
+            "require --surface custom"
+        )
+    from .surface import resolve_surface
+
+    try:
+        args.surface = resolve_surface(
+            surface_slug,
+            args.surface_uva_reflectance,
+            args.surface_uvb_reflectance,
+        ).slug
+    except ValueError as exc:
+        parser.error(str(exc))
+    if args.skin_tilt_deg is not None and not 0 <= args.skin_tilt_deg <= 180:
+        parser.error("--skin-tilt-deg must be in [0, 180]")
+    if args.skin_azimuth_deg is not None:
+        if not 0 <= args.skin_azimuth_deg <= 360:
+            parser.error("--skin-azimuth-deg must be in [0, 360]")
+        if args.skin_azimuth_deg == 360:
+            args.skin_azimuth_deg = 0.0
     root = Path(args.out)
     _setup_logging(root, debug=args.verbose)
     strict = config.STRICT_DEFAULT and not args.allow_degraded
@@ -1234,6 +1421,12 @@ def main() -> None:
                         site=site,
                         personal_mmd_j_m2=args.personal_mmd,
                         personal_mmd_basis=args.personal_mmd_basis,
+                        surface_slug=args.surface,
+                        surface_extent=args.surface_extent,
+                        skin_tilt_deg=args.skin_tilt_deg,
+                        skin_azimuth_deg=args.skin_azimuth_deg,
+                        surface_uva_reflectance=args.surface_uva_reflectance,
+                        surface_uvb_reflectance=args.surface_uvb_reflectance,
                     )
                 print("\nSetup complete. Launch the dashboard with: uv run sunstack ui")
         elif args.command == "ui":
@@ -1288,6 +1481,12 @@ def main() -> None:
                 force_cams=args.force_cams,
                 auto_calibrate=not args.no_auto_calibrate,
                 only_slug=args.site,
+                surface_slug=args.surface,
+                surface_extent=args.surface_extent,
+                skin_tilt_deg=args.skin_tilt_deg,
+                skin_azimuth_deg=args.skin_azimuth_deg,
+                surface_uva_reflectance=args.surface_uva_reflectance,
+                surface_uvb_reflectance=args.surface_uvb_reflectance,
             )
     except Exception as exc:
         LOG.exception("FATAL")

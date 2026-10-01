@@ -231,6 +231,19 @@ SURFACE_MODEL_VERSION = "uv-surface-v1"
 FUSION_VERSION = "calibrated-uvi-fusion-v2"
 CONFIDENCE_VERSION = "calibrated-error-v1"
 WINDOW_RANK_VERSION = "fixed-duration-dose-v2"
+DEPRECATED_FIELDS = (
+    "overall_tan_opportunity_0_100",
+    "sun_adjusted_feels_like_f",
+    "sun_window_confidence_0_100",
+    "tierB-clear-sky-v1",
+)
+DEPRECATED_ALIASES = {
+    "melanogenic_effective_irradiance_wm2": (
+        "delayed_pigmentation_effective_irradiance_horizontal_wm2 "
+        "(migration alias)"
+    ),
+}
+
 REQUIRE_CANONICAL_SPECTRUM = (
     os.getenv("SUNSTACK_REQUIRE_CANONICAL_SPECTRUM", "0").strip().lower()
     in {"1", "true", "yes", "on"}
@@ -265,6 +278,91 @@ WIND_STRONG_MPH = float(os.getenv("SUNSTACK_WIND_STRONG_MPH", "35"))
 # dominates; local is context; atmosphere/confidence are small modifiers.
 OVERALL_SCORE_WEIGHTS = {"absolute": 0.70, "local": 0.15, "atmosphere": 0.05, "confidence": 0.10}
 OVERALL_ABSOLUTE_HEADROOM = float(os.getenv("SUNSTACK_OVERALL_ABSOLUTE_HEADROOM", "20"))
+_SCORE_SEMANTIC_TEXT = {
+    "absolute": (
+        "global physical melanogenic intensity "
+        "(100*E_mel/E_mel_global_ref); not locally normalized"
+    ),
+    "local": "serving-domain historical local seasonal percentile (rebuilt with v5 scores)",
+    "atmospheric": (
+        "geometry-conditioned transmission percentile "
+        "(conditional comparison, not causal isolation)"
+    ),
+    "confidence": (
+        "calibrated reliability from expected error "
+        f"({CONFIDENCE_VERSION}); higher bins mean lower realized error, "
+        "never sunnier skies"
+    ),
+    "strong_sun_probability": (
+        "probability of useful sun (ensemble/DNI/GHI/cloud); "
+        "product quantity, not confidence"
+    ),
+    "atmospheric_note": (
+        "transmission percentile = conditional comparison vs history, "
+        "not a direct aerosol measurement"
+    ),
+    "uvi_note": (
+        "Headline UVI is plain-median fusion over unique providers "
+        "(drives SED only); TanScore/TanDose come from the UVA/UVB model, "
+        "not from UVI"
+    ),
+    "overall": (
+        "LEGACY composite (deprecated product heuristic, "
+        "absolute-dominant/capped, then outdoor feasibility); "
+        "ranking uses fixed-duration dose"
+    ),
+    "tandose": (
+        "model-defined action-spectrum-weighted cumulative "
+        "delayed-melanogenesis exposure (melanogenic-effective J/m^2); "
+        "NOT an internationally standardized dose"
+    ),
+    "sed": (
+        "independent erythemal channel: integral(E_ery dt)/100; "
+        "NEVER positively increases TanScore/Opportunity"
+    ),
+    "uva_uvb_dose": (
+        "diagnostic physical broadband doses; "
+        "NOT action-spectrum-weighted biological endpoints"
+    ),
+}
+
+
+def score_semantics() -> dict[str, object]:
+    return {
+        **_SCORE_SEMANTIC_TEXT,
+        "overall_weights": OVERALL_SCORE_WEIGHTS,
+        "overall_absolute_headroom": OVERALL_ABSOLUTE_HEADROOM,
+        "schema_version": SCHEMA_VERSION,
+        "temporal_semantics_version": TEMPORAL_SEMANTICS_VERSION,
+        "photobiology_model_version": PHOTOBIOLOGY_MODEL_VERSION,
+        "tan_score_model_version": TAN_SCORE_MODEL_VERSION,
+        "action_spectrum_version": ACTION_SPECTRUM_VERSION,
+        "spectral_backend_strict": SPECTRAL_BACKEND_VERSION_V5,
+        "spectral_backend_degraded": SPECTRAL_DEGRADED_BACKEND,
+        "surface_model_version": SURFACE_MODEL_VERSION,
+        "fusion_version": FUSION_VERSION,
+        "confidence_version": CONFIDENCE_VERSION,
+        "window_rank_version": WINDOW_RANK_VERSION,
+        "global_reference_version": GLOBAL_MELANOGENIC_REFERENCE_VERSION,
+        "global_reference_e_mel_wm2": GLOBAL_MELANOGENIC_REFERENCE_WM2,
+        "min_tan_temp_f": MIN_TAN_TEMP_F,
+        "comfortable_tan_temp_f": COMFORTABLE_TAN_TEMP_F,
+        "heat_warning_temp_f": HEAT_WARNING_TEMP_F,
+        "max_tan_temp_f": MAX_TAN_TEMP_F,
+        "active_precip_in_threshold": ACTIVE_PRECIP_IN_THRESHOLD,
+        "active_snow_in_threshold": ACTIVE_SNOW_IN_THRESHOLD,
+        "precip_probability_penalty_max": PRECIP_PROBABILITY_PENALTY_MAX,
+        "wind_warning_mph": WIND_WARNING_MPH,
+        "wind_strong_mph": WIND_STRONG_MPH,
+        "uvi_disagreement_warn_frac": UVI_DISAGREEMENT_WARN_FRAC,
+        "uvi_disagreement_strong_frac": UVI_DISAGREEMENT_STRONG_FRAC,
+        "skin_tilt_deg": SKIN_TILT_DEG,
+        "skin_azimuth_deg": SKIN_AZIMUTH_DEG,
+        "tandose_max_interp_gap_s": TANDOSE_MAX_INTERP_GAP_S,
+        "deprecated_fields": DEPRECATED_FIELDS,
+        "deprecated_aliases": DEPRECATED_ALIASES,
+    }
+
 STRICT_DEFAULT = os.getenv("SUNSTACK_STRICT", "1").strip().lower() not in {"0", "false", "no"}
 REQUIRE_DIRECT_CAMS = os.getenv("SUNSTACK_REQUIRE_DIRECT_CAMS", "1").strip().lower() not in {"0", "false", "no"}
 UI_HOST = os.getenv("SUNSTACK_UI_HOST", "127.0.0.1")

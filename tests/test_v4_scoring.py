@@ -2031,11 +2031,11 @@ def _split_frame() -> pd.DataFrame:
 
 
 def test_uvi_consensus_resists_single_bad_source(tmp_path):
-    # OM-double-weighted median: OM outlier vs two agreeing sources lands
-    # between (3.8/3.55), closer to the pair than to OM; spread names the
-    # disagreement width; source count is exact.
+    # Plain median over unique providers: [2.6, 5.6, 5.0] -> 5.0 (the middle
+    # source, not the outlier); spread names the disagreement width; source
+    # count is exact. Matches state.fuse_uvi_unique_count on identical inputs.
     out = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
-    assert np.allclose(out["uvi_consensus"].to_numpy(), [3.8, 3.55])
+    assert np.allclose(out["uvi_consensus"].to_numpy(), [5.0, 5.0])
     assert (out["uvi_consensus_sources"].to_numpy() == 3).all()
     assert np.allclose(out["uvi_source_spread"].to_numpy(), [3.0, 3.46])
     assert np.allclose(out["uvi_sunny"].to_numpy(), [5.6, 5.56])
@@ -2046,15 +2046,15 @@ def test_sed_integrates_consensus_not_raw_om(tmp_path):
     # SED's erythemal input is consensus-derived: a bad OM UVI must not drag
     # the erythemal channel down while the other sources agree.
     out = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
-    assert np.allclose(out["erythemal_irradiance_wm2"].to_numpy(), [0.095, 0.08875])
+    assert np.allclose(out["erythemal_irradiance_wm2"].to_numpy(), [0.125, 0.125])
 
 
 def test_consensus_degrades_with_missing_sources(tmp_path):
-    # EPA-less rows (non-US site / failed fetch) degrade OM-weighted: OM ties
-    # break toward OM; a lone OM row degrades to OM itself. NaN never zero.
+    # Source-less rows degrade to the plain median of what remains: the
+    # midpoint of two sources, OM itself when lone. NaN never zero.
     two = _split_frame().drop(columns=["uvi_epa"])
     out = score_forecast(two, Path(tmp_path), None, _confidence())
-    assert np.allclose(out["uvi_consensus"].to_numpy(), [2.6, 2.1], atol=0.01)
+    assert np.allclose(out["uvi_consensus"].to_numpy(), [4.1, 3.83], atol=0.01)
     assert (out["uvi_consensus_sources"].to_numpy() == 2).all()
     one = _best_air().iloc[:1].copy()
     solo = score_forecast(one, Path(tmp_path), None, _confidence())
