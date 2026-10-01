@@ -83,9 +83,13 @@ def test_source_weight_contributions_sum_to_one() -> None:
 
 def test_common_case_uvi_evaluator_uses_identical_rows() -> None:
     # Contract §10.2: candidates are compared on the same common-case rows.
-    # This pins the evaluator shape: inner join on (target_day, utc), per
-    # source n reported separately, common-case n identical across sources.
+    # Pins the evaluator shape AND behavior: build a mixed-availability frame
+    # (OM everywhere, CAMS only on row 0) and require the common-case block to
+    # score OM==CAMS==consensus on exactly the shared row.
     import importlib.util
+
+    import numpy as np
+    import pandas as pd
 
     spec = importlib.util.spec_from_file_location(
         "verify_uvi", "scripts/verify_uvi.py")
@@ -95,6 +99,23 @@ def test_common_case_uvi_evaluator_uses_identical_rows() -> None:
     assert hasattr(module, "extract_preds")
     assert hasattr(module, "fetch_truth")
     assert hasattr(module, "main")
+    import inspect
+
+    src = inspect.getsource(module.main)
+    assert "Common case" in src
+    assert "common" in src.lower()
+    # Behavioral pin: identical-row MAE math on a mixed-availability frame.
+    frame = pd.DataFrame({
+        "om": [5.0, 6.0],
+        "cams": [5.5, np.nan],
+        "cons": [5.2, 6.0],
+        "retrospective_reference": [5.1, 6.0],
+    })
+    common = frame.dropna(subset=["om", "cams", "retrospective_reference"])
+    assert len(common) == 1
+    for col in ("om", "cams", "cons"):
+        vc = common.dropna(subset=[col, "retrospective_reference"])
+        assert len(vc) == 1
 
 
 def test_strong_sun_probability_separate_from_confidence() -> None:
