@@ -214,9 +214,10 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   offset, not a scale error; UVI-disagreement confidence penalty is the
   correct response pending a fix in CAMS time decoding.
 - `scripts/check_literature.py` -> `docs/validation/literature_sanity.md`:
-  all gates pass (Parrish UVB/UVA 1247x, Keong photoaddition exact,
-  erythema/melanogenesis spectral crossing 1.44x at 300 nm vs 3.11x at
-  340 nm, IPD UVA-dominant/UVB-silent, SED/TanDose divergence 5.40 vs 2706).
+  all gates pass (Parrish UVB/UVA 1146x, Keong photoaddition exact,
+  erythema/melanogenesis separation S_mel/S_ery 1.49 @300 / 1.65 @320 /
+  1.57 @340 / 1.77 @365 nm, IPD UVA-dominant/UVB-silent, SED/TanDose
+  divergence 5.40 vs 2374).
   Two provisional-shape bugs caught by the gates and fixed: IPD Gaussian was
   too broad shortward (added 312 nm logistic cutoff), and the assumed
   erythema>>melanogenesis ordering at 320 nm was backwards (spectra cross).

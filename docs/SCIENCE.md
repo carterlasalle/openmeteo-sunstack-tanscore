@@ -552,11 +552,12 @@ and `--skin-azimuth-deg`. Persisted runs and static exports retain
   absolute validation (CERES 5.02% vs station 3.5% is a hypothesis, not a reproduced
   root cause — extraction script, response curve, and exact matching logic are not
   preserved, so the result is not independently reproducible), model unchanged.
-- **Literature gates** (`scripts/check_literature.py` → 6/6 PASS): Parrish
-  UVB/UVA effectiveness 1247×, Keong photoaddition exact, erythema/melanogenesis
-  spectral crossing 1.44× @300 nm vs 3.11× @340 nm, IPD UVA-dominant/UVB-silent,
-  SED/TanDose divergence 5.40 vs 2706. Two provisional-shape bugs caught and
-  fixed by these gates (IPD shortwave cutoff, 320 nm ordering).
+- **Literature gates** (`scripts/check_literature.py` → 13 PASS): Parrish
+  UVB/UVA effectiveness 1146×, Keong photoaddition exact, erythema/melanogenesis
+  separation S_mel/S_ery 1.49 @300 nm / 1.65 @320 nm / 1.57 @340 nm / 1.77 @365 nm,
+  IPD UVA-dominant/UVB-silent, SED/TanDose divergence 5.40 vs 2374. Two
+  provisional-shape bugs caught and fixed by these gates (IPD shortwave cutoff,
+  320 nm ordering).
 - **Migration signature** (`compare_legacy_v4.py`, byte-reproducible):
   most-UVB-rich +9.8/+3.1, most-UVA-rich −0.7/−2.9 — v4 reorders exactly as the
   physics predicts; cloudy-day run monotonic +2.77→−1.07 across ratio quintiles

@@ -62,9 +62,11 @@ rescale photons inside TanDose.
   training-manifest SHA, libRadtran provenance, parameter ranges, and non-empty
   held-out validation metrics pass the manifest gate.
 - Tier C is the explicitly labeled degraded broadband proxy
-  `tierC-broadband-proxy-v2`; `--allow-degraded` may permit it, but it is never
-  a silent substitute for Tier B. Strict mode fails loudly when its required
-  spectral tier/data are unavailable.
+  `tierC-broadband-proxy-v2`, currently the production default with its tier on
+  every output (no gate-passing Tier-B emulator is wired). A tier A/B claim
+  without a validated manifest fails loudly instead of scoring silently as Tier
+  C. `--allow-degraded` additionally permits pre-manifest/sklearn-drift
+  bundles. Missing spectrum/reference data always fails loudly in any mode.
 - `interval-contract-v1` distinguishes interval-mean radiation from point
   samples: means integrate over declared support; point samples integrate over
   actual timestamps.

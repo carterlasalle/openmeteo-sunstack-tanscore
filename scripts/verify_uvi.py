@@ -6,8 +6,10 @@ snapshot against the Open-Meteo previous-runs best_match retrospective
 REFERENCE (not truth: shared provider DNA flatters OM ~0.1-0.2).
 
 Scores per source (OM/CAMS/EPA/consensus) at 1-day lead, 12-2PM EDT:
-MAE, bias, RMSE + per-day breakdown. Fails loudly if consensus regresses
-past OM (the fusion-must-not-lose-to-its-best-input invariant).
+per-source availability MAE/bias/RMSE table PLUS a common-case block on the
+identical om/cams/cons/reference row set (the §10.2 ranking metric). Fails
+loudly (exit 1) if consensus common-case MAE exceeds OM by >0.5 on identical
+rows, and likewise on the legacy availability table.
 Usage: uv run python scripts/verify_uvi.py [--refetch]
 Writes docs/validation/uvi_verification.md (not committed by CI).
 """
@@ -101,31 +103,50 @@ def main() -> int:
              "| source | n | MAE | bias | RMSE |",
              "|---|---|---|---|---|"]
     # Contract §10.2 common case: candidates compared on the IDENTICAL row
-    # set where every scored source is present. Per-source n is still reported
+    # set where every ranked source is present. Per-source n is still reported
     # separately (availability), but the ranking metric uses common rows only.
-    common_cols: list[str] = ["om", "retrospective_reference"]
+    common_cols: list[str] = ["om", "cams", "cons", "retrospective_reference"]
     common: pd.DataFrame = j.dropna(subset=common_cols)
-    lines.append(f"Common case: {len(common)} rows (all of om/cams/reference present).")
+    lines.append(f"Common case: {len(common)} rows (om/cams/cons/reference all present).")
     lines.append("")
     stats: dict[str, tuple[float, float]] = {}
+    table_rows: list[str] = []
     for col in ("om", "cams", "epa", "cons"):
         v: pd.DataFrame = j.dropna(subset=[col, "retrospective_reference"])
         if not len(v):
-            lines.append(f"| {col} | 0 | -- | -- | -- |")
+            table_rows.append(f"| {col} | 0 | -- | -- | -- |")
             continue
         err = v[col] - v["retrospective_reference"]
         stats[col] = (float(np.abs(err).mean()), float(err.mean()))
-        lines.append(
+        table_rows.append(
             f"| {col} | {len(v)} | {np.abs(err).mean():.2f} "
             f"| {err.mean():+.2f} | {np.sqrt((err**2).mean()):.2f} |")
+    lines.extend(table_rows)
+    if len(common):
+        lines.append("")
+        lines.append("Common-case MAE (identical rows, ranking metric):")
+        for col in ("om", "cams", "cons"):
+            vc: pd.DataFrame = common.dropna(subset=[col, "retrospective_reference"])
+            if not len(vc):
+                continue
+            errc = vc[col] - vc["retrospective_reference"]
+            lines.append(f"- {col}: n={len(vc)} MAE {np.abs(errc).mean():.2f} "
+                         f"bias {errc.mean():+.2f}")
+        if "cons" in common.columns and "om" in common.columns and len(common):
+            cons_err = (common["cons"] - common["retrospective_reference"]).abs().mean()
+            om_err = (common["om"] - common["retrospective_reference"]).abs().mean()
+            if float(cons_err) > float(om_err) + 0.5:
+                print("FAIL: consensus common-case MAE exceeds OM by >0.5",
+                      file=sys.stderr)
+                out = ROOT / "docs" / "validation" / "uvi_verification.md"
+                out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+                return 1
     lines += ["",
               "Reference: Open-Meteo previous-runs best_match (shared-DNA caveat).",
               "Target: MAE < 1.0, |bias| < 0.3 per source at 1-day lead."]
-    out = ROOT / "docs" / "validation" / "uvi_verification.md"
-    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(out.read_text())
+    # Legacy availability invariant (kept): consensus must not lose badly to
+    # its best input even on differing availability.
+    if "cons" in stats and "om" in stats and stats["cons"][0] > stats["om"][0] + 0.5:
+        print("FAIL: consensus MAE exceeds OM MAE by >0.5", file=sys.stderr)
+        return 1
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

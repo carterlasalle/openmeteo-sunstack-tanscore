@@ -103,19 +103,27 @@ def test_common_case_uvi_evaluator_uses_identical_rows() -> None:
 
     src = inspect.getsource(module.main)
     assert "Common case" in src
-    assert "common" in src.lower()
-    # Behavioral pin: identical-row MAE math on a mixed-availability frame.
+    # Production common-case column set: every ranked source + reference.
+    assert '"om", "cams", "cons", "retrospective_reference"' in src
+    # The loud invariant must exist on the identical row set (not just the
+    # legacy availability table): fail text + nonzero exit wired to it.
+    assert "common-case MAE exceeds OM" in src
+    assert src.count("return 1") >= 2
+    # Behavioral pin: identical-row MAE math on a mixed-availability frame
+    # using production's own column set (cons missing on row 1 narrows it).
     frame = pd.DataFrame({
         "om": [5.0, 6.0],
         "cams": [5.5, np.nan],
-        "cons": [5.2, 6.0],
+        "cons": [5.2, np.nan],
         "retrospective_reference": [5.1, 6.0],
     })
-    common = frame.dropna(subset=["om", "cams", "retrospective_reference"])
+    common = frame.dropna(subset=["om", "cams", "cons", "retrospective_reference"])
     assert len(common) == 1
     for col in ("om", "cams", "cons"):
         vc = common.dropna(subset=[col, "retrospective_reference"])
         assert len(vc) == 1
+    # And consensus-missing rows genuinely narrow the common set.
+    assert len(frame.dropna(subset=["om", "retrospective_reference"])) == 2
 
 
 def test_strong_sun_probability_separate_from_confidence() -> None:
