@@ -654,19 +654,26 @@ def score_forecast(
     out = add_local_scores(out, local_ref)
     out["local_tan_label"] = [_grade_local(float(x)) for x in num(out, "local_tan_score_0_100").fillna(np.nan)]
 
-    # Keep quality and uncertainty separate. A low confidence never changes the
-    # physical TanScore; it only changes how much to trust that forecast.
+    # Reliability from the calibrated error model (§11): confidence is a
+    # monotonic transform of expected error, never of sunniness. Ensemble
+    # strong-sun probability rides along as a separate product column.
     if forecast_confidence is not None and not forecast_confidence.empty and "time" in forecast_confidence:
         confidence_cols = [c for c in [
-            "time", "ensemble_strong_sun_support_0_100", "deterministic_agreement_0_100",
+            "time", "ensemble_strong_sun_support_0_100", "strong_sun_probability_0_100",
+            "deterministic_agreement_0_100",
             "sun_window_confidence_0_100",
         ] if c in forecast_confidence]
         if len(confidence_cols) > 1:
             out = out.merge(forecast_confidence.loc[:, confidence_cols], on="time", how="left")
-    if "sun_window_confidence_0_100" in out:
-        out["tan_forecast_confidence_0_100"] = num(out, "sun_window_confidence_0_100")
+    if "strong_sun_probability_0_100" in out:
+        out["strong_sun_probability_0_100"] = num(out, "strong_sun_probability_0_100")
+    elif "ensemble_strong_sun_support_0_100" in out:
+        out["strong_sun_probability_0_100"] = num(out, "ensemble_strong_sun_support_0_100")
     else:
-        out["tan_forecast_confidence_0_100"] = np.nan
+        out["strong_sun_probability_0_100"] = np.nan
+    from .calibrate import estimate_expected_uvi_error as _estimate_err
+
+    out = _estimate_err(out, calibration_dir)
     out["uv_input_disagree"] = _uv_ghi_disagree(out).to_numpy(dtype=bool)
     out["tan_forecast_confidence_0_100"] = apply_disagreement_penalty(
         out["tan_forecast_confidence_0_100"], out["uv_input_disagree"]

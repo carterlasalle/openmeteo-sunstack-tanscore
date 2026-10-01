@@ -114,22 +114,22 @@ def test_all_direct_cams_fields_propagate(tmp_path):
 
 
 def test_uvi_disagreement_moves_confidence_not_physics(tmp_path):
+    # v5: confidence comes from the calibrated error model (spread/source
+    # driven), so wide CAMS disagreement lowers it while physics stays put.
     agree = score_forecast(_best_air(), Path(tmp_path),
                            _cams([0.125, 0.1625, 0.15], [0.15, 0.175, 0.1625]),
                            _confidence(80.0))
     clash = score_forecast(_best_air(), Path(tmp_path),
                            _cams([0.01, 0.01, 0.01], [0.15, 0.175, 0.1625]),
                            _confidence(80.0))
-    assert (agree["tan_forecast_confidence_0_100"].to_numpy() == 80.0).all()
-    assert (clash["tan_forecast_confidence_0_100"].to_numpy() ==
-            round(80.0 * 0.65, 1)).all()
+    assert bool((clash["tan_forecast_confidence_0_100"].to_numpy() <
+                 agree["tan_forecast_confidence_0_100"].to_numpy()).all())
     assert clash["uvi_source_disagree"].all()
     # Identical broadband inputs => identical melanogenic physics.
     assert np.allclose(agree["melanogenic_effective_irradiance_wm2"].to_numpy(),
                        clash["melanogenic_effective_irradiance_wm2"].to_numpy())
     assert np.allclose(agree["tan_score_absolute_0_100"].to_numpy(),
                        clash["tan_score_absolute_0_100"].to_numpy())
-
 
 def test_uvi_disagreement_covers_epa_outlier(tmp_path):
     # OM + CAMS agree while EPA is far: the all-source spread must flag and
@@ -151,16 +151,16 @@ def test_uvi_disagreement_covers_epa_outlier(tmp_path):
 
 
 def test_uvi_spread_thresholds_are_absolute(tmp_path):
-    # Spread is absolute UVI: >=2.0 strong (x0.65), >=1.0 mild (x0.85).
+    # Spread is absolute UVI: wider spread => lower calibrated confidence.
     one = _best_air().iloc[:1].copy()
     one["cams_uv_index"] = one["uv_index"] + 1.2
     mild = score_forecast(one, Path(tmp_path), None, _confidence(80.0))
     assert bool(mild["uvi_source_disagree"].iloc[0])
-    assert float(mild["tan_forecast_confidence_0_100"].iloc[0]) == round(80.0 * 0.85, 1)
     two = _best_air().iloc[:1].copy()
     two["cams_uv_index"] = two["uv_index"] + 2.5
     strong = score_forecast(two, Path(tmp_path), None, _confidence(80.0))
-    assert float(strong["tan_forecast_confidence_0_100"].iloc[0]) == round(80.0 * 0.65, 1)
+    assert (float(strong["tan_forecast_confidence_0_100"].iloc[0]) <
+            float(mild["tan_forecast_confidence_0_100"].iloc[0]))
 
 
 def _half_hour_frame(emel_scale: float = 1.0) -> pd.DataFrame:
@@ -2003,8 +2003,12 @@ def test_corrupt_version_file_stays_stale(tmp_path):
 def test_no_confidence_input_is_nan(tmp_path):
     from sunstack.tanscore import score_forecast
 
+    # v5: confidence comes from the calibrated error model (always defined
+    # from source count/spread/regime), while ensemble strong-sun support
+    # stays NaN without its input frame.
     out = score_forecast(_best_air(), Path(tmp_path), None, None)
-    assert out["tan_forecast_confidence_0_100"].isna().all()
+    assert out["tan_forecast_confidence_0_100"].notna().all()
+    assert "strong_sun_probability_0_100" in out.columns
 
 
 def test_best_tan_windows_ranks_by_overall_when_present():

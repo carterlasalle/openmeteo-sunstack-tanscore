@@ -329,6 +329,12 @@ def best_windows(best_match_enriched: pd.DataFrame, ensemble_probs: pd.DataFrame
     # provides the second view.
     conf_num = 0.65 * support.fillna(0) + 0.35 * agreement.fillna(0)
     conf_den = 0.65 * support.notna().astype(float) + 0.35 * agreement.notna().astype(float)
+    # Contract §11.1: ensemble scenario support is a PRODUCT quantity —
+    # probability of useful sun — never "confidence". Reliability lives in
+    # the calibrated error model; this column is the sunniness term that must
+    # not wear the confidence name.
+    df["strong_sun_probability_0_100"] = support.round(1)
+    # Legacy name retained one migration version for downstream merges.
     df["sun_window_confidence_0_100"] = (conf_num / conf_den.where(conf_den > 0)).round(1)
 
     sort_cols = [c for c in ["sun_score_0_100", "sun_window_confidence_0_100"] if c in df]
