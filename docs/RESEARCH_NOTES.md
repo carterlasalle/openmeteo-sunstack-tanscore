@@ -732,3 +732,67 @@ sqrt(UVIxUVA)) with a wavelength/action-spectrum model:
   export supplies the published versions, weights, and provenance.
 - Evidence is maintained in `tests/test_v5_ui_surface.py`,
   `tests/test_v5_contract.py`, and the publication validator checks.
+
+## 2026-10-01 - v5 §27 closure matrix (50 known defects)
+
+Status after `75c8bcf` + doc-honesty follow-ups. Legend: FIXED = closed in
+tree with test/evidence; PARTIAL = narrowed but residual remains, documented
+as a limitation. No DEFERRED: every item is either closed or documented with
+its blocker.
+
+| ID | defect | evidence | status |
+|---|---|---|---|
+| 1 | provisional Parrish curve | `parrish_fda_3630-v1`, 6 anchors, `test_delayed_pigmentation_spectrum_authoritative_anchors` | FIXED |
+| 2 | fixed-band proxy unvalidated | `tierC-broadband-proxy-v2` label + gate harness; no libRadtran corpus here | PARTIAL |
+| 3 | 30-min state mismatch | `state.recompute_derived_state`, `test_v5_state` | FIXED |
+| 4 | source count = votes | unique providers + `vote_count` split, `test_v5_state:47` | FIXED |
+| 5 | confidence rewards sun | no UVI term, `test_v5_confidence:26` | FIXED |
+| 6 | coverage names mismatch | manifest `feature_schema`, `tanscore:559` | FIXED |
+| 7 | coverage vs docs | transparency-only, SCIENCE corrected | FIXED |
+| 8 | bundles lack manifests | writer + strict raise, retrained both sites | FIXED |
+| 9 | hash recorded not enforced | `training_code_sha256` verified on load | FIXED |
+| 10 | missing weather = 100 | UNKNOWN + reason, `test_v5_feasibility:27` | FIXED |
+| 11 | peaks at other metric | true maxima + `peaks_are_true_maxima` | FIXED |
+| 12 | global corpus absent | manifest + rebuild script; v2 corpus pending | PARTIAL |
+| 13 | literature overstates | renamed invariants; Payerne unreproducible noted | FIXED |
+| 14 | fusion populations differ | common-case block + behavioral test | FIXED |
+| 15 | POWER as accuracy | `POWER-product emulation` label | FIXED |
+| 16 | local ref domain | lead-band serving refs + fallback flag | FIXED |
+| 17 | Payerne +42% | hypothesis label + extraction gap noted | FIXED |
+| 18 | gate misses invariants | `validate_final_products` + Gate 3 | FIXED |
+| 19 | UVB boundary mismatch | `[280,315)/[315,400]`, energy test | FIXED |
+| 20 | sun-feels heuristic | demoted `sun_warming_heuristic_f` | FIXED |
+| 21 | broadband plane factor | honest Tier-C limitation documented; per-component recon pending | PARTIAL |
+| 22 | SED prefers raw OM | consensus-first + `sed_uvi_source`, test | FIXED |
+| 23 | CAMS first interval | cycle-partitioned, first = NaN, tests | FIXED |
+| 24 | HRRR snapshot | explicit copy + bounded ratio + test | FIXED |
+| 25 | Fit denominator | daylight mask + `daylight_fit_denominator` (20/20) | FIXED |
+| 26 | duplicate tier code | single resolver + alias | FIXED |
+| 27 | stale-ref tolerance | complete-metadata gate | FIXED |
+| 28 | POWER/OM anchor | interval registry + midpoint merge | FIXED |
+| 29 | means as points | exact vs trapezoid primitives | FIXED |
+| 30 | clearness naming | canonical rename + alias | FIXED |
+| 31 | TOA exact claim | date-dependent, mean-distance labeled | FIXED |
+| 32 | temp absent claim | model caveat in SCIENCE | FIXED |
+| 33 | atmosphere isolates | canonical `geometry_conditioned_*` + alias | FIXED |
+| 34 | Absolute-first | legacy composite label, dose ranking | FIXED |
+| 35 | scale-invariance test | sustained-window rename + dose tests | FIXED |
+| 36 | OM median tie | inverse-error fusion, prose fixed | FIXED |
+| 37 | lone sample = 0 | NaN + incomplete, tests | FIXED |
+| 38 | WMO 97 | `{95,96,97,99}` + test | FIXED |
+| 39 | rain instant claim | interval semantics + test | FIXED |
+| 40 | snow w/o depth | `snow_depth` fetched + carried + test | FIXED |
+| 41 | fallback named Tier B | `degraded_clear_sky_parametric_v1` | FIXED |
+| 42 | IPD/TanDose ratio | ratio prose removed | FIXED |
+| 43 | generic MMD | basis gate, MEASURED rejected | FIXED |
+| 44 | surface/albedo conflation | separate concepts + tests | FIXED |
+| 45 | README weights | 70/15/5/10 + contract test | FIXED |
+| 46 | sand 25% claim | geometry-dependent wording | FIXED |
+| 47 | zero metabolism | resting-rate wording | FIXED |
+| 48 | dew/wind arithmetic | corrected + pinned test | FIXED |
+| 49 | HRRR truth | forecast wording (dated log entry kept) | FIXED |
+| 50 | no surface selector | presets + UI/API/CLI + tests | FIXED |
+
+Open blockers (need external inputs, not code): Tier-B emulator/corpus
+(no uvspec), WOUDC independent sets, multi-year global-v2 corpus,
+per-component plane convolution (D21 residue).

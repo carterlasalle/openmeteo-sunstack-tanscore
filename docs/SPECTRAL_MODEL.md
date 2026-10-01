@@ -51,11 +51,16 @@ consensus-derived erythemal field, never a raw provider or pre-fusion value.
 ## Skin-plane exposure
 
 `SUNSTACK_SKIN_TILT_DEG` / `SUNSTACK_SKIN_AZIMUTH_DEG` configure the optional
-plane. Direct uses incidence angle; diffuse uses isotropic sky view; local
-reflected context uses the selected local surface profile. CAMS
-`forecast_albedo` remains a regional RT input and never becomes local surface
-reflectance. Environmental-horizontal fields remain immutable; the plane is
-additional context.
+plane. Tier-C limitation (honest): the plane E_DP is the horizontal E_mel
+scaled by one broadband geometric factor (incidence-cosine direct + isotropic
+diffuse + generic-albedo ground bounce), NOT a per-component spectral
+reconstruction convolved per band — broadband shortwave composition is not UV
+composition. The local-surface reflected E_DP/UVA/UVB components are reported
+as separate band-weighted diagnostics and are never folded into the plane E_DP,
+so §12.11 plane ranking does not yet vary with surface. CAMS `forecast_albedo`
+remains a regional RT input and never becomes local surface reflectance.
+Environmental-horizontal fields remain immutable; the plane is additional
+context.
 
 ## Known Tier-C limitation: uniform intra-band shape
 
