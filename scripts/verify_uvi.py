@@ -107,8 +107,6 @@ def main() -> int:
     # separately (availability), but the ranking metric uses common rows only.
     common_cols: list[str] = ["om", "cams", "cons", "retrospective_reference"]
     common: pd.DataFrame = j.dropna(subset=common_cols)
-    lines.append(f"Common case: {len(common)} rows (om/cams/cons/reference all present).")
-    lines.append("")
     stats: dict[str, tuple[float, float]] = {}
     table_rows: list[str] = []
     for col in ("om", "cams", "epa", "cons"):
@@ -118,12 +116,16 @@ def main() -> int:
             continue
         err = v[col] - v["retrospective_reference"]
         stats[col] = (float(np.abs(err).mean()), float(err.mean()))
-        table_rows.append(
+        row = (
             f"| {col} | {len(v)} | {np.abs(err).mean():.2f} "
-            f"| {err.mean():+.2f} | {np.sqrt((err**2).mean()):.2f} |")
+            f"| {err.mean():+.2f} | {np.sqrt((err**2).mean()):.2f} |"
+        )
+        table_rows.append(row)
     lines.extend(table_rows)
+    lines.append("")
+    lines.append(f"Common case: {len(common)} rows (om/cams/cons/reference all present).")
+    lines.append("")
     if len(common):
-        lines.append("")
         lines.append("Common-case MAE (identical rows, ranking metric):")
         for col in ("om", "cams", "cons"):
             vc: pd.DataFrame = common.dropna(subset=[col, "retrospective_reference"])
@@ -144,9 +146,16 @@ def main() -> int:
     lines += ["",
               "Reference: Open-Meteo previous-runs best_match (shared-DNA caveat).",
               "Target: MAE < 1.0, |bias| < 0.3 per source at 1-day lead."]
+    out = ROOT / "docs" / "validation" / "uvi_verification.md"
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(out.read_text())
     # Legacy availability invariant (kept): consensus must not lose badly to
     # its best input even on differing availability.
     if "cons" in stats and "om" in stats and stats["cons"][0] > stats["om"][0] + 0.5:
         print("FAIL: consensus MAE exceeds OM MAE by >0.5", file=sys.stderr)
         return 1
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

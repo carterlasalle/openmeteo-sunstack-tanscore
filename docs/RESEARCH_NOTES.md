@@ -743,7 +743,7 @@ its blocker.
 
 | ID | defect | evidence | status |
 |---|---|---|---|
-| 1 | provisional Parrish curve | `parrish_fda_3630-v1`, 6 anchors, `test_delayed_pigmentation_spectrum_authoritative_anchors` | FIXED |
+| 1 | provisional Parrish curve | `parrish-fda-3630-v1`, 6 anchors, `test_delayed_pigmentation_spectrum_authoritative_anchors` | FIXED |
 | 2 | fixed-band proxy unvalidated | `tierC-broadband-proxy-v2` label + gate harness; no libRadtran corpus here | PARTIAL |
 | 3 | 30-min state mismatch | `state.recompute_derived_state`, `test_v5_state` | FIXED |
 | 4 | source count = votes | unique providers + `vote_count` split, `test_v5_state:47` | FIXED |

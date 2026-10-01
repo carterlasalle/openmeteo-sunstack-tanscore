@@ -4,12 +4,12 @@ Snapshots: 138 | 1-day-lead rows: 333
 
 | source | n | MAE | bias | RMSE |
 |---|---|---|---|---|
-Common case: 147 rows (om/cams/cons/reference all present).
-
 | om | 333 | 0.48 | -0.11 | 0.77 |
 | cams | 159 | 1.14 | -1.03 | 1.37 |
 | epa | 0 | -- | -- | -- |
 | cons | 147 | 0.62 | -0.53 | 0.71 |
+
+Common case: 147 rows (om/cams/cons/reference all present).
 
 Common-case MAE (identical rows, ranking metric):
 - om: n=147 MAE 0.13 bias +0.03

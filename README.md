@@ -12,8 +12,7 @@
 
 </div>
 
-SunStack estimates spectrally weighted delayed-pigmentation exposure from forecast atmospheric conditions, reports independent erythemal exposure, and separately evaluates outdoor usability. Strict mode uses a validated spectral backend; degraded mode is explicitly labeled.
-
+SunStack estimates spectrally weighted delayed-pigmentation exposure from forecast atmospheric conditions, reports independent erythemal exposure, and separately evaluates outdoor usability. Strict mode fails loudly on missing/unverifiable inputs and labels its degraded Tier-C broadband backend explicitly; no gate-passing Tier-B emulator is wired yet.
 It fetches live Open-Meteo forecasts, full ensemble data, native HRRR sub-hourly radiation, CAMS air-quality data, **direct Copernicus CAMS spectral/ozone forecasts**, NASA POWER historical UVA/UVB, archived Open-Meteo forecasts, and previous runs for lead-time skill calibration.
 
 ### Shipped v5 semantics

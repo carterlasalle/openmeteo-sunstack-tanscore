@@ -505,7 +505,7 @@ def build_30min_forecast(
     # light before sunrise. kt is smooth and dimensionless; the :30 TOA below
     # is solar geometry at the true :30 stamp — a fixed 1361.1 W/m²
     # mean-distance approximation (§5.6), never "exact" — not interpolated.
-    # Backed by HRRR native 15-min truth: daylight MAE 53.8 -> 51.5, median
+    # Backed by native HRRR 15-min forecast comparison: daylight MAE 53.8 -> 51.5, median
     # 16.0 -> 12.1 (n=258 slots).
     if "shortwave_radiation_instant" in h.columns:
         ghi_h = pd.to_numeric(h["shortwave_radiation_instant"], errors="coerce")
