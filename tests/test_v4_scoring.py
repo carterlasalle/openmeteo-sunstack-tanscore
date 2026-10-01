@@ -459,8 +459,8 @@ def test_primitive_with_no_valid_samples_is_unknown():
     solo = integrate_band_dose(
         pd.Series(pd.to_datetime(["2026-06-21T12:00Z", "2026-06-21T13:00Z"], utc=True)),
         pd.Series([0.4, np.nan]))
-    assert solo["dose_j_m2"] == 0.0  # lone finite sample spans zero time
-    assert solo["complete"] is False  # ...but cannot claim a complete window
+    assert pd.isna(solo["dose_j_m2"])  # lone sample over a nonzero window: unknown
+    assert solo["complete"] is False  # ...and cannot claim a complete window
 
 
 def test_doctor_checks_photobiology_resources(tmp_path, capsys):

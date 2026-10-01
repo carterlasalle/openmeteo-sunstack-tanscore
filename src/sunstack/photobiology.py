@@ -253,8 +253,13 @@ def _trapezoidal_dose(
         # No valid samples: the dose is UNKNOWN (NaN), never zero.
         return float("nan"), False, 0.0
     if n_valid == 1:
-        # A lone sample spans zero time (dose 0) but cannot claim a complete
-        # window: coverage is undefined, so mark incomplete with zero coverage.
+        # Contract §17.1: a lone sample over a nonzero requested window is
+        # UNKNOWN (NaN), never numeric zero — one point spans zero time but
+        # cannot claim the window's energy. A zero-duration request (single
+        # stamp) keeps dose 0 with incomplete coverage.
+        span = float(secs_all.max() - secs_all.min()) if len(secs_all) > 1 else 0.0
+        if span > 0:
+            return float("nan"), False, 0.0
         return 0.0, False, 0.0
     secs = _epoch_seconds(t)
     dose = 0.0

@@ -46,10 +46,16 @@ def add_solar_diagnostics(frame: pd.DataFrame, interval_seconds: int = 3600) -> 
 
     out["uv_transmission"] = safe_ratio(uv, uv_clear)
     out["uv_attenuation"] = 1.0 - out["uv_transmission"]
+    # Contract §5.6: terrestrial_radiation is the provider's instantaneous TOA
+    # proxy at the stamp, NOT date-dependent extraterrestrial over the
+    # interval — so this ratio is an approximate clearness proxy, and the
+    # true clear-sky index (GHI / clear-sky GHI) lives in clear_sky_index*.
     out["clearness_index"] = safe_ratio(ghi, toa)
     out["clearness_index_instant"] = safe_ratio(ghi_i, toa_i)
     out["direct_fraction"] = safe_ratio(direct, ghi)
-    out["diffuse_fraction"] = safe_ratio(diffuse, ghi)
+    # True clear-sky index (GHI / modeled clear-sky GHI) — distinct from the
+    # TOA-based clearness proxy above (contract §5.6).
+    out["clear_sky_index"] = safe_ratio(ghi, _num(out, "clear_ghi"))
     out["direct_fraction_instant"] = safe_ratio(direct_i, ghi_i)
     out["diffuse_fraction_instant"] = safe_ratio(diffuse_i, ghi_i)
     out["sunshine_fraction"] = sunshine / float(interval_seconds)
