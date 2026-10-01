@@ -1,0 +1,22 @@
+{
+  "schema_version": "sunstack-output-v5",
+  "temporal_semantics_version": "interval-contract-v1",
+  "photobiology_model_version": "delayed-pigmentation-v2",
+  "tan_score_model_version": "action-spectrum-v2",
+  "action_spectrum_version": "parrish-fda-3630-v1",
+  "spectral_backend_strict": "tierB-libradtran-emulator-v1",
+  "spectral_backend_degraded": "tierC-broadband-proxy-v2",
+  "surface_model_version": "uv-surface-v1",
+  "fusion_version": "calibrated-uvi-fusion-v2",
+  "confidence_version": "calibrated-error-v1",
+  "window_rank_version": "fixed-duration-dose-v2",
+  "deprecated_fields": [
+    "overall_tan_opportunity_0_100",
+    "sun_adjusted_feels_like_f",
+    "sun_window_confidence_0_100",
+    "tierB-clear-sky-v1"
+  ],
+  "deprecated_aliases": {
+    "melanogenic_effective_irradiance_wm2": "delayed_pigmentation_effective_irradiance_horizontal_wm2 (migration alias)"
+  }
+}

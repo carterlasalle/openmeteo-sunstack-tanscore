@@ -599,19 +599,26 @@ def _run_live_inner(
             source_issues + cams_issues + photo_issues + score_issues
             + (final_issues if "final_issues" in dir() else []),
         ),
-        "photobiology_model_version": _PBV,
+        "schema_version": config.SCHEMA_VERSION,
+        "temporal_semantics_version": config.TEMPORAL_SEMANTICS_VERSION,
+        "photobiology_model_version": config.PHOTOBIOLOGY_MODEL_VERSION,
         "tan_score_model_version": config.TAN_SCORE_MODEL_VERSION,
-        "tan_dose_model_version": _TDV,
+        "tan_dose_model_version": config.TAN_SCORE_MODEL_VERSION,
+        "action_spectrum_version": config.ACTION_SPECTRUM_VERSION,
+        "surface_model_version": config.SURFACE_MODEL_VERSION,
+        "confidence_version": config.CONFIDENCE_VERSION,
+        "window_rank_version": config.WINDOW_RANK_VERSION,
         "global_reference_version": config.GLOBAL_MELANOGENIC_REFERENCE_VERSION,
         "global_reference_e_mel_wm2": config.GLOBAL_MELANOGENIC_REFERENCE_WM2,
         "score_semantics": {
             "absolute": "global physical melanogenic intensity (100*E_mel/E_mel_global_ref); not locally normalized",
-            "local": "historical local seasonal percentile (rebuilt with v4 scores)",
-            "atmospheric": "local percentile at similar season and solar elevation",
-            "confidence": "forecast agreement/support (ensemble + inter-model; heuristic 0-100, NOT a calibrated probability; never alters physics)",
-            "atmospheric_note": "atmospheric percentile = relative transmission/conditions vs history, not a direct aerosol measurement",
-            "uvi_note": "Headline UVI is OM-double-weighted fusion (drives SED only); TanScore/TanDose come from the UVA/UVB model, not from UVI",
-            "overall": "weighted geometric merge of the four components, absolute-dominant/capped, then multiplied by outdoor feasibility",
+            "local": "serving-domain historical local seasonal percentile (rebuilt with v5 scores)",
+            "atmospheric": "geometry-conditioned transmission percentile (conditional comparison, not causal isolation)",
+            "confidence": "calibrated reliability from expected error (calibrated-error-v1); higher bins mean lower realized error, never sunnier skies",
+            "strong_sun_probability": "probability of useful sun (ensemble/DNI/GHI/cloud); product quantity, not confidence",
+            "atmospheric_note": "transmission percentile = conditional comparison vs history, not a direct aerosol measurement",
+            "uvi_note": "Headline UVI is plain-median fusion over unique providers (drives SED only); TanScore/TanDose come from the UVA/UVB model, not from UVI",
+            "overall": "LEGACY composite (deprecated product heuristic, absolute-dominant/capped, then outdoor feasibility); ranking uses fixed-duration dose",
             "overall_weights": config.OVERALL_SCORE_WEIGHTS,
             "tandose": "model-defined action-spectrum-weighted cumulative delayed-melanogenesis exposure (melanogenic-effective J/m^2); NOT an internationally standardized dose",
             "sed": "independent erythemal channel: integral(E_ery dt)/100; NEVER positively increases TanScore/Opportunity",
@@ -649,7 +656,7 @@ def _run_live_inner(
     # must update renderer_* only — never forecast_code_sha. See output.py.
     from .ui import build_sha as _build_sha
     summary["forecast_code_sha"] = _build_sha()
-    summary["fusion_version"] = "om-weighted-median-v1"
+    summary["fusion_version"] = config.FUSION_VERSION
     summary["input_manifest"] = {
         "run_dir": str(run_dir),
         "raw_dir": str(raw_dir),
