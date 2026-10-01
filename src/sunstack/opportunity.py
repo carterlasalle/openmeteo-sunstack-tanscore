@@ -10,72 +10,18 @@ import pandas as pd
 import pvlib.location
 
 from . import config
-from .calibrate import absolute_tan_score, num, scol
+from .calibrate import num, scol
 
 LOG = logging.getLogger("sunstack")
 
 
-def _recompute_v4_scores(frame: pd.DataFrame) -> pd.DataFrame:
-    """Recompute E_mel + v4 Absolute (+ erythemal + legacy diagnostic) in place.
+def _num(df: pd.DataFrame, name: str, default=np.nan) -> pd.Series:
+    return num(df, name, default)
 
-    Used after sub-hour broadband corrections. Wavelength-additive Tier-C
-    reconstruction; no sqrt interaction. Never an interpolated spectral value
-    presented as native resolution (callers retain subhour_source).
-    """
-    from .photobiology import (
-        absolute_tan_score_from_melanogenic_irradiance,
-        erythemal_irradiance_from_uvi,
-    )
-    from .spectral import melanogenic_from_broadband
-
-    out = frame
-    if {"predicted_uva_wm2", "predicted_uvb_wm2"}.issubset(out.columns):
-        # No fillna(0): a missing band is UNKNOWN, never zero irradiance. The
-        # broadband helpers preserve NaN, and only genuine night rows are
-        # clamped to zero below — otherwise a missing UVB band would silently
-        # understate E_mel and Absolute.
-        from .spectral import pigment_darkening_from_broadband as _pig_broadband
-
-        uva_arr = pd.to_numeric(out["predicted_uva_wm2"], errors="coerce").to_numpy(dtype=float)
-        uvb_arr = pd.to_numeric(out["predicted_uvb_wm2"], errors="coerce").to_numpy(dtype=float)
-        e_mel = melanogenic_from_broadband(uva_arr, uvb_arr)
-        if "is_day" in out:
-            night = pd.to_numeric(out["is_day"], errors="coerce").fillna(1) == 0
-            e_mel = np.where(night.to_numpy(), 0.0, e_mel)
-        out["melanogenic_effective_irradiance_wm2"] = np.round(e_mel, 5)
-        out["tan_score_absolute_0_100"] = np.round(
-            absolute_tan_score_from_melanogenic_irradiance(
-                e_mel, float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2)
-            ), 1,
-        )
-        out["tan_score_model_version"] = config.TAN_SCORE_MODEL_VERSION
-        # The pigment-darkening channel follows the same corrected bands, or
-        # it would publish doses inconsistent with the corrected radiation.
-        out["pigment_darkening_effective_irradiance"] = np.round(
-            _pig_broadband(uva_arr, uvb_arr), 5)
-    ery_source = "uvi_consensus" if "uvi_consensus" in out else "uv_index"
-    if ery_source in out:
-        out["erythemal_irradiance_wm2"] = np.round(
-            erythemal_irradiance_from_uvi(
-                pd.to_numeric(out[ery_source], errors="coerce").to_numpy(dtype=float)
-            ), 5,
-        )
-    if {"uv_index", "predicted_uva_wm2"}.issubset(out.columns):
-        out["legacy_absolute_tan_score_55_30_15"] = np.round(
-            absolute_tan_score(
-                pd.to_numeric(out["uv_index"], errors="coerce"),
-                pd.to_numeric(out["predicted_uva_wm2"], errors="coerce"),
-            ), 1,
-        )
-    return out
 
 RAIN_CODES = set(range(51, 68)) | {80, 81, 82}
 SNOW_CODES = set(range(71, 78)) | {85, 86}
 THUNDER_CODES = {95, 96, 99}
-
-
-def _num(df: pd.DataFrame, name: str, default=np.nan) -> pd.Series:
-    return num(df, name, default)
 
 
 def _weighted_geometric(row: pd.Series) -> float:
@@ -546,11 +492,19 @@ def build_30min_forecast(
                 changed
             ] * np.sqrt(ratio[changed])
             if "tan_score_absolute_0_100" in out:
-                sub = out.loc[changed].copy()
-                sub = _recompute_v4_scores(sub)
+                # Single-pass derived state (§4): recompute ALL children from
+                # the corrected primitives, never a hand-picked subset.
+                from .state import recompute_derived_state as _recompute
+
+                sub = _recompute(out.loc[changed].copy())
                 for col in ("melanogenic_effective_irradiance_wm2",
                             "tan_score_absolute_0_100", "erythemal_irradiance_wm2",
                             "pigment_darkening_effective_irradiance",
+                            "uvi_consensus", "uvi_consensus_sources",
+                            "uvi_consensus_vote_count", "uvi_source_spread",
+                            "uvi_sunny", "uvi_cloudy",
+                            "uvi_difference_absolute", "uvi_difference_percent",
+                            "fusion_version",
                             "legacy_absolute_tan_score_55_30_15",
                             "tan_score_model_version"):
                     if col in sub:
@@ -677,40 +631,27 @@ def build_30min_forecast(
             if {"uv_index", "predicted_uva_wm2", "tan_score_absolute_0_100"}.issubset(
                 out.columns
             ):
-                sub = out.loc[is_native].copy()
-                sub = _recompute_v4_scores(sub)
+                # Single-pass derived state (§4): the corrected sources feed
+                # ONE recompute of consensus/erythemal/E_mel/disagreement. No
+                # second hand-rolled fusion below may overwrite it.
+                from .state import recompute_derived_state as _recompute_native
+
+                sub = _recompute_native(out.loc[is_native].copy())
                 for col in ("melanogenic_effective_irradiance_wm2",
                             "tan_score_absolute_0_100", "erythemal_irradiance_wm2",
                             "pigment_darkening_effective_irradiance",
+                            "uvi_consensus", "uvi_consensus_sources",
+                            "uvi_consensus_vote_count", "uvi_source_spread",
+                            "uvi_sunny", "uvi_cloudy",
+                            "uvi_difference_absolute", "uvi_difference_percent",
+                            "fusion_version",
                             "legacy_absolute_tan_score_55_30_15",
                             "tan_score_model_version"):
                     if col in sub:
                         out.loc[is_native, col] = sub[col].to_numpy()
-            # Fusion is derived state: recompute it from the corrected
-            # individual sources so headline/range/spread/flags describe the
-            # same state (never interpolate ingredients and statistics
-            # independently). OM keeps its double weight (see tanscore).
-            _vote_cols = ["uv_index", "uv_index", "uvi_cams"]
-            if "uvi_epa" in out.columns:
-                _vote_cols.append("uvi_epa")
-            _vote_cols = [c for c in _vote_cols if c in out.columns]
-            if _vote_cols:
-                _stack = np.vstack([
-                    pd.to_numeric(out[c], errors="coerce").to_numpy(dtype=float)
-                    for c in _vote_cols
-                ])
-                with np.errstate(divide="ignore", invalid="ignore"):
-                    out["uvi_consensus"] = np.round(
-                        np.nanmedian(_stack, axis=0), 3)
-                    out["uvi_source_spread"] = np.round(
-                        np.nanmax(_stack, axis=0) - np.nanmin(_stack, axis=0), 3)
-                    out["uvi_sunny"] = np.round(np.nanmax(_stack, axis=0), 3)
-                    out["uvi_cloudy"] = np.round(np.nanmin(_stack, axis=0), 3)
-                _spread = pd.to_numeric(
-                    out["uvi_source_spread"], errors="coerce").fillna(0)
-                out["uvi_source_disagree"] = (_spread >= 1.0).to_numpy(dtype=bool)
-                out["uvi_consensus_sources"] = np.sum(
-                    np.isfinite(_stack), axis=0).astype(int)
+            _spread = pd.to_numeric(
+                _num(out, "uvi_source_spread"), errors="coerce").fillna(0)
+            out["uvi_source_disagree"] = (_spread >= 1.0).to_numpy(dtype=bool)
     # Local/Atmospheric recompute: Absolute changed under HRRR/kt correction
     # above, but Local/Atmo still percentile the OLD physics (audit: composite
     # of two physical states). Recompute against the calibration reference
@@ -918,14 +859,23 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                 "day_overall_peak_0_100": round(
                     float(best["overall_tan_opportunity_0_100"]), 1
                 ),
+                # Contract §16.5/§27.11: every field named peak is that
+                # field's own maximum, never the value at another metric's
+                # peak. Values AT the opportunity peak ride as *_at_best_*.
                 "day_absolute_peak_0_100": round(
+                    float(_num(daylight, "tan_score_absolute_0_100").max()), 1
+                ),
+                "day_absolute_at_best_usable_30m_0_100": round(
                     float(best.get("tan_score_absolute_0_100", np.nan)), 1
                 ),
                 "day_local_peak_0_100": round(
+                    float(_num(daylight, "local_tan_score_0_100").max()), 1
+                ),
+                "day_local_at_best_usable_30m_0_100": round(
                     float(best.get("local_tan_score_0_100", np.nan)), 1
                 ),
                 "day_atmospheric_peak_0_100": round(
-                    float(best.get("atmospheric_quality_percentile_0_100", np.nan)), 1
+                    float(_num(daylight, "atmospheric_quality_percentile_0_100").max()), 1
                 ),
                 "day_confidence_at_peak_0_100": round(
                     float(best.get("tan_forecast_confidence_0_100", np.nan)), 1
