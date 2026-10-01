@@ -243,14 +243,15 @@ def add_interval_doses(frame: pd.DataFrame) -> pd.DataFrame:
     # NOTE: no fillna(0) anywhere here. A missing input sample is UNKNOWN and
     # must integrate as NaN (loud), never as zero exposure. Only genuinely
     # measured zeros (night rows carry 0.0) integrate as zero.
-
+    # Contract §17.4: rolling SED fills erythemal holes from final consensus
+    # UVI first, raw OM display UVI only where consensus itself is missing.
     work = out.copy()
     work["_e_mel"] = e_mel.to_numpy()
-    work["_ery"] = ery.to_numpy()
+    work["_ery"] = _ery_or_uvi(out, ery).to_numpy()
+    work["sed_uvi_source"] = sed_uvi_source(out, ery).to_numpy()
     work["_uva"] = uva.to_numpy()
     work["_uvb"] = uvb.to_numpy()
     work["_pig"] = pig.to_numpy()
-
     for label, sec in (("15m", 900.0), ("30m", 1800.0), ("1h", 3600.0)):
         out[f"tan_dose_{label}_j_m2"] = _rolling_dose(work, "_e_mel", sec, "", "tandose").to_numpy()
         out[f"sed_{label}"] = _rolling_dose(work, "_ery", sec, "", "sed").to_numpy()
@@ -274,6 +275,7 @@ def add_interval_doses(frame: pd.DataFrame) -> pd.DataFrame:
             out[f"tan_dose_{label}_j_m2"] / ref / 60.0
         ).round(2)
     out["tan_dose_model_version"] = TAN_DOSE_MODEL_VERSION
+    out["sed_uvi_source"] = work["sed_uvi_source"].to_numpy()
     # v5 canonical endpoint names (contract §2.1.B): every emitted tan_dose_*
     # column gets an exact delayed_pigmentation_dose_* twin; old names stay.
     for col in [c for c in out.columns if "tan_dose" in str(c)]:
@@ -288,16 +290,38 @@ def _group_col(group: pd.DataFrame, name: str) -> pd.Series:
 
 
 def _ery_or_uvi(group: pd.DataFrame, ery: pd.Series) -> pd.Series:
-    """Use measured erythemal irradiance; derive from UVI only when absent.
+    """Use erythemal irradiance; derive from final consensus UVI only when absent.
 
-    Data we already have (UVI) must not degrade into missing SED, but a
-    derived value is still marked by its source column, never invented.
+    Contract §17.4: SED uses final `uvi_consensus` first. Raw OM display UVI
+    fills only consensus holes; both-missing stays unknown, never invented.
     """
-    # Rowwise: fill ONLY the holes from UVI (audit: the .any() check kept
-    # null ery where UVI existed). combine_first never invents where both miss.
+    # Rowwise: fill ONLY the holes (audit: the .any() check kept null ery
+    # where UVI existed). combine_first never invents where both miss.
+    filled = ery.copy()
+    if "uvi_consensus" in group.columns:
+        filled = filled.combine_first(num(group, "uvi_consensus") / 40.0)
     if "uv_index" in group.columns:
-        return ery.combine_first(num(group, "uv_index") / 40.0)
-    return ery
+        filled = filled.combine_first(num(group, "uv_index") / 40.0)
+    return filled
+
+
+def sed_uvi_source(group: pd.DataFrame, ery: pd.Series) -> pd.Series:
+    """Per-row SED UVI provenance: final consensus, degraded raw OM, or missing."""
+    src = pd.Series("final", index=ery.index, dtype=object)
+    if "uvi_consensus" in group.columns:
+        cons_missing = num(group, "uvi_consensus").isna().to_numpy()
+    else:
+        cons_missing = np.ones(len(ery), dtype=bool)
+    ery_missing = ery.isna().to_numpy()
+    src[(~ery_missing)] = "final"
+    src[(ery_missing) & (~cons_missing)] = "final"
+    if "uv_index" in group.columns:
+        om_have = num(group, "uv_index").notna().to_numpy()
+        src[(ery_missing) & (cons_missing) & (om_have)] = "degraded_om"
+    src[(ery_missing) & (cons_missing) &
+        ((~num(group, "uv_index").notna().to_numpy())
+         if "uv_index" in group.columns else True)] = "missing"
+    return src
 
 
 def day_totals(frame: pd.DataFrame) -> pd.DataFrame:

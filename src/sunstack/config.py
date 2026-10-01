@@ -302,9 +302,9 @@ _SCORE_SEMANTIC_TEXT = {
         "not a direct aerosol measurement"
     ),
     "uvi_note": (
-        "Headline UVI is plain-median fusion over unique providers "
-        "(drives SED only); TanScore/TanDose come from the UVA/UVB model, "
-        "not from UVI"
+        "Headline UVI is bias-corrected inverse-error weighted fusion over "
+        "unique providers (drives SED only); TanScore/TanDose come from the "
+        "UVA/UVB model, not from UVI"
     ),
     "overall": (
         "LEGACY composite (deprecated product heuristic, "
@@ -422,8 +422,8 @@ HOURLY_VARIABLES = [
     "pressure_msl", "surface_pressure", "visibility", "weather_code",
     "cloud_cover", "cloud_cover_low", "cloud_cover_mid", "cloud_cover_high",
     "precipitation_probability", "precipitation", "rain", "showers", "snowfall",
+    "snow_depth",
     "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m",
-    "uv_index", "uv_index_clear_sky", "sunshine_duration", "is_day",
     "cape", "lifted_index", "convective_inhibition", "freezing_level_height",
     "boundary_layer_height", "total_column_integrated_water_vapour",
     "evapotranspiration", "et0_fao_evapotranspiration", "vapour_pressure_deficit",

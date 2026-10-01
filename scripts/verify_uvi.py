@@ -7,8 +7,7 @@ REFERENCE (not truth: shared provider DNA flatters OM ~0.1-0.2).
 
 Scores per source (OM/CAMS/EPA/consensus) at 1-day lead, 12-2PM EDT:
 MAE, bias, RMSE + per-day breakdown. Fails loudly if consensus regresses
-past OM (the median-must-not-lose-its-best-input invariant).
-
+past OM (the fusion-must-not-lose-to-its-best-input invariant).
 Usage: uv run python scripts/verify_uvi.py [--refetch]
 Writes docs/validation/uvi_verification.md (not committed by CI).
 """

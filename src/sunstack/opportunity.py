@@ -449,9 +449,8 @@ def build_30min_forecast(
         "rain",
         "showers",
         "snowfall",
+        "snow_depth",
         "wind_speed_10m",
-        "wind_gusts_10m",
-        "weather_code",
     )
     numeric = h.select_dtypes(include=[np.number, "bool"]).copy()
     for _col in _SUBHOUR_NUMERIC_COLUMNS:
@@ -641,8 +640,8 @@ def build_30min_forecast(
             "precipitation",
             "rain",
             "snowfall",
+            "snow_depth",
             "weather_code",
-            "wind_speed_10m",
             "wind_gusts_10m",
             "shortwave_radiation",
             "direct_radiation",

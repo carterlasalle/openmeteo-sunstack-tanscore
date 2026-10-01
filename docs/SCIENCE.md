@@ -25,9 +25,8 @@
 
 | # | Question | Answered by | Uses temperature, rain, wind? |
 |---|----------|-------------|-------------------------------|
-| 1 | **How strong is the tanning radiation, physically?** | Environmental TanScore: Absolute (global), Local (seasonal percentile), Atmosphere (geometry-matched percentile) | **No.** By design (`docs/RESEARCH_NOTES.md` §"Outdoor feasibility is not biology"). |
+| 1 | **How strong is the tanning radiation, physically?** | Environmental TanScore: Absolute (global), Local (seasonal percentile), Atmosphere (geometry-matched percentile) | **No direct comfort multiplier.** By design (`docs/RESEARCH_NOTES.md` §"Outdoor feasibility is not biology"). Model caveat: `temp_c`/`rh` are empirical predictors inside the UVA/UVB estimator, so meteorology can indirectly move the radiation estimate. |
 | 2 | **Can I actually use it lying outside right now?** | Outdoor feasibility → Overall opportunity | **Yes** — as usability penalties and hard blocks, never as melanogenesis weights. |
-
 The pipeline answers Q1 first (`tanscore.score_forecast`), then multiplies by usability
 (`opportunity.apply_outdoor_feasibility`). Nothing downstream ever flows backward:
 feasibility cannot change $E_{\mathrm{mel}}$, Absolute, or any dose.
@@ -85,9 +84,8 @@ profiles (RH/cloud/geopotential at 925/850/700/500/300 hPa). Daily aggregates
 **Deep profiles** (`PROFILE_MODELS` × 8 levels 1000→300 hPa × 6 fields) are fetched
 separately so an unsupported pressure field can never break the main request.
 
-**HRRR 15-minute truth** (`hrrr_15min_params`): `ncep_hrrr_conus`,
+**HRRR 15-minute native forecast** (`hrrr_15min_params`): `ncep_hrrr_conus`,
 `forecast_minutely_15 = 72` steps (`SUNSTACK_HRRR_15MIN_STEPS`), radiation + weather
-subset (`config.HRRR_15MIN_VARIABLES`). Native `:00/:30` stamps override interpolation
 (§8); the full 15-min grid enriches hourly UV by inside-only time interpolation with
 explicit `uv_temporal_source = best_match_hourly_time_interpolated` labeling
 (`derive.enrich_15min_with_hourly_uv`).
@@ -255,8 +253,8 @@ positive values through the night.
   Independent, never increases scores.
 - **Pigment-darkening (IPD) channel:** same Tier-C machinery through the
   `ipd_action_spectrum` (UVA-dominant, existing-pigment oxidation/redistribution
-  endpoint) — diagnostic context, including "Visible-Darkening Potential" (day-max
-  30-min IPD dose, ~3× TanDose in practice).
+  endpoint) — diagnostic context only. IPD and TanDose use different
+  normalizations and are never compared as a ratio.
 - **Physical UVA/UVB doses:** broadband energy, diagnostic only.
 - **MMD** (minimal melanogenesis dose): a *measured* subject/source/endpoint
   threshold, never modeled here (§9).
@@ -313,8 +311,9 @@ never a raw provider value or a pre-fusion intermediate.
 ### 4.2 Confidence (`confidence_version = calibrated-error-v1`)
 
 `tan_forecast_confidence_0_100` is calibrated reliability/error context, never
-sun strength and never a multiplier on photons. Source disagreement, coverage,
-and forecast error affect confidence; they do not alter delayed-pigmentation
+sun strength and never a multiplier on photons. Source disagreement and
+forecast error affect confidence; coverage is emitted for transparency only and
+does not move confidence. None alter delayed-pigmentation
 irradiance, SED, or dose. `strong_sun_probability_0_100` remains a separate
 useful-sun probability.
 
@@ -429,9 +428,8 @@ stamps revert to NaN); booleans/codes forward-fill; run-constant metadata
 geometry is recomputed per :30 stamp. Native HRRR values are native HRRR
 **forecast** inputs, not observation truth.
 
-- **Clear-sky-index GHI** (measured quantity only): $kt = \mathrm{GHI}/\mathrm{TOA}$
-  ($\mathrm{TOA} = 1361.1\cos\mathrm{SZA}$, mean-distance approximation) interpolated, then
-  $\mathrm{GHI}_{:30} = kt_{:30}\times\mathrm{TOA}_{:30}$, night-zeroed. Grounded
+- **Clearness-index GHI** (measured quantity only): $kt = \mathrm{GHI}/\mathrm{TOA}$
+  ($\mathrm{TOA}$ date-dependent extraterrestrial horizontal irradiance) interpolated, then
   in 720 native HRRR rows: daylight MAE 53.8→**51.5**, median 16.0→**12.1**,
   low-sun 23.3→20.6; cloud-edge passages (~p90 140) are irreducible to any
   interpolator. Propagated to UV by bounded ratio $r \in [0.7, 1.3]$: UVA × $r$,

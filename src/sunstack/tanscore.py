@@ -191,12 +191,13 @@ def build_live_feature_frame(best: pd.DataFrame, cams_direct: pd.DataFrame | Non
 def _load_bundle(calibration_dir: Path, *, strict: bool = True):
     """Load the UVA/UVB bundle, failing closed on version mismatch.
 
-    A stale pickle (old sklearn, old model version) must never masquerade
-    as the current model: missing manifest, sklearn drift, and model version
-    drift are all fatal in strict mode. Degraded mode (--allow-degraded)
-    keeps the old warn-and-continue behavior for pre-manifest bundles and
-    sklearn drift, but model-version drift still errors (a wrong-model pickle
-    is never acceptable output).
+    A stale pickle (old sklearn, old model version, changed training code)
+    must never masquerade as the current model: missing manifest, sklearn
+    drift, model-version drift, and training-code hash drift are all fatal in
+    strict mode. Degraded mode (--allow-degraded) keeps the old
+    warn-and-continue behavior for pre-manifest bundles, sklearn drift, and
+    training-code drift, but model-version drift still errors (a wrong-model
+    pickle is never acceptable output).
     """
     import logging as _logging
 
@@ -228,6 +229,19 @@ def _load_bundle(calibration_dir: Path, *, strict: bool = True):
             f"UVA/UVB bundle model_version={man.get('model_version')} != "
             f"runtime {config.TAN_SCORE_MODEL_VERSION}: retrain with "
             f"`sunstack bootstrap`.")
+    # Contract §20.2: a recorded-but-uncompared hash is not enforcement.
+    # Recompute the training-code hash and fail strict on mismatch.
+    import hashlib as _hashlib
+    from pathlib import Path as _Path
+
+    _expected_sha = _hashlib.sha256(
+        (_Path(__file__).parent / "calibrate.py").read_bytes()).hexdigest()[:16]
+    if man.get("training_code_sha256") != _expected_sha:
+        msg = (f"UVA/UVB bundle training_code_sha256={man.get('training_code_sha256')} != "
+               f"current {_expected_sha}: retrain with `sunstack bootstrap`.")
+        if strict:
+            raise RuntimeError(f"ERROR bundle: {msg}")
+        _logging.getLogger("sunstack").warning("%s", msg)
     return bundle
 
 
@@ -701,21 +715,19 @@ def score_forecast(
                 _ver.get("tan_score_model_version", "unknown"))
             _model_ok = (_ver.get("tan_score_model_version")
                          == config.TAN_SCORE_MODEL_VERSION)
-            _spec_ok = (_ver.get("action_spectrum_version", None) in
-                        (None, config.ACTION_SPECTRUM_VERSION))
-            _tier_ok = (_ver.get("spectral_backend_version", None) in
-                        (None, config.SPECTRAL_DEGRADED_BACKEND))
-            _temp_ok = (_ver.get("temporal_semantics_version", None) in
-                        (None, config.TEMPORAL_SEMANTICS_VERSION))
-            _refver_ok = (_ver.get("global_reference_version", None) in
-                          (None, config.GLOBAL_MELANOGENIC_REFERENCE_VERSION))
+            # Contract §20.3: missing metadata is stale, not backward-compatible
+            # "okay". Every key must match exactly; absent key = stale file.
+            _spec_ok = (_ver.get("action_spectrum_version")
+                        == config.ACTION_SPECTRUM_VERSION)
+            _tier_ok = (_ver.get("spectral_backend_version")
+                        == config.SPECTRAL_DEGRADED_BACKEND)
+            _temp_ok = (_ver.get("temporal_semantics_version")
+                        == config.TEMPORAL_SEMANTICS_VERSION)
+            _refver_ok = (_ver.get("global_reference_version")
+                          == config.GLOBAL_MELANOGENIC_REFERENCE_VERSION)
             _refval = _ver.get("global_reference_e_mel_wm2", None)
-            _refval_ok = (_refval is None or float(_refval) ==
+            _refval_ok = (_refval is not None and float(_refval) ==
                           float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2))
-            # An env-overridden reference value without a version bump changes
-            # Absolute silently: without a recorded value to compare, a mere
-            # version match is not enough to trust the file. Missing value is
-            # tolerated only for files written before the value was recorded.
             _ref_usable = bool(_model_ok and _spec_ok and _tier_ok and _temp_ok
                                and _refver_ok and _refval_ok)
             out["local_reference_stale"] = not _ref_usable
@@ -732,16 +744,16 @@ def score_forecast(
             _lead_version = str(_lead_manifest.get("tan_score_model_version", "unknown"))
             _lead_model_ok = (_lead_manifest.get("tan_score_model_version")
                               == config.TAN_SCORE_MODEL_VERSION)
-            _lead_spec_ok = (_lead_manifest.get("action_spectrum_version", None) in
-                             (None, config.ACTION_SPECTRUM_VERSION))
-            _lead_tier_ok = (_lead_manifest.get("spectral_backend_version", None) in
-                             (None, config.SPECTRAL_DEGRADED_BACKEND))
-            _lead_temp_ok = (_lead_manifest.get("temporal_semantics_version", None) in
-                             (None, config.TEMPORAL_SEMANTICS_VERSION))
+            _lead_spec_ok = (_lead_manifest.get("action_spectrum_version")
+                             == config.ACTION_SPECTRUM_VERSION)
+            _lead_tier_ok = (_lead_manifest.get("spectral_backend_version")
+                             == config.SPECTRAL_DEGRADED_BACKEND)
+            _lead_temp_ok = (_lead_manifest.get("temporal_semantics_version")
+                             == config.TEMPORAL_SEMANTICS_VERSION)
             _lead_refver_ok = (_lead_manifest.get("global_reference_version")
                                == config.GLOBAL_MELANOGENIC_REFERENCE_VERSION)
             _lead_refval = _lead_manifest.get("global_reference_e_mel_wm2", None)
-            _lead_refval_ok = (_lead_refval is None or float(_lead_refval) ==
+            _lead_refval_ok = (_lead_refval is not None and float(_lead_refval) ==
                                float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2))
             _lead_bands = _lead_manifest.get("bands", [])
             _lead_ok = (_lead_model_ok and _lead_spec_ok and _lead_tier_ok

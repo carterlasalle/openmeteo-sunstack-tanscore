@@ -1,6 +1,7 @@
 {
   "rows": 111761,
   "validation_split_year": 2024,
+  "dropped_constant_features": [],
   "uva": {
     "mae": 0.42540930440997204,
     "rmse": 0.6704849781593735,

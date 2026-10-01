@@ -312,6 +312,9 @@ def _write_legacy_reference(calibration_dir: Path) -> None:
     }).to_parquet(calibration_dir / "local_reference.parquet", index=False)
     _ = (calibration_dir / "local_reference_version.json").write_text(json.dumps({
         "tan_score_model_version": config.TAN_SCORE_MODEL_VERSION,
+        "action_spectrum_version": config.ACTION_SPECTRUM_VERSION,
+        "spectral_backend_version": config.SPECTRAL_DEGRADED_BACKEND,
+        "temporal_semantics_version": config.TEMPORAL_SEMANTICS_VERSION,
         "global_reference_version": config.GLOBAL_MELANOGENIC_REFERENCE_VERSION,
         "global_reference_e_mel_wm2": config.GLOBAL_MELANOGENIC_REFERENCE_WM2,
     }), encoding="utf-8")

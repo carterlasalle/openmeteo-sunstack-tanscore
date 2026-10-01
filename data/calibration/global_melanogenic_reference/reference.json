@@ -2,8 +2,8 @@
   "action_spectrum_name": "parrish_delayed_melanogenesis",
   "action_spectrum_tier": "provisional",
   "atmosphere_source": "provisional Tier-C broadband mapping anchored to NASA POWER UVA/UVB climatology; full libRadtran LUT corpus pending",
-  "build_date": "2026-09-23",
-  "code_git_sha": "356495e",
+  "build_date": "2026-10-01",
+  "code_git_sha": "46318f1",
   "definition": "99.9th percentile of modeled naturally occurring daylight melanogenic-effective irradiance in the reference corpus",
   "global_reference_e_mel_wm2": 1.6,
   "global_reference_version": "global-mel-ref-v1-provisional",
@@ -33,11 +33,11 @@
   "empirical_two_site_grounding": {
     "method": "Tier-C E_mel over pooled daylight training climatology (NASA POWER UVA/UVB, south-bend + pacific-palisades, ghi>10 & sza<90)",
     "distribution": {
-      "p50": 0.271,
-      "p90": 0.998,
-      "p99": 1.403,
-      "p99.9": 1.522,
-      "p100max": 1.6,
+      "p50": 0.222,
+      "p90": 0.871,
+      "p99": 1.242,
+      "p99.9": 1.355,
+      "p100max": 1.429,
       "n": 220717
     },
     "note": "Temperate/subtropical sites only (max UVI ~11-12 in tables); unsampled equatorial/high-altitude extremes justify headroom above the pooled p99.9."
