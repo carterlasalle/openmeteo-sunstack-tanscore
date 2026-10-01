@@ -86,8 +86,9 @@ def test_v4_absolute_is_normalized_emel_with_legacy_diagnostic(tmp_path):
     assert "legacy_absolute_tan_score_55_30_15" in out
     assert not out["legacy_absolute_tan_score_55_30_15"].equals(
         out["tan_score_absolute_0_100"])
+    # Erythemal is the consensus channel (weighted fusion), not raw OM UVI.
     assert (out["erythemal_irradiance_wm2"].to_numpy() ==
-            out["uv_index"].to_numpy() / 40.0).all()
+            out["uvi_consensus"].to_numpy() / 40.0).all()
 
 
 def test_all_direct_cams_fields_propagate(tmp_path):
@@ -108,9 +109,12 @@ def test_all_direct_cams_fields_propagate(tmp_path):
         assert col in out, col
         assert out[col].notna().all(), col
     assert (out["cams_ozone_du"].to_numpy() > 200).all()
-    # Accumulated downward UV differentiates back to a physical irradiance.
-    assert np.allclose(out["cams_downward_surface_uv_wm2"].to_numpy(),
-                       0.25, atol=0.01)
+    # Accumulated downward UV differentiates back to a physical irradiance;
+    # the first interval has no backward difference (contract §5.7) and stays
+    # unknown — never back-filled.
+    dw = out["cams_downward_surface_uv_wm2"].to_numpy()
+    assert bool(np.isnan(dw[0]))
+    assert np.allclose(dw[1:], 0.25, atol=0.01)
 
 
 def test_uvi_disagreement_moves_confidence_not_physics(tmp_path):
@@ -1904,6 +1908,29 @@ def test_cams_features_convert_ozone_and_split_bands():
         "time_utc", "ozone_du", "aod340", "aod380", "cams_forecast_albedo"]
 
 
+def test_cams_accumulated_uv_differences_within_cycles_only():
+    # Contract §5.7: partition by forecast cycle, sort by time, never
+    # difference across cycles, negative increments are unknown (not
+    # zero-clipped), and each cycle's first interval stays unfilled.
+    from sunstack.tanscore import _cams_features
+
+    times = pd.to_datetime(
+        ["2026-06-21 00:00", "2026-06-21 01:00", "2026-06-21 02:00",
+         "2026-06-21 03:00", "2026-06-21 04:00"], utc=True)
+    cams = pd.DataFrame({
+        "time_utc": times,
+        "cams_surface_downward_uv_radiation": [100.0, 3700.0, 200.0, 300.0, 500.0],
+        "cams_cycle": ["a", "a", "a", "b", "b"],
+    })
+    out = _cams_features(cams.iloc[[3, 1, 4, 0, 2]])  # unordered input rows
+    irr = out["cams_downward_surface_uv_wm2"].to_numpy(dtype=float)
+    assert bool(np.isnan(irr[0]))  # 03:00 — first row of cycle b
+    assert abs(irr[1] - 1.0) < 1e-9  # 01:00 — within cycle a
+    assert abs(irr[2] - 200.0 / 3600.0) < 1e-9  # 04:00 — within cycle b
+    assert bool(np.isnan(irr[3]))  # 00:00 — first row of cycle a, unfilled
+    assert bool(np.isnan(irr[4]))  # 02:00 — accumulation reset within cycle a
+
+
 def test_utc_parsing_handles_dst_fold_and_gap(monkeypatch):
     # Wall-clock DST transitions must not shift or collapse the UTC grid:
     # fall-back folds disambiguate by order, spring gaps shift forward.
@@ -2031,11 +2058,13 @@ def _split_frame() -> pd.DataFrame:
 
 
 def test_uvi_consensus_resists_single_bad_source(tmp_path):
-    # Plain median over unique providers: [2.6, 5.6, 5.0] -> 5.0 (the middle
-    # source, not the outlier); spread names the disagreement width; source
-    # count is exact. Matches state.fuse_uvi_unique_count on identical inputs.
+    # Bias-corrected inverse-error weights (OM 0.674 / CAMS 0.142 / EPA 0.184):
+    # [2.6, 5.6, 5.0] -> 0.674*2.71 + 0.142*6.63 + 0.184*5.0 = 3.69 (OM skill
+    # dominates the low outlier, bias correction lifts; no source is trusted
+    # blindly). Spread names the disagreement width; source count is exact.
+    # Matches state.fuse_uvi_unique_count on identical inputs.
     out = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
-    assert np.allclose(out["uvi_consensus"].to_numpy(), [5.0, 5.0])
+    assert np.allclose(out["uvi_consensus"].to_numpy(), [3.69, 3.352], atol=0.01)
     assert (out["uvi_consensus_sources"].to_numpy() == 3).all()
     assert np.allclose(out["uvi_source_spread"].to_numpy(), [3.0, 3.46])
     assert np.allclose(out["uvi_sunny"].to_numpy(), [5.6, 5.56])
@@ -2046,19 +2075,20 @@ def test_sed_integrates_consensus_not_raw_om(tmp_path):
     # SED's erythemal input is consensus-derived: a bad OM UVI must not drag
     # the erythemal channel down while the other sources agree.
     out = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
-    assert np.allclose(out["erythemal_irradiance_wm2"].to_numpy(), [0.125, 0.125])
+    assert np.allclose(out["erythemal_irradiance_wm2"].to_numpy(), [0.09215, 0.08358], atol=1e-4)
 
 
 def test_consensus_degrades_with_missing_sources(tmp_path):
-    # Source-less rows degrade to the plain median of what remains: the
-    # midpoint of two sources, OM itself when lone. NaN never zero.
+    # Source-less rows reweight what remains: OM/CAMS-only rows trust OM
+    # (0.827/0.173) after bias correction; OM itself when lone. NaN never zero.
     two = _split_frame().drop(columns=["uvi_epa"])
     out = score_forecast(two, Path(tmp_path), None, _confidence())
-    assert np.allclose(out["uvi_consensus"].to_numpy(), [4.1, 3.83], atol=0.01)
+    assert np.allclose(out["uvi_consensus"].to_numpy(), [3.39, 2.97], atol=0.01)
     assert (out["uvi_consensus_sources"].to_numpy() == 2).all()
     one = _best_air().iloc[:1].copy()
     solo = score_forecast(one, Path(tmp_path), None, _confidence())
-    assert np.allclose(solo["uvi_consensus"].to_numpy(), solo["uv_index"].to_numpy())
+    # Lone OM row: bias-corrected OM input (OM bias -0.11 reads low, +0.11).
+    assert np.allclose(solo["uvi_consensus"].to_numpy(), solo["uvi_openmeteo"].to_numpy() + 0.11)
 
 
 def test_daily_peak_uv_uses_consensus(tmp_path):
@@ -2070,8 +2100,9 @@ def test_daily_peak_uv_uses_consensus(tmp_path):
     scored = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
     half = build_30min_forecast(scored, None)
     daily = build_daily_summary(half)
+    # Daily peak rounds the consensus max to 2dp for the day card.
     assert np.allclose(daily["peak_uv_index"].to_numpy(),
-                       [half["uvi_consensus"].max()])
+                       [round(float(half["uvi_consensus"].max()), 2)])
 
 
 def test_epa_normalizers_parse_live_shape():

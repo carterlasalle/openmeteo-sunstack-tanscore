@@ -278,8 +278,12 @@ def train_uv_models(training: pd.DataFrame, calibration_dir: Path) -> dict:
         "training_code_sha256": _hashlib.sha256(_train_src).hexdigest()[:16],
         "sklearn_version": _sk_ver,
         "trained_at": datetime.now(UTC).isoformat(),
+        # Feature contract the scorer reads for model_feature_coverage_fraction
+        # (v5 contract §11.4): the post-drop feature list, not MODEL_FEATURES.
+        "features": list(kept),
         "feature_schema": sorted(kept),
         "metrics": {k: v for k, v in report.items() if k in ("uva", "uvb")},
+        "dropped_constant_features": list(dropped),
     }
     joblib.dump(bundle, calibration_dir / "uva_uvb_models.joblib")
     (calibration_dir / "model_metrics.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -473,7 +477,13 @@ def estimate_expected_uvi_error(
     source_term = np.where(sources >= 3, 0.0, np.where(sources == 2, 0.25, 0.60))
     low_sun_term = np.where(sza > 65, 0.30, 0.0)
     cloud_term = 0.002 * np.abs(cloud - 50.0)
-    expected = base + spread_term + source_term + low_sun_term + cloud_term
+    # EPA UVI is an integer product (contract §10.3): its straight average
+    # already sits up to half a UVI off the continuous scale. A +0.5
+    # quantization term prices that rounding into every row EPA feeds.
+    epa_present = num(out, "uvi_epa").notna()
+    assert isinstance(epa_present, pd.Series)
+    epa_term = 0.5 * epa_present.to_numpy(dtype=float)
+    expected = base + spread_term + source_term + low_sun_term + cloud_term + epa_term
     expected = np.clip(expected, 0.2, 4.0)
     out["uvi_expected_abs_error"] = np.round(expected, 3)
     cons = num(out, "uvi_consensus").to_numpy(dtype=float)

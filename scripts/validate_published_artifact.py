@@ -3,9 +3,11 @@
 Reads data.json outputs AS CONSUMERS SEE THEM and independently recomputes
 invariants. ``validation_issues=[]`` may only be emitted after this serialized
 check passes. Fatal checks: schema/versions present, spectrum checksum,
-unique UVI counts, consensus within range, E_ery equals UVI/40, SED
-recomputation, night-UV bound, true peaks, feasibility missingness honesty,
-source-count bounds, surface invariance, row/summary version agreement.
+model/reference manifest compatibility, unique UVI counts, consensus within
+range, E_ery equals UVI/40, SED recomputation, delayed-pigmentation dose
+recomputation, night-UV bound, true peaks, at_best interval provenance,
+feasibility missingness honesty, source-count bounds, surface invariance,
+no deprecated ranking key, row/summary version agreement.
 """
 
 from __future__ import annotations
@@ -17,19 +19,39 @@ from pathlib import Path
 from typing import TypedDict, cast
 
 FATAL_CHECKS = [
+    # Contract §22 fatal checks; numbered as in the contract. Items 13, 16,
+    # 19, 20 (confidence contract, static Fit denominator, stale-reference and
+    # pre-manifest gates) have no serialized signal yet and stay unlisted
+    # rather than pass vacuously.
     "schema_version_present",
     "action_spectrum_checksum",
+    "manifests_compatible",
     "unique_uvi_source_count",
     "uvi_consensus_within_range",
     "ery_equals_uvi_over_40",
     "sed_recomputes",
+    "dp_dose_recomputes",
     "no_finite_night_uv",
     "peaks_are_true_maxima",
+    "at_best_from_window",
     "feasibility_missingness_honest",
     "source_counts_bounded",
     "surface_local_mode_invariant",
+    "no_deprecated_ranking_key",
     "row_summary_version_agreement",
 ]
+
+# Fields whose name says "value at the selected best window/time": each must
+# equal its source column on the row the daily row selects (best_30m_start),
+# never another metric's peak. (source columns, absolute tolerance)
+_AT_BEST_FIELDS: dict[str, tuple[tuple[str, ...], float]] = {
+    "day_absolute_at_best_usable_30m_0_100": (("tan_score_absolute_0_100",), 0.15),
+    "day_local_at_best_usable_30m_0_100": (("local_tan_score_0_100",), 0.15),
+    "day_confidence_at_peak_0_100": (("tan_forecast_confidence_0_100",), 0.15),
+    "uvi_at_best": (("uvi_consensus", "uv_index"), 0.06),
+    "temperature_at_best_f": (("temperature_2m",), 0.11),
+    "precip_at_best_pct": (("precipitation_probability",), 0.11),
+}
 
 
 class ArtifactDoc(TypedDict):
@@ -67,6 +89,21 @@ def _rows_of(items: list[object]) -> list[dict[str, object]]:
     return out
 
 
+def _twin_mismatch(alias: object, twin: object) -> bool:
+    """True when both names are published and disagree (canonical twin rule).
+
+    The v5 canonical names are exact copies of the legacy columns; a build
+    that publishes only the legacy name is accepted (migration window).
+    """
+    if alias is None or twin is None:
+        return False
+    if isinstance(alias, bool) or isinstance(twin, bool):
+        return bool(alias) != bool(twin)
+    if _is_finite(alias) and _is_finite(twin):
+        return abs(_num(alias) - _num(twin)) > 1e-9
+    return str(alias) != str(twin)
+
+
 def validate_artifact(data_path: Path) -> dict[str, object]:
     """Validate a serialized data.json artifact. Returns failures by check."""
     from itertools import pairwise
@@ -101,6 +138,63 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
     except (ImportError, OSError, ValueError) as exc:
         failures["action_spectrum_checksum"].append(str(exc))
 
+    # §22.3 model/reference manifests compatible: the published identity block
+    # must agree with itself (summary vs score_semantics vs daily rows) and
+    # with the shipped reference manifests on disk. Unreadable/absent shipped
+    # manifests are skipped (a consumer cannot be shown a claim we never made).
+    semantic_raw = summary.get("score_semantics")
+    semantic_block = (cast(dict[str, object], semantic_raw)
+                      if isinstance(semantic_raw, dict) else None)
+    if semantic_block is not None:
+        for key in ("tan_score_model_version", "photobiology_model_version",
+                    "action_spectrum_version", "fusion_version",
+                    "confidence_version", "window_rank_version",
+                    "global_reference_version"):
+            if (key in summary and key in semantic_block
+                    and summary[key] != semantic_block[key]):
+                failures["manifests_compatible"].append(
+                    f"summary {key} != score_semantics {key}")
+        backend = summary.get("spectral_backend")
+        strict_backend = semantic_block.get("spectral_backend_strict")
+        degraded_backend = semantic_block.get("spectral_backend_degraded")
+        if (isinstance(backend, str) and isinstance(strict_backend, str)
+                and isinstance(degraded_backend, str)
+                and backend not in (strict_backend, degraded_backend)):
+            failures["manifests_compatible"].append(
+                f"spectral_backend {backend} not declared in score_semantics")
+    try:
+        ref_path = Path("data/calibration/global_melanogenic_reference/reference.json")
+        ref_version: object = None
+        if ref_path.exists():
+            ref = cast(dict[str, object],
+                       json.loads(ref_path.read_text(encoding="utf-8")))
+            ref_version = ref.get("global_reference_version")
+            for key in ("global_reference_version", "global_reference_e_mel_wm2"):
+                if key not in ref or key not in summary:
+                    continue
+                if key == "global_reference_e_mel_wm2" and _is_finite(ref[key]) and _is_finite(summary[key]):
+                    if abs(_num(ref[key]) - _num(summary[key])) > 1e-9:
+                        failures["manifests_compatible"].append(
+                            f"summary {key} != shipped reference manifest")
+                elif ref[key] != summary[key]:
+                    failures["manifests_compatible"].append(
+                        f"summary {key} != shipped reference manifest")
+        local_path = Path("data/calibration/local_reference_version.json")
+        if local_path.exists():
+            local = cast(dict[str, object],
+                         json.loads(local_path.read_text(encoding="utf-8")))
+            for key in ("tan_score_model_version", "global_reference_version"):
+                if key in local and key in summary and local[key] != summary[key]:
+                    failures["manifests_compatible"].append(
+                        f"summary {key} != local reference manifest")
+            if (ref_version is not None
+                    and "global_reference_version" in local
+                    and local["global_reference_version"] != ref_version):
+                failures["manifests_compatible"].append(
+                    "local reference manifest != global reference manifest")
+    except (OSError, ValueError) as exc:
+        failures["manifests_compatible"].append(str(exc))
+
     rows = _rows_of(hourly if hourly else half)
     for row in rows:
         stamp = row.get("time")
@@ -132,6 +226,19 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
 
     day_rows = _rows_of(daily)
     half_rows = _rows_of(half)
+    # §22.17 setup: the artifact declares its own deprecated names; ranking
+    # keys must not name one of them (or a column that is not published).
+    deprecated_names: set[str] = set()
+    declared_deprecated = summary.get("deprecated_fields")
+    if isinstance(declared_deprecated, list):
+        deprecated_names.update(str(x) for x in cast(list[object], declared_deprecated))
+    declared_aliases = summary.get("deprecated_aliases")
+    if isinstance(declared_aliases, dict):
+        deprecated_names.update(
+            str(k) for k in cast(dict[object, object], declared_aliases))
+    emitted_columns: set[str] = set()
+    for r in (half_rows or rows):
+        emitted_columns.update(str(k) for k in r)
     for day in day_rows:
         date = str(day.get("date", ""))
         # Peaks are built from the 30-min daylight frame (build_daily_summary
@@ -146,6 +253,35 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
             colmax = max((_num(r.get(src_col)) for r in scoped_pool if _is_finite(r.get(src_col))), default=float("nan"))
             if _is_finite(day.get(peak_col)) and _is_finite(colmax) and abs(_num(day[peak_col]) - colmax) > 0.15:
                 failures["peaks_are_true_maxima"].append(f"{day.get('date')}: {peak_col} != max")
+        # §16.5/§27.11: every *_at_best* field carries the value of the
+        # interval the daily row selects (best_30m_start), never another
+        # metric's peak.
+        sel_stamp = str(day.get("best_30m_start") or "")[:16]
+        sel_row = next((r for r in scoped_pool
+                        if str(r.get("time", ""))[:16] == sel_stamp), None)
+        if sel_row is not None:
+            for day_col, (src_cols, tol) in _AT_BEST_FIELDS.items():
+                if day_col not in day:
+                    continue
+                src = next((sel_row.get(c) for c in src_cols
+                            if _is_finite(sel_row.get(c))), None)
+                if not _is_finite(day.get(day_col)) or not _is_finite(src):
+                    continue
+                if abs(_num(day[day_col]) - _num(src)) > tol:
+                    failures["at_best_from_window"].append(
+                        f"{date}: {day_col} != value at {sel_stamp}")
+        # §22.17: no deprecated v4 column may serve as the v5 ranking key.
+        # A ranking declaration the artifact publishes must name a live,
+        # non-deprecated column.
+        for key, value in day.items():
+            if "rank" not in key or not isinstance(value, str):
+                continue
+            if value in deprecated_names:
+                failures["no_deprecated_ranking_key"].append(
+                    f"{date}: {key} names deprecated column {value}")
+            elif key.endswith("_rank_key") and value not in emitted_columns:
+                failures["no_deprecated_ranking_key"].append(
+                    f"{date}: {key} names unemitted column {value}")
 
     # SED recompute: consecutive 30-min rows with finite erythemal must match
     # the emitted trailing sed_30m within tolerance (pure-python trapezoid,
@@ -167,12 +303,14 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
                 continue
         parsed.sort(key=lambda p: p[0])
         checked = 0
-        for (t0, e0, s0), (t1, e1, s1) in pairwise(parsed):
+        for (t0, e0, _), (t1, e1, s1) in pairwise(parsed):
             dt = (t1 - t0).total_seconds()
             if abs(dt - 1800.0) > 60.0:
                 continue
             expected = 0.5 * (e0 + e1) * dt / 100.0
-            emitted = next((r.get("sed_30m") for r in rows if r.get("time") in (s0, s1)), None)
+            # Trailing doses END at their row stamp: the [t0, t1] leg lives on
+            # the row at t1 (the t0 row's value covers [t0-30m, t0]).
+            emitted = next((r.get("sed_30m") for r in rows if r.get("time") == s1), None)
             if _is_finite(emitted):
                 checked += 1
                 if abs(_num(emitted) - expected) > max(0.05, 0.05 * abs(expected)):
@@ -183,6 +321,99 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
                 failures["sed_recomputes"].append("SED recomputation non-finite")
     except (ValueError, TypeError) as exc:
         failures["sed_recomputes"].append(str(exc))
+
+    # §22.8 delayed-pigmentation dose independently recomputes: trapezoid over
+    # the published irradiance series (trailing 30-min legs), plus the day and
+    # window totals that must fall out of those same rows. Canonical twins are
+    # verified whenever a build emits them (legacy-only artifacts are accepted
+    # during the migration window).
+    try:
+        dp_rows = half_rows or rows
+        dp_pts: list[tuple[datetime, float, dict[str, object]]] = []
+        for r in dp_rows:
+            t = r.get("time")
+            e = r.get("delayed_pigmentation_effective_irradiance_horizontal_wm2")
+            if not _is_finite(e):
+                e = r.get("melanogenic_effective_irradiance_wm2")
+            if not isinstance(t, str) or not _is_finite(e):
+                continue
+            try:
+                dp_pts.append((datetime.fromisoformat(t), _num(e), r))
+            except ValueError:
+                continue
+        dp_pts.sort(key=lambda p: p[0])
+
+        def _window_integral(start: datetime, end: datetime) -> float:
+            total = 0.0
+            for (t0, leg0, _), (t1, leg1, _) in pairwise(dp_pts):
+                dt = (t1 - t0).total_seconds()
+                # Same gap rule as the pipeline; published window stamps bound
+                # real samples, so legs are always fully inside or outside.
+                if dt > 3600.0 or t0 < start or t1 > end:
+                    continue
+                total += 0.5 * (leg0 + leg1) * dt
+            return total
+
+        for (t0, leg0, _), (t1, leg1, r1) in pairwise(dp_pts):
+            dt = (t1 - t0).total_seconds()
+            if abs(dt - 1800.0) > 60.0:
+                continue
+            expected = 0.5 * (leg0 + leg1) * dt
+            emitted = r1.get("delayed_pigmentation_dose_30m_j_m2",
+                             r1.get("tan_dose_30m_j_m2"))
+            if _is_finite(emitted) and abs(_num(emitted) - expected) > max(0.05, 0.05 * abs(expected)):
+                failures["dp_dose_recomputes"].append(f"{t1}: 30m dose mismatch")
+            for alias, twin in (("tan_dose_30m_j_m2", "delayed_pigmentation_dose_30m_j_m2"),
+                                ("tan_dose_30m_complete", "delayed_pigmentation_dose_30m_complete"),
+                                ("tan_dose_30m_coverage_fraction",
+                                 "delayed_pigmentation_dose_30m_coverage_fraction")):
+                if _twin_mismatch(r1.get(alias), r1.get(twin)):
+                    failures["dp_dose_recomputes"].append(f"{t1}: {twin} != {alias}")
+        for day in _rows_of(daily):
+            stamp = str(day.get("date", ""))
+            day_pts = [p for p in dp_pts if p[0].date().isoformat() == stamp]
+            if day_pts:
+                expected_day = _window_integral(day_pts[0][0], day_pts[-1][0])
+                emitted_day = day.get("delayed_pigmentation_dose_day_j_m2",
+                                      day.get("tan_dose_day_j_m2"))
+                if _is_finite(emitted_day) and abs(_num(emitted_day) - expected_day) > max(0.5, 0.05 * abs(expected_day)):
+                    failures["dp_dose_recomputes"].append(f"{stamp}: day dose mismatch")
+            for alias, twin in (("tan_dose_day_j_m2", "delayed_pigmentation_dose_day_j_m2"),
+                                ("tan_dose_complete", "delayed_pigmentation_dose_complete"),
+                                ("tan_dose_coverage_fraction",
+                                 "delayed_pigmentation_dose_coverage_fraction"),
+                                ("tan_dose_best_window_j_m2",
+                                 "delayed_pigmentation_dose_best_window_j_m2"),
+                                ("tan_dose_best_window_complete",
+                                 "delayed_pigmentation_dose_best_window_complete"),
+                                ("tan_dose_best_window_coverage_fraction",
+                                 "delayed_pigmentation_dose_best_window_coverage_fraction")):
+                if _twin_mismatch(day.get(alias), day.get(twin)):
+                    failures["dp_dose_recomputes"].append(f"{stamp}: {twin} != {alias}")
+            for start_col, end_col, dose_col, twin_name in (
+                ("best_usable_30m_start", "best_usable_30m_end",
+                 "best_usable_30m_dose_j_m2", None),
+                ("best_window_start", "best_window_end", "tan_dose_best_window_j_m2",
+                 "delayed_pigmentation_dose_best_window_j_m2"),
+            ):
+                start, end = day.get(start_col), day.get(end_col)
+                if not (isinstance(start, str) and isinstance(end, str)):
+                    continue
+                dose = day.get(dose_col)
+                if twin_name is not None and day.get(twin_name) is not None:
+                    dose = day[twin_name]
+                if not _is_finite(dose):
+                    continue
+                try:
+                    expected = _window_integral(datetime.fromisoformat(start),
+                                                datetime.fromisoformat(end))
+                except ValueError:
+                    continue
+                if abs(_num(dose) - expected) > max(0.5, 0.05 * abs(expected)):
+                    failures["dp_dose_recomputes"].append(
+                        f"{stamp}: {dose_col} does not recompute over {start_col}")
+    except (ValueError, TypeError) as exc:
+        failures["dp_dose_recomputes"].append(str(exc))
 
     for r in rows:
         if "surface_material_slug" in r and "melanogenic_effective_irradiance_wm2" not in r:

@@ -45,26 +45,56 @@ def _stack_sources(frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndar
     return om, cams, epa
 
 
-def fuse_uvi_unique_count(frame: pd.DataFrame) -> pd.DataFrame:
-    """Final UVI fusion: plain NaN-tolerant median plus UNIQUE provider count.
+_SOURCE_BIAS = (-0.11, -1.03, 0.0)  # UVI verification file, 1-day lead (OM, CAMS, EPA)
+_SOURCE_MAE = (0.48, 1.14, 1.0)  # OM, CAMS verified; EPA default (n=0)
+_FUSION_WEIGHT_CAP = 0.6  # max single-source share: no false certainty
+# Fixed skill shares from the verification MAEs: 1/MAE^2 normalized, then
+# the dominant share clipped at 0.6 (false-certainty guard) with the clipped
+# slack redistributed to the uncapped sources. Per-row weights restrict these
+# shares to finite sources and renormalize.
+_RAW = np.array([1.0 / m**2 for m in _SOURCE_MAE])
+_FIXED_SHARES = np.clip(_RAW / _RAW.sum(), 0.0, _FUSION_WEIGHT_CAP)
+_FIXED_SHARES = _FIXED_SHARES / _FIXED_SHARES.sum()
 
-    The old OMx2 vote median had non-obvious behavior ([0,2,6,6] gives 4, not
-    an OM tie-break to 6). v5 headline fusion is the ordinary median over
-    finite sources; ``uvi_consensus_sources`` counts unique providers
-    (OM/CAMS/EPA present), never weighted votes. The legacy vote count rides
-    along as ``uvi_consensus_vote_count`` for migration diagnostics.
+
+def _source_weights(finite: np.ndarray) -> np.ndarray:
+    # A source-free row keeps NaN weights, hence NaN consensus (never zero).
+    weights = np.where(finite, np.asarray(_FIXED_SHARES)[:, None], np.nan)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return weights / np.nansum(weights, axis=0)
+
+
+def fuse_uvi_unique_count(frame: pd.DataFrame) -> pd.DataFrame:
+    """Final UVI fusion: bias-corrected inverse-error weights + count.
+
+    Skill weights come from the UVI verification file, not the code: OM bias
+    -0.11 MAE 0.48, CAMS bias -1.03 MAE 1.14 (1-day lead), EPA bias 0 MAE 1.0
+    (default: zero scored rows). Consensus is the weighted mean of
+    bias-corrected sources (value minus bias) with weights 1/MAE^2 normalized,
+    each share capped at 0.6 (false-certainty guard) and renormalized over
+    the sources finite in each row. ``uvi_consensus_sources`` counts unique
+    providers (OM/CAMS/EPA present),
+    never weighted votes. The legacy vote count rides along as
+    ``uvi_consensus_vote_count`` for migration diagnostics.
     """
     out = frame.copy()
     om, cams, epa = _stack_sources(out)
     stacked = np.vstack([om, cams, epa])
+    weights = _source_weights(np.isfinite(stacked))
     with np.errstate(divide="ignore", invalid="ignore"):
-        out["uvi_consensus"] = np.round(np.nanmedian(stacked, axis=0), 3)
+        corrected = stacked - np.asarray(_SOURCE_BIAS)[:, None]
+        consensus = np.nansum(corrected * weights, axis=0)
         finite = np.isfinite(stacked)
+        # Source-free rows emit NaN consensus, never a zero masquerading as
+        # clean air; downstream SED integrates them as gaps, not zeros.
+        out["uvi_consensus"] = np.round(np.where(finite.any(axis=0), consensus, np.nan), 3)
         out["uvi_consensus_sources"] = np.asarray(finite.sum(axis=0), dtype=int)
         # Legacy OMx2 vote count, migration diagnostic only.
         vote_arr: np.ndarray = np.asarray(
             2 * finite[0].astype(int) + finite[1].astype(int) + finite[2].astype(int))
         out["uvi_consensus_vote_count"] = np.asarray(vote_arr, dtype=int)
+        out["uvi_source_values"] = [tuple(np.round(row, 3)) for row in stacked.T]
+        out["uvi_source_weights"] = [tuple(np.round(row, 3)) for row in weights.T]
         spread = np.nanmax(stacked, axis=0) - np.nanmin(stacked, axis=0)
         out["uvi_source_spread"] = np.round(spread, 3)
         out["uvi_sunny"] = np.round(np.nanmax(stacked, axis=0), 3)

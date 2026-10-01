@@ -283,12 +283,14 @@ used by **both** training and serving — a 58/120 $\mathrm{W\,m^{-2}}$
 median/p90 train/serve clear-sky seam was found and killed (cost: UVA MAE
 0.324→0.327, negligible against live consistency).
 
-**Skill (as recorded, not as marketing):** mapping on POWER inputs UVA MAE ~0.30
+**Skill (as recorded, not as marketing):** POWER-product emulation MAE ~0.30
 daylight (held-out R² 0.9989 / UVB 0.9894; trees earn most on UVB, 4× over
 linear); NWP-fed (38k archived-forecast hours) UVA MAE ~5.8, bias +2.1 — inputs
 run ~20% brighter, the converter is faithful. Independent BSRN Payerne: +42%
-bias root-caused to **instrument scale** (CERES clear-sky UVA/GHI 5.02% vs station
-3.5%), no model change. Per-row calibration tier stamps CAMS presence honestly:
+bias plausibly explained by instrument/definition mismatch; unresolved as
+independent absolute validation (CERES clear-sky UVA/GHI 5.02% vs station
+3.5% is a hypothesis, not a reproduced root cause), no model change. Per-row
+calibration tier stamps CAMS presence honestly:
 `nasa_power_ml_plus_cams_spectral` vs `nasa_power_ml`. Bundle manifest binds
 pickle ↔ training-code SHA ↔ sklearn version (drift warns; model-version drift
 errors); predictions reindex to the bundle's feature list and clip at 0.
@@ -299,8 +301,11 @@ errors); predictions reindex to the bundle's feature list and clip at 0.
 
 ### 4.1 Calibrated UVI fusion (`fusion_version = calibrated-uvi-fusion-v2`)
 
-`uvi_consensus` is finalized only after the contributing source values and
-sub-hour corrections are final; source counts identify unique providers, not
+`uvi_consensus` is the bias-corrected inverse-error weighted mean over unique
+providers (OM bias −0.11 MAE 0.48, CAMS bias −1.03 MAE 1.14 at 1-day lead,
+EPA bias 0 MAE 1.0 default unscored; weights 1/MAE² capped at 0.6 share,
+renormalized over finite sources; per-row `uvi_source_weights` and
+`uvi_source_values` emitted). Source counts identify unique providers, not
 weighted votes. `erythemal_irradiance_wm2 = uvi_consensus / 40` is then derived
 from that final consensus. SED integrates this final-consensus erythemal field,
 never a raw provider value or a pre-fusion intermediate.
@@ -425,7 +430,7 @@ geometry is recomputed per :30 stamp. Native HRRR values are native HRRR
 **forecast** inputs, not observation truth.
 
 - **Clear-sky-index GHI** (measured quantity only): $kt = \mathrm{GHI}/\mathrm{TOA}$
-  ($\mathrm{TOA} = 1361.1\cos\mathrm{SZA}$, exact astronomy) interpolated, then
+  ($\mathrm{TOA} = 1361.1\cos\mathrm{SZA}$, mean-distance approximation) interpolated, then
   $\mathrm{GHI}_{:30} = kt_{:30}\times\mathrm{TOA}_{:30}$, night-zeroed. Grounded
   in 720 native HRRR rows: daylight MAE 53.8→**51.5**, median 16.0→**12.1**,
   low-sun 23.3→20.6; cloud-edge passages (~p90 140) are irreducible to any
@@ -538,11 +543,13 @@ and `--skin-azimuth-deg`. Persisted runs and static exports retain
   1-day lead): OM 0.49/−0.11/0.78, CAMS 1.22/−1.12/1.42, consensus 0.66/−0.58
   (MAE/bias/RMSE) — the OM×2 fusion vote, quantified. Rolling verifier:
   `scripts/verify_uvi.py`.
-- **Estimator:** POWER holdout UVA R² 0.9989 / UVB 0.9894, stratified by
-  SZA/cloud/season/AOD/ozone (`docs/validation/external_validation.md`);
-  NWP-fed MAE ~5.8 explained by +20% input brightness (BSRN corroboration
-  +29%/+48 $\mathrm{W\,m^{-2}}$); Payerne +42% attributed to biometer-vs-integral
-  scale (CERES 5.02% vs station 3.5%), model unchanged.
+- **Estimator:** POWER-product emulation (POWER holdout UVA R² 0.9989 / UVB 0.9894),
+  stratified by SZA/cloud/season/AOD/ozone
+  (`docs/validation/external_validation.md`); NWP-fed MAE ~5.8 explained by +20%
+  input brightness (BSRN corroboration +29%/+48 $\mathrm{W\,m^{-2}}$); Payerne +42%
+  plausibly explained by instrument/definition mismatch; unresolved as independent
+  absolute validation (CERES 5.02% vs station 3.5% is a hypothesis, not a reproduced
+  root cause), model unchanged.
 - **Literature gates** (`scripts/check_literature.py` → 6/6 PASS): Parrish
   UVB/UVA effectiveness 1247×, Keong photoaddition exact, erythema/melanogenesis
   spectral crossing 1.44× @300 nm vs 3.11× @340 nm, IPD UVA-dominant/UVB-silent,

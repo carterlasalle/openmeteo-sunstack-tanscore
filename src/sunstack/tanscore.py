@@ -10,6 +10,7 @@ import pandas as pd
 
 from . import config
 from .calibrate import MODEL_FEATURES, absolute_tan_score, num, scol, solar_features
+from .temporal import cams_accumulation_to_interval_means
 
 
 def _find_col(df: pd.DataFrame, tokens: tuple[str, ...], excludes: tuple[str, ...] = ()) -> str | None:
@@ -103,17 +104,18 @@ def _cams_features(cams: pd.DataFrame | None) -> pd.DataFrame:
         down_acc = grab(("downward_uv",))
     out["cams_downward_uv_accumulated_j_m2"] = down_acc
     try:
-        tsec = pd.to_datetime(cams["time_utc"], utc=True).map(lambda x: x.timestamp())
-        dvals = pd.to_numeric(down_acc, errors="coerce").to_numpy(dtype=float)
-        irr = np.full_like(dvals, np.nan, dtype=float)
-        dt = np.diff(np.asarray(tsec, dtype=float))
-        dv = np.diff(dvals)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            rate = np.where(dt > 0, dv / dt, np.nan)
-        irr[1:] = np.clip(rate, 0, None)
-        # First stamp has no backward difference; forward-fill from next if day.
-        if len(irr) > 1 and not np.isfinite(irr[0]) and np.isfinite(irr[1]):
-            irr[0] = irr[1]
+        # Contract §5.7: partition by forecast cycle before differencing. The
+        # helper sorts by time, never crosses cycles, maps resets/negatives to
+        # NaN, and leaves each cycle's unknown first interval NaN (no back-fill).
+        times = pd.to_datetime(cams["time_utc"], utc=True)
+        cycles = cams["cams_cycle"] if "cams_cycle" in cams else np.full(len(cams), "whole-frame")
+        diffs = cams_accumulation_to_interval_means(times, down_acc, cycles)
+        irr = np.full(len(cams), np.nan, dtype=float)
+        # Helper rows follow its internal stable time sort; scatter back.
+        order = np.argsort(
+            times.map(lambda x: x.timestamp()).to_numpy(dtype=float), kind="stable"
+        )
+        irr[order] = diffs["interval_mean_wm2"].to_numpy(dtype=float)
         out["cams_downward_surface_uv_wm2"] = irr
     except (TypeError, ValueError):
         out["cams_downward_surface_uv_wm2"] = np.nan
@@ -477,22 +479,41 @@ def score_forecast(
 
         require_canonical_spectrum(_STEM)
     _spec, global_ref, spectrum_tier = _require_photobiology_or_fail()
-
     uva, uvb, tier = predict_uva_uvb(features, calibration_dir)
     out = features.copy()
-    # Feature coverage 0-15: confidence degrades when atmospheric predictors
-    # vanish past CAMS/AQ horizons (audit: missing inputs read as full model).
-    _feat_cols = ("ghi", "dni", "dhi", "clear_ghi", "clear_dni", "kt_clear",
-                  "albedo", "aod550", "cloud_cover", "sza", "temperature_2m",
-                  "ozone_du", "aod340", "aod380", "relative_humidity_2m")
-    try:
+    # v5 contract §11.4 coverage fractions: computed from the bundle/backend
+    # manifest feature list after mapping — the old hand-written column names
+    # did not match model features and read missing inputs as full model.
+    # Emitted for transparency only: coverage is NOT coupled into confidence
+    # or any score (no error-model coupling — no historical calibration shows
+    # a coverage→error relationship, so uncertainty stays calibrated-error-v1).
+    _schema: list[str] = []
+    _bundle = _load_bundle(calibration_dir)
+    if isinstance(_bundle, dict):
+        _man = _bundle.get("manifest")
+        if isinstance(_man, dict) and isinstance(_man.get("feature_schema"), list):
+            _schema = [str(c) for c in _man["feature_schema"] if isinstance(c, str)]
+        elif isinstance(_man, dict) and isinstance(_man.get("features"), list):
+            _schema = [str(c) for c in _man["features"] if isinstance(c, str)]
+        elif isinstance(_bundle.get("features"), list):
+            _schema = [str(c) for c in _bundle["features"] if isinstance(c, str)]
+    if _schema:
         _cov = np.zeros(len(features), dtype=int)
-        for c in _feat_cols:
-            if c in features:
-                _cov = _cov + num(features, c).notna().to_numpy().astype(int)
-        out["atmospheric_feature_coverage"] = _cov
-    except (TypeError, ValueError):
-        pass
+        for c in _schema:
+            _cov = _cov + num(features, c).notna().to_numpy().astype(int)
+        out["model_feature_coverage_fraction"] = np.round(_cov / len(_schema), 4)
+    else:
+        # No bundle manifest (degraded parametric fallback): model feature
+        # coverage is unknown, so emit NaN rather than assume full coverage.
+        out["model_feature_coverage_fraction"] = np.nan
+    # Spectral proxy: Tier-C broadband proxy has no spectral feature matrix
+    # to count against, so this is binary 1.0/0.0 — 1.0 where the spectral
+    # layer's two inputs (predicted UVA/UVB) are both present, 0.0 otherwise.
+    out["spectral_feature_coverage_fraction"] = np.where(
+        np.isfinite(np.asarray(uva, dtype=float))
+        & np.isfinite(np.asarray(uvb, dtype=float)),
+        1.0, 0.0,
+    )
     out["predicted_uva_wm2"] = np.round(uva, 3)
     out["predicted_uvb_wm2"] = np.round(uvb, 4)
     out["tan_calibration_tier"] = tier
@@ -539,12 +560,13 @@ def score_forecast(
     ]
 
     # UVI source fusion: EPA/NWS operational (US public product) + CAMS
-    # spectral + Open-Meteo Best Match (not GFS-only), plain NaN-tolerant
-    # median over unique providers (state.fuse_uvi_unique_count). 65-snapshot
-    # verification (Sep 2026) showed OM 1-day-lead MAE 0.57 vs CAMS 1.49 with
-    # a -1.4 systematic low bias (thin-cloud over-attenuation); the plain
-    # median still resists a single bad feed, and lone-source rows stay that
-    # source. Legacy OMx2 vote count rides along as a migration diagnostic.
+    # spectral + Open-Meteo Best Match (not GFS-only), bias-corrected
+    # inverse-error weighting over unique providers via
+    # state.fuse_uvi_unique_count. 127-snapshot verification (Sep 2026)
+    # showed 1-day-lead OM MAE 0.48 bias -0.11 vs CAMS MAE 1.14 bias -1.03
+    # (EPA unscored: bias 0 MAE 1.0 default); the weighted consensus trusts
+    # skill over luck, and lone-source rows stay that source. Legacy OMx2
+    # vote count rides along as a migration diagnostic.
     out["uvi_openmeteo"] = num(out, "uv_index")
     if "cams_uv_index" in out:
         out["uvi_cams"] = num(out, "cams_uv_index")
@@ -554,16 +576,25 @@ def score_forecast(
         out["uvi_epa"] = num(out, "uvi_epa")
     else:
         out["uvi_epa"] = np.nan
-    # Single fusion everywhere (contract §4): plain NaN-tolerant median over
-    # unique providers via state.fuse_uvi_unique_count. The old OMx2 vote
-    # median disagreed with the 30-min recompute on identical inputs
-    # (4.95/5.62/NaN fused 4.95 hourly but 5.1 at :30), faking a cross-product
-    # mismatch the gate correctly refused to publish.
+    # Provider coverage: fraction of the three fused UVI providers (OM/CAMS/
+    # EPA) finite on this row. Same transparency-only rule: no error-model
+    # coupling until calibrated (see §11.4 comment on the model fraction).
+    out["source_coverage_fraction"] = np.round((
+        num(out, "uvi_openmeteo").notna().to_numpy().astype(int)
+        + num(out, "uvi_cams").notna().to_numpy().astype(int)
+        + num(out, "uvi_epa").notna().to_numpy().astype(int)
+    ) / 3.0, 4)
+    # Single fusion everywhere (contract §4): bias-corrected inverse-error
+    # weights over unique providers via state.fuse_uvi_unique_count. The old
+    # OMx2 vote median disagreed with the 30-min recompute on identical
+    # inputs (4.95/5.62/NaN fused 4.95 hourly but 5.1 at :30), faking a
+    # cross-product mismatch the gate correctly refused to publish.
     from .state import fuse_uvi_unique_count as _fuse
 
     _fused = _fuse(out)
     for _col in ("uvi_consensus", "uvi_consensus_sources",
                  "uvi_consensus_vote_count", "uvi_source_spread",
+                 "uvi_source_values", "uvi_source_weights",
                  "uvi_sunny", "uvi_cloudy", "fusion_version"):
         out[_col] = _fused[_col].to_numpy()
     # Independent erythemal channel (SED input) from the consensus UVI. NEVER

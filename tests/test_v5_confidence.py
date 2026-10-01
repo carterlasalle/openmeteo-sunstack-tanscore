@@ -7,6 +7,8 @@ asserts only the correct quantity moves.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pandas as pd
 
@@ -69,9 +71,14 @@ def test_source_weight_contributions_sum_to_one() -> None:
     out = fuse_uvi_unique_count(frame)
     # Unique provider count (not votes) drives the fusion contract.
     assert out["uvi_consensus_sources"].tolist() == [3, 1]
-    # Consensus lies within the finite source range (convex fusion).
-    assert out["uvi_consensus"].iloc[0] == 5.0
-    assert out["uvi_consensus"].iloc[1] == 6.0
+    # Weights are visible per row and sum to one over finite sources.
+    assert out["uvi_source_weights"].tolist()[0] == (0.674, 0.142, 0.184)
+
+    _lone = out["uvi_source_weights"].tolist()[1]
+    assert _lone[0] == 1.0 and all(math.isnan(v) for v in _lone[1:])
+    assert out["uvi_source_values"].tolist()[0] == (5.0, 5.5, 4.5)
+    # Weighted consensus: [5.199, 6.11] (bias-corrected, OM-dominant).
+    assert out["uvi_consensus"].tolist() == [5.199, 6.11]
 
 
 def test_common_case_uvi_evaluator_uses_identical_rows() -> None:

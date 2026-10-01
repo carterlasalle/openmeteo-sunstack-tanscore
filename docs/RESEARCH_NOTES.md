@@ -71,9 +71,12 @@ Held-out R² 0.999 decomposes as: linear GHI-only OLS already scores R² 0.990
 trees earn most on UVB, 4x MAE reduction over linear).
 Against independent ground truth (Payerne SL-501A biometer, never in training,
 with BSRN GHI/DNI/DHI + Brewer Dobson ozone + EAC4 aerosols as inputs): +42%
-bias. Root-caused to INSTRUMENT SCALE, not the model: CERES clear-sky
-UVA/GHI = 5.02% (n=2925, tight) vs station 3.5% at matched SZA 60-70. The SL-501
-broadband response underweights band edges vs a true 315-400 integral.
+bias. Plausibly explained by instrument/definition mismatch; unresolved as
+independent absolute validation: CERES clear-sky UVA/GHI = 5.02% (n=2925,
+tight) vs station 3.5% at matched SZA 60-70. The SL-501
+broadband response may underweight band edges vs a true 315-400 integral, but that
+remains a hypothesis — the extraction script, response curve, and exact matching
+logic needed to reproduce the result are not preserved.
 Conclusion: the estimator faithfully reproduces its CERES-anchored training
 distribution; absolute radiometric truth needs Brewer spectra (WOUDC), not
 biometers. No model change made.
@@ -105,12 +108,13 @@ biometers. No model change made.
 ## 2026-09-15 — Sub-hourly interpolation grounded in HRRR truth
 720 native HRRR 15-min rows (10 runs) vs time-interpolation: pure
 interpolation error on daylight :15/:30/:45 slots (n=258) is linear-GHI
-MAE 53.8 / median 16.0 / p90 143.8. Clear-sky-index (kt x exact-TOA)
+MAE 53.8 / median 16.0 / p90 143.8. Clear-sky-index (kt x 1361.1-TOA)
 wins: MAE 51.5, median 12.1 (-24%), low-sun MAE 23.3 -> 20.6. The big
 errors are cloud-edge passages no interpolator can see (p90 ~140 both).
 Shipped in build_30min_forecast for shortwave_radiation_instant only
-(the measured quantity): exact pvlib TOA at :30 stamps, night-zero
-instead of ghost light, bounded 0.7-1.3 propagation to UVA/UVB/UVI +
+(the measured quantity): pvlib geometry at :30 stamps with the fixed
+mean-distance TOA (never exact), night-zero instead of ghost light,
+bounded 0.7-1.3 propagation to UVA/UVB/UVI +
 absolute recompute, native-HRRR override keeps precedence. Pinned by
 pre-sunrise ghost test (6:30 slot exactly 0) and mocked-TOA kt-plumbing
 test (312.5, not linear 250.0).

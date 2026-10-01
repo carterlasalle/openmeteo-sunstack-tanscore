@@ -202,17 +202,9 @@ def apply_outdoor_feasibility(
     out["overall_components_unblocked_0_100"] = out.apply(
         _weighted_geometric, axis=1
     ).round(1)
-    # Coverage honesty (audit: missing components silently redefined Overall).
-    _comp_cols = ("tan_score_absolute_0_100", "local_tan_score_0_100",
-                  "atmospheric_quality_percentile_0_100",
-                  "tan_forecast_confidence_0_100")
-    _cov = np.zeros(len(out), dtype=int)
-    for c in _comp_cols:
-        if c in out.columns:
-            col = pd.to_numeric(out[c], errors="coerce")
-            assert isinstance(col, pd.Series)
-            _cov = _cov + col.notna().to_numpy().astype(int)
-    out["overall_component_coverage"] = _cov
+    # Coverage honesty: the old overall_component_coverage count was removed
+    # with the LEGACY Overall deprecation (§2.5); component transparency now
+    # comes from model/spectral/source_coverage_fraction (§11.4) in tanscore.
     out["overall_tan_opportunity_0_100"] = (
         (out["overall_components_unblocked_0_100"] * multiplier).clip(0, 100).round(1)
     )
@@ -378,7 +370,12 @@ def _as_utc(stamps: pd.Series) -> pd.Series:
 
 
 def _toa_wm2(times_utc: pd.Series) -> np.ndarray:
-    """Exact extraterrestrial horizontal irradiance: pure solar geometry."""
+    """Extraterrestrial horizontal irradiance from solar geometry.
+
+    Approximate (contract §5.6): fixed 1361.1 W/m^2 mean-Earth-Sun-distance
+    solar constant; the ±3.4% orbital-eccentricity cycle is ignored. For
+    date-dependent values use ``temporal.extra_radiation_date_dependent``.
+    """
     loc = pvlib.location.Location(config.LATITUDE, config.LONGITUDE, tz="UTC")
     zen = pd.DataFrame(loc.get_solarposition(pd.DatetimeIndex(times_utc)))[
         "zenith"
@@ -485,8 +482,10 @@ def build_30min_forecast(
     # Clear-sky-index interpolation for instantaneous GHI. Linear blends fail
     # where solar geometry moves fast (sunrise/sunset shoulders): they invent
     # light before sunrise. kt is smooth and dimensionless; the :30 TOA below
-    # is exact astronomy, not interpolated. Backed by HRRR native 15-min
-    # truth: daylight MAE 53.8 -> 51.5, median 16.0 -> 12.1 (n=258 slots).
+    # is solar geometry at the true :30 stamp — a fixed 1361.1 W/m²
+    # mean-distance approximation (§5.6), never "exact" — not interpolated.
+    # Backed by HRRR native 15-min truth: daylight MAE 53.8 -> 51.5, median
+    # 16.0 -> 12.1 (n=258 slots).
     if "shortwave_radiation_instant" in h.columns:
         ghi_h = pd.to_numeric(h["shortwave_radiation_instant"], errors="coerce")
         toa_h = _toa_wm2(_as_utc(h.index.to_series()))
@@ -546,6 +545,7 @@ def build_30min_forecast(
                             "pigment_darkening_effective_irradiance",
                             "uvi_consensus", "uvi_consensus_sources",
                             "uvi_consensus_vote_count", "uvi_source_spread",
+                            "uvi_source_values", "uvi_source_weights",
                             "uvi_sunny", "uvi_cloudy",
                             "uvi_difference_absolute", "uvi_difference_percent",
                             "fusion_version",
@@ -582,7 +582,7 @@ def build_30min_forecast(
                 .to_numpy()
             )
 
-    # Solar geometry is recomputed exactly at every :30 stamp with pvlib
+    # Solar geometry is recomputed at every :30 stamp with pvlib
     # (audit: linear interpolation mislabeled as "true mid-hour sun"; near
     # noon the error is small, at shoulders it is not). Same code path serves
     # hourly, half-hourly, and future 15-min grids.
@@ -690,6 +690,7 @@ def build_30min_forecast(
                             "pigment_darkening_effective_irradiance",
                             "uvi_consensus", "uvi_consensus_sources",
                             "uvi_consensus_vote_count", "uvi_source_spread",
+                            "uvi_source_values", "uvi_source_weights",
                             "uvi_sunny", "uvi_cloudy",
                             "uvi_difference_absolute", "uvi_difference_percent",
                             "fusion_version",
@@ -751,6 +752,7 @@ def build_30min_forecast(
                      "pigment_darkening_effective_irradiance",
                      "uvi_consensus", "uvi_consensus_sources",
                      "uvi_consensus_vote_count", "uvi_source_spread",
+                     "uvi_source_values", "uvi_source_weights",
                      "uvi_sunny", "uvi_cloudy",
                      "uvi_difference_absolute", "uvi_difference_percent",
                      "fusion_version",

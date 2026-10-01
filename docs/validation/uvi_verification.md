@@ -11,3 +11,7 @@ Snapshots: 127 | 1-day-lead rows: 333
 
 Reference: Open-Meteo previous-runs best_match (shared-DNA caveat).
 Target: MAE < 1.0, |bias| < 0.3 per source at 1-day lead.
+
+Stratification limit: no independent ground truth, so MAE/bias are pooled
+over sites/SZA/cloud regimes and EPA is unscored; fusion weights stay global
+until stratified skill exists. Shared-DNA reference likely flatters OM.

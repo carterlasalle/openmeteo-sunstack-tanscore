@@ -204,10 +204,22 @@ def apply_skin_plane(
     out["surface_reflectance_source"] = surface.source_citation
     out["surface_reflection_uncertainty"] = surface.reflectance_high - surface.reflectance_low
     out["surface_model_version"] = _SURFACE_VERSION
+    # v5 canonical endpoint names (contract §2.1.B/§2.2): the legacy columns
+    # stay, each gets an exact twin. Emitted here because every published
+    # frame passes through this stage; the percentile twin is the
+    # geometry-conditioned transmission percentile (score_semantics:
+    # conditional comparison vs history, never an "air clarity" claim).
+    if "atmospheric_quality_percentile_0_100" in out:
+        out["geometry_conditioned_transmission_percentile_0_100"] = (
+            out["atmospheric_quality_percentile_0_100"])
     if "melanogenic_effective_irradiance_wm2" not in out:
         return out
+    out["delayed_pigmentation_effective_irradiance_horizontal_wm2"] = (
+        out["melanogenic_effective_irradiance_wm2"])
     if abs(plane.tilt_deg) < 1e-9:
         out["skin_plane_e_mel_wm2"] = out["melanogenic_effective_irradiance_wm2"]
+        out["skin_plane_delayed_pigmentation_effective_irradiance_wm2"] = (
+            out["skin_plane_e_mel_wm2"])
         out["skin_plane_factor"] = 1.0
         out["skin_plane_standard"] = "horizontal environmental reference"
         out["skin_plane_ground_reflected_delayed_pigmentation_wm2"] = 0.0
@@ -229,6 +241,8 @@ def apply_skin_plane(
     out["skin_plane_factor"] = np.round(factors, 4)
     e_mel = _num(out, "melanogenic_effective_irradiance_wm2")
     out["skin_plane_e_mel_wm2"] = (e_mel * np.asarray(factors)).round(5)
+    out["skin_plane_delayed_pigmentation_effective_irradiance_wm2"] = (
+        out["skin_plane_e_mel_wm2"])
     out["skin_plane_standard"] = (
         f"tilt {plane.tilt_deg:g}deg az {plane.azimuth_deg:g}deg (horizontal reference preserved)"
     )

@@ -53,8 +53,9 @@ def test_unique_uvi_source_count_not_vote_count() -> None:
         "uvi_epa": [6.0, np.nan],
     })
     out = fuse_uvi_unique_count(frame)
-    # Plain median: [2.0, 5.0]. Old OMx2 vote median gave [4.0, 5.0].
-    assert out["uvi_consensus"].tolist() == [2.0, 5.0]
+    # Weighted fusion: [1.607, 5.11] (bias-corrected, OM-dominant). Unique
+    # count still separates provider presence from the legacy vote count.
+    assert out["uvi_consensus"].tolist() == [1.607, 5.11]
     assert out["uvi_consensus_sources"].tolist() == [3, 1]
     assert out["uvi_consensus_vote_count"].tolist() == [4, 2]
 

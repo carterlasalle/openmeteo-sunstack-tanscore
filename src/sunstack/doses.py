@@ -180,6 +180,10 @@ def add_interval_doses(frame: pd.DataFrame) -> pd.DataFrame:
             out[f"tan_dose_{label}_j_m2"] / ref / 60.0
         ).round(2)
     out["tan_dose_model_version"] = TAN_DOSE_MODEL_VERSION
+    # v5 canonical endpoint names (contract §2.1.B): every emitted tan_dose_*
+    # column gets an exact delayed_pigmentation_dose_* twin; old names stay.
+    for col in [c for c in out.columns if "tan_dose" in str(c)]:
+        out[str(col).replace("tan_dose", "delayed_pigmentation_dose")] = out[col]
     return out
 
 
@@ -243,14 +247,24 @@ def day_totals(frame: pd.DataFrame) -> pd.DataFrame:
         sd = integrate_sed(t, ery, gap)
         uva_d = integrate_band_dose(t, uva, gap)
         uvb_d = integrate_band_dose(t, uvb, gap)
+        day_dose = round(float(td["tan_dose_melanogenic_j_m2"]), 1)
+        day_ref_min = round(reference_minutes(
+            float(td["tan_dose_melanogenic_j_m2"]),
+            float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2)), 1)
+        day_complete = bool(td["tan_dose_complete"])
+        day_coverage = round(float(td["tan_dose_coverage_fraction"]), 3)
         rows.append({
             "date": date,
-            "tan_dose_day_j_m2": round(float(td["tan_dose_melanogenic_j_m2"]), 1),
-            "tan_dose_day_reference_minutes": round(reference_minutes(
-                float(td["tan_dose_melanogenic_j_m2"]),
-                float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2)), 1),
-            "tan_dose_complete": bool(td["tan_dose_complete"]),
-            "tan_dose_coverage_fraction": round(float(td["tan_dose_coverage_fraction"]), 3),
+            "tan_dose_day_j_m2": day_dose,
+            # v5 canonical endpoint names (contract §2.1.B): exact twins,
+            # legacy tan_dose_* names stay as migration aliases.
+            "delayed_pigmentation_dose_day_j_m2": day_dose,
+            "tan_dose_day_reference_minutes": day_ref_min,
+            "delayed_pigmentation_dose_day_reference_minutes": day_ref_min,
+            "tan_dose_complete": day_complete,
+            "delayed_pigmentation_dose_complete": day_complete,
+            "tan_dose_coverage_fraction": day_coverage,
+            "delayed_pigmentation_dose_coverage_fraction": day_coverage,
             "sed_day_total": round(float(sd["sed"]), 3),
             "sed_complete": bool(sd["sed_complete"]),
             "sed_coverage_fraction": round(float(sd["sed_coverage_fraction"]), 3),
@@ -277,12 +291,18 @@ def window_dose(frame: pd.DataFrame, start, end,
         # No samples inside the window: exposure is UNKNOWN (NaN), never
         # zero — zero would claim a measured absence of sun.
         nan = float("nan")
-        return {"tan_dose_best_window_j_m2": nan, "sed_best_window": nan,
-                "uva_dose_window_j_m2": nan, "uvb_dose_window_j_m2": nan,
-                "tan_dose_best_window_complete": False,
-                "tan_dose_best_window_coverage_fraction": nan,
-                "sed_best_window_complete": False,
-                "sed_best_window_coverage_fraction": nan}
+        return {
+            "tan_dose_best_window_j_m2": nan, "sed_best_window": nan,
+            "uva_dose_window_j_m2": nan, "uvb_dose_window_j_m2": nan,
+            "tan_dose_best_window_complete": False,
+            "tan_dose_best_window_coverage_fraction": nan,
+            # v5 canonical endpoint names (contract §2.1.B): exact twins,
+            # legacy tan_dose_* names stay as migration aliases.
+            "delayed_pigmentation_dose_best_window_j_m2": nan,
+            "delayed_pigmentation_dose_best_window_complete": False,
+            "delayed_pigmentation_dose_best_window_coverage_fraction": nan,
+            "sed_best_window_complete": False,
+            "sed_best_window_coverage_fraction": nan}
     t = pd.to_datetime(g["dt"] if "dt" in g else g["time"], utc=True)
 
     def _gcol(name: str) -> pd.Series:
@@ -295,10 +315,18 @@ def window_dose(frame: pd.DataFrame, start, end,
     sd = integrate_sed(t, _ery_or_uvi(g, _gcol("erythemal_irradiance_wm2")), gap)
     uva_d = integrate_band_dose(t, _gcol("predicted_uva_wm2"), gap)
     uvb_d = integrate_band_dose(t, _gcol("predicted_uvb_wm2"), gap)
+    win_dose = round(float(td["tan_dose_melanogenic_j_m2"]), 1)
+    win_complete = bool(td["tan_dose_complete"])
+    win_coverage = round(float(td["tan_dose_coverage_fraction"]), 3)
     return {
-        "tan_dose_best_window_j_m2": round(float(td["tan_dose_melanogenic_j_m2"]), 1),
-        "tan_dose_best_window_complete": bool(td["tan_dose_complete"]),
-        "tan_dose_best_window_coverage_fraction": round(float(td["tan_dose_coverage_fraction"]), 3),
+        "tan_dose_best_window_j_m2": win_dose,
+        # v5 canonical endpoint names (contract §2.1.B): exact twins, legacy
+        # tan_dose_* names stay as migration aliases.
+        "delayed_pigmentation_dose_best_window_j_m2": win_dose,
+        "tan_dose_best_window_complete": win_complete,
+        "delayed_pigmentation_dose_best_window_complete": win_complete,
+        "tan_dose_best_window_coverage_fraction": win_coverage,
+        "delayed_pigmentation_dose_best_window_coverage_fraction": win_coverage,
         "sed_best_window": round(float(sd["sed"]), 3),
         "sed_best_window_complete": bool(sd["sed_complete"]),
         "sed_best_window_coverage_fraction": round(float(sd["sed_coverage_fraction"]), 3),

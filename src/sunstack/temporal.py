@@ -7,6 +7,10 @@ stamped 12:00 do not describe the same interval, so merging by raw timestamp
 is a category error. This module is the versioned registry plus the interval
 conversion/alignment primitives every physics consumer must use.
 
+TOA note (contract §5.6): the fixed ``1361.1*cos(SZA)`` approximation is a
+mean-distance estimate, never "exact"; ``extra_radiation_date_dependent`` is
+the date-dependent form.
+
 Version: ``interval-contract-v1`` (``config.TEMPORAL_SEMANTICS_VERSION``).
 """
 
