@@ -32,7 +32,9 @@ def _weighted_geometric(row: pd.Series) -> float:
     vals: dict[str, Any] = {
         "absolute": row.get("tan_score_absolute_0_100", np.nan),
         "local": row.get("local_tan_score_0_100", np.nan),
-        "atmosphere": row.get("atmospheric_quality_percentile_0_100", np.nan),
+        # Canonical key first, deprecated alias as fallback (one migration version).
+        "atmosphere": row.get("geometry_conditioned_transmission_percentile_0_100",
+                              row.get("atmospheric_quality_percentile_0_100", np.nan)),
         "confidence": row.get("tan_forecast_confidence_0_100", np.nan),
     }
     weights = config.OVERALL_SCORE_WEIGHTS
@@ -1073,7 +1075,8 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                     float(best.get("local_tan_score_0_100", np.nan)), 1
                 ),
                 "day_atmospheric_peak_0_100": round(
-                    float(_num(daylight, "atmospheric_quality_percentile_0_100").max()), 1
+                    float(_num(daylight, "geometry_conditioned_transmission_percentile_0_100").fillna(
+                        _num(daylight, "atmospheric_quality_percentile_0_100")).max()), 1
                 ),
                 "day_confidence_at_peak_0_100": round(
                     float(best.get("tan_forecast_confidence_0_100", np.nan)), 1

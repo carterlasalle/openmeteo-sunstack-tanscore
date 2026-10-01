@@ -51,8 +51,7 @@ Every hour and 30-minute period exposes the components separately:
 |---|---|
 | `tan_score_absolute_0_100` | Globally anchored delayed-pigmentation intensity: 100 * E_mel / fixed global reference. **Not** graded on a South Bend curve |
 | `local_tan_score_0_100` | Percentile versus historical daylight around this location and season (serving-domain reference) |
-| `atmospheric_quality_percentile_0_100` | Geometry-conditioned transmission percentile (conditional comparison, not causal isolation) |
-| `tan_forecast_confidence_0_100` | Calibrated reliability from expected error (higher bins mean lower realized error, never sunnier skies) |
+| `geometry_conditioned_transmission_percentile_0_100` | Geometry-conditioned transmission percentile (conditional comparison, not causal isolation; legacy alias `atmospheric_quality_percentile_0_100`) |
 | `strong_sun_probability_0_100` | Probability of useful sun (ensemble/DNI/GHI/cloud); product quantity, not confidence |
 | `outdoor_feasibility_0_100` | Practical outdoor usability only (with `outdoor_feasibility_complete` + missing-field reasons) |
 | `overall_tan_opportunity_0_100` | LEGACY composite (deprecated product heuristic); ranking uses fixed-duration delayed-pigmentation dose |

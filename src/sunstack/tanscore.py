@@ -321,8 +321,9 @@ def fnum(row: pd.Series, name: str, default: float = float("nan")) -> float:
 def add_local_scores(forecast: pd.DataFrame, local_ref: pd.DataFrame) -> pd.DataFrame:
     out = forecast.copy()
     if local_ref is None or local_ref.empty:
-        out["local_tan_score_0_100"] = np.nan
-        out["atmospheric_quality_percentile_0_100"] = np.nan
+        out["local_tan_score_0_100"] = np.nan * np.ones(len(out))
+        out["geometry_conditioned_transmission_percentile_0_100"] = np.nan * np.ones(len(out))
+        out["atmospheric_quality_percentile_0_100"] = np.nan * np.ones(len(out))
         return out
     ref = local_ref.copy()
     local_times = pd.to_datetime(scol(out, "time_utc"), utc=True).dt.tz_convert(ZoneInfo(config.TIMEZONE))
@@ -348,8 +349,12 @@ def add_local_scores(forecast: pd.DataFrame, local_ref: pd.DataFrame) -> pd.Data
             ]
         atm_scores.append(_percentile(scol(same_geometry, "absolute_tan_score_0_100"), score))
     out["local_tan_score_0_100"] = np.round(local_scores, 1)
-    out["atmospheric_quality_percentile_0_100"] = np.round(atm_scores, 1)
+    out["geometry_conditioned_transmission_percentile_0_100"] = np.round(atm_scores, 1)
+    # Deprecated alias (one migration version): old name stays parseable but
+    # must never be the primary contract key.
+    out["atmospheric_quality_percentile_0_100"] = out["geometry_conditioned_transmission_percentile_0_100"]
     return out
+
 
 def _add_serving_local_scores(
     forecast: pd.DataFrame,
@@ -358,8 +363,9 @@ def _add_serving_local_scores(
 ) -> tuple[pd.DataFrame, np.ndarray]:
     """Score each forecast row against its matching archived forecast lead."""
     out = forecast.copy()
-    out["local_tan_score_0_100"] = np.nan
-    out["atmospheric_quality_percentile_0_100"] = np.nan
+    out["local_tan_score_0_100"] = np.nan * np.ones(len(out))
+    out["geometry_conditioned_transmission_percentile_0_100"] = np.nan * np.ones(len(out))
+    out["atmospheric_quality_percentile_0_100"] = np.nan * np.ones(len(out))
     lead_days = np.arange(len(out), dtype=float) / 24.0
     bands = tuple(SERVING_REFERENCE_BANDS)
     row_bands = np.select(
@@ -379,6 +385,7 @@ def _add_serving_local_scores(
         scored = add_local_scores(out.iloc[positions], reference)
         for column in (
             "local_tan_score_0_100",
+            "geometry_conditioned_transmission_percentile_0_100",
             "atmospheric_quality_percentile_0_100",
         ):
             out.iloc[positions, out.columns.get_loc(column)] = scored[column].to_numpy()

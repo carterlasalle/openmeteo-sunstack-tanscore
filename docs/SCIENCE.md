@@ -35,8 +35,7 @@ feasibility cannot change $E_{\mathrm{mel}}$, Absolute, or any dose.
 
 - `tan_score_absolute_0_100` — global melanogenic intensity. Physics.
 - `local_tan_score_0_100` — seasonal percentile of Absolute against local climatology. Interpretation.
-- `atmospheric_quality_percentile_0_100` — same percentile but restricted to matching solar geometry. Interpretation.
-- `tan_forecast_confidence_0_100` — trust in the forecast. Uncertainty, not physics.
+- `geometry_conditioned_transmission_percentile_0_100` — same percentile but restricted to matching solar geometry. Interpretation (legacy alias `atmospheric_quality_percentile_0_100`).
 - `outdoor_feasibility_0_100` — usability multiplier (1.0 = perfect, 0.0 = hard-blocked).
 - `overall_components_unblocked_0_100` — geometric merge of the four above, *before* feasibility.
 - `overall_tan_opportunity_0_100` — LEGACY composite (deprecated product heuristic), not the recommendation ranking.

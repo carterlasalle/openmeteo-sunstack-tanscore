@@ -206,10 +206,11 @@ def apply_skin_plane(
     out["surface_model_version"] = _SURFACE_VERSION
     # v5 canonical endpoint names (contract §2.1.B/§2.2): the legacy columns
     # stay, each gets an exact twin. Emitted here because every published
-    # frame passes through this stage; the percentile twin is the
-    # geometry-conditioned transmission percentile (score_semantics:
-    # conditional comparison vs history, never an "air clarity" claim).
-    if "atmospheric_quality_percentile_0_100" in out:
+    # frame passes through this stage. (The geometry percentile twin is now
+    # primary in tanscore.add_local_scores; this backfills frames that never
+    # passed through scoring.)
+    if ("geometry_conditioned_transmission_percentile_0_100" not in out
+            and "atmospheric_quality_percentile_0_100" in out):
         out["geometry_conditioned_transmission_percentile_0_100"] = (
             out["atmospheric_quality_percentile_0_100"])
     if "melanogenic_effective_irradiance_wm2" not in out:
