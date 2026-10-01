@@ -19,13 +19,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import shutil
 import subprocess
 from pathlib import Path
 
 import numpy as np
 
-RANGES = {
+RANGES: dict[str, tuple[float, float]] = {
     "sza_deg": (0.0, 88.0),
     "ozone_du": (200.0, 450.0),
     "altitude_m": (0.0, 4000.0),
@@ -66,14 +67,21 @@ output_user lambda edir edn eup
 def stratified_design(n: int, seed: int = 23) -> dict[str, np.ndarray]:
     rng = np.random.default_rng(seed)
     out: dict[str, np.ndarray] = {}
-    for name, (lo, hi) in RANGES.items():
-        edges = np.linspace(0, 1, n + 1)
-        u = edges[:-1] + rng.random(n) * (edges[1] - edges[0])
+    for name, bounds in RANGES.items():
+        lo: float = bounds[0]
+        hi: float = bounds[1]
+        edges: np.ndarray = np.linspace(0, 1, n + 1)
+        divs: np.ndarray = edges[:-1] + 0.0
+        draws: np.ndarray = rng.random(n, dtype=np.float64)
+        step: np.ndarray = np.full(n, 1.0 / n)
+        u: np.ndarray = divs + draws * step
         rng.shuffle(u)
         if name in ("aod340", "cloud_liquid_g_m2", "cloud_ice_g_m2"):
             # log-uniform over (max(lo,eps), hi]; exact 0 handled by cloud cover.
             lo_eff = max(lo, 1e-3)
-            out[name] = np.exp(np.log(lo_eff) + u * (np.log(hi) - np.log(lo_eff)))
+            lo_log: float = math.log(lo_eff)
+            hi_log: float = math.log(hi)
+            out[name] = np.exp(lo_log + u * (hi_log - lo_log))
         else:
             out[name] = lo + u * (hi - lo)
     # Physically consistent derivations.
@@ -88,41 +96,56 @@ def stratified_design(n: int, seed: int = 23) -> dict[str, np.ndarray]:
     return out
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    from typing import cast
+
     ap = argparse.ArgumentParser()
-    ap.add_argument("--samples", type=int, default=2000)
-    ap.add_argument("--seed", type=int, default=23)
-    ap.add_argument("--out", default="data/research/spectral_corpus")
-    args = ap.parse_args()
+    _ = ap.add_argument("--samples", type=int, default=2000)
+    _ = ap.add_argument("--seed", type=int, default=23)
+    _ = ap.add_argument("--out", default="data/research/spectral_corpus")
+    ns = ap.parse_args(argv)
+    samples = cast(int, ns.samples)
+    seed = cast(int, ns.seed)
+    out_dir = Path(cast(str, ns.out))
+    _ = out_dir.mkdir(parents=True, exist_ok=True)
+    design = stratified_design(samples, seed)
+    keys = sorted(design)
+    cols: dict[str, list[float]] = {k: design[k].ravel().tolist() for k in keys}
+    header = ["sample_id", *keys]
+    lines = [",".join(header)]
+    for i in range(samples):
+        cells: list[str] = [str(i)] + [f"{cols[k][i]:.6e}" for k in keys]
+        lines.append(",".join(cells))
+    _ = (out_dir / "design.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _ = (out_dir / "uvspec_template.inp").write_text(UVSPEC_TEMPLATE, encoding="utf-8")
 
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    design = stratified_design(args.samples, args.seed)
-    cols = ["sample_id", *sorted(design)]
-    import pandas as pd
-
-    frame = pd.DataFrame({"sample_id": np.arange(args.samples)})
-    for k in sorted(design):
-        frame[k] = design[k]
-    frame.to_csv(out_dir / "design.csv", index=False)
-    (out_dir / "uvspec_template.inp").write_text(UVSPEC_TEMPLATE, encoding="utf-8")
 
     uvspec = shutil.which("uvspec")
     lib_version = "not-installed"
     if uvspec:
         try:
-            r = subprocess.run([uvspec, "-v"], capture_output=True, text=True, timeout=30)
+            r = subprocess.run([uvspec, "-v"], capture_output=True, text=True, timeout=30, check=False)
             lines = (r.stdout or r.stderr or "").strip().splitlines()
             lib_version = lines[0][:120] if lines else "uvspec-found-version-unknown"
         except (OSError, subprocess.SubprocessError):
             lib_version = "uvspec-found-version-unknown"
-    manifest = {
+    manifest: dict[str, object] = {
         "corpus": "libradtran-tierB-training",
-        "samples": args.samples,
-        "seed": args.seed,
-        "parameter_ranges": RANGES,
+        "spectral_backend": "tierB-libradtran-emulator-v1",
+        "samples": samples,
+        "seed": seed,
+        "parameter_ranges": {k: [lo, hi] for k, (lo, hi) in RANGES.items()},
+        "regime_enrichment": [
+            "low sun (SZA 70-88)",
+            "high ozone (400-450 DU) and low ozone (200-250 DU)",
+            "high/absorbing aerosol (AOD340 > 0.5, SSA340 < 0.92)",
+            "bright snow/sand surfaces (albedo > 0.5)",
+            "cloud transitions (total_cloud_cover 0.05-0.5)",
+            "high altitude (2000-4000 m)",
+        ],
         "spectral_domain_nm": [280, 400],
         "target_spacing_nm": 0.5,
+        "output_components": ["edir (direct)", "edn (diffuse down)", "eup (diffuse up)"],
         "libRadtran": lib_version,
         "uvspec_binary": uvspec or None,
         "uvspec_template": "uvspec_template.inp (DRAFT - requires operator review)",
@@ -132,13 +155,13 @@ def main() -> None:
         "required_next_steps": [
             "Operator reviews uvspec_template.inp against installed libRadtran.",
             "Run per-sample uvspec; store spectra + integrated UVA/UVB/erythemal.",
-            "Train runtime emulator; record emulator version + training-manifest sha.",
+            "Train runtime emulator (scripts/train_spectral_emulator.py); record emulator version + training-manifest sha.",
             "Validate on held-out cases + NASA POWER + CAMS/Open-Meteo UVI.",
         ],
     }
-    (out_dir / "manifest.json").write_text(
+    _ = (out_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    print(f"design: {args.samples} samples -> {out_dir}/design.csv")
+    print(f"design: {samples} samples -> {out_dir}/design.csv")
     print(f"libRadtran: {lib_version}; manifest status: {manifest['status']}")
 
 

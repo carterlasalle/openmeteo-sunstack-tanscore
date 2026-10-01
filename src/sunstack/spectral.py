@@ -30,9 +30,9 @@ from .photobiology import (
 )
 
 SPECTRAL_BACKEND_VERSION = "tierC-broadband-proxy-v2"
-SPECTRAL_WAVES_NM = np.arange(280, 401, 1, dtype=float)
-UVB_MASK = (SPECTRAL_WAVES_NM >= 280) & (SPECTRAL_WAVES_NM < 315)
-UVA_MASK = (SPECTRAL_WAVES_NM >= 315) & (SPECTRAL_WAVES_NM <= 400)
+SPECTRAL_WAVES_NM: np.ndarray = np.arange(280, 401, 1, dtype=float)
+UVB_MASK: np.ndarray = (SPECTRAL_WAVES_NM >= 280) & (SPECTRAL_WAVES_NM < 315)
+UVA_MASK: np.ndarray = (SPECTRAL_WAVES_NM >= 315) & (SPECTRAL_WAVES_NM <= 400)
 
 TIER_DESCRIPTIONS = {
     "A": "direct/reference-quality spectral reconstruction",
@@ -66,12 +66,17 @@ def band_effective_weights(spectrum_stem: str | None = None) -> tuple[float, flo
 def reconstruct_spectrum_tierC(
     uva_wm2: float, uvb_wm2: float
 ) -> np.ndarray:
-    """Uniform intra-band E_lambda consistent with broadband UVA/UVB totals."""
+    """Uniform intra-band E_lambda consistent with broadband UVA/UVB totals.
+
+    Contract §6.4: UVB spans [280,315) and UVA spans [315,400], so the cell
+    count in each mask is the divisor — otherwise the reconstruction leaks
+    energy at the boundary (86 cells / 85 nm overcounted UVA).
+    """
     uva = max(float(uva_wm2), 0.0)
     uvb = max(float(uvb_wm2), 0.0)
     e = np.zeros_like(SPECTRAL_WAVES_NM, dtype=float)
-    e[UVB_MASK] = uvb / (315 - 280)
-    e[UVA_MASK] = uva / (400 - 315)
+    e[UVB_MASK] = uvb / int(UVB_MASK.sum())
+    e[UVA_MASK] = uva / int(UVA_MASK.sum())
     return e
 
 
@@ -190,10 +195,8 @@ def apply_skin_plane(
         for z, a, d, f, al in zip(sza, saz, direct, diffuse, alb)
     ]
     out["skin_plane_factor"] = np.round(factors, 4)
-    out["skin_plane_e_mel_wm2"] = (
-        pd.to_numeric(out["melanogenic_effective_irradiance_wm2"], errors="coerce")
-        * np.asarray(factors)
-    ).round(5)
+    e_mel = _num(out, "melanogenic_effective_irradiance_wm2")
+    out["skin_plane_e_mel_wm2"] = (e_mel * np.asarray(factors)).round(5)
     out["skin_plane_standard"] = (
         f"tilt {plane.tilt_deg:g}deg az {plane.azimuth_deg:g}deg (horizontal reference preserved)"
     )
@@ -315,7 +318,7 @@ TIER_B_REQUIRED_MANIFEST_FIELDS = (
 )
 
 
-def validate_tierB_manifest(manifest: dict) -> dict:
+def validate_tierB_manifest(manifest: dict[str, object]) -> dict[str, object]:
     """Enforce the Tier-B emulator manifest contract. Fails loudly.
 
     Strict mode calls this before trusting any Tier-B spectral output: the
