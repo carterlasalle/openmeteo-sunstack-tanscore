@@ -1,0 +1,15 @@
+{
+  "bands": [
+    "0_24h",
+    "24_72h",
+    "3_7d"
+  ],
+  "row_counts": {
+    "0_24h": 54151,
+    "24_72h": 22868,
+    "3_7d": 45916
+  },
+  "tan_score_model_version": "action-spectrum-v2",
+  "global_reference_version": "global-mel-ref-v1-provisional",
+  "fallback": "Use local_reference.parquet when the serving lead band is unavailable."
+}
