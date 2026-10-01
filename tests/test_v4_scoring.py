@@ -72,7 +72,7 @@ def _confidence(value: float = 80.0) -> pd.DataFrame:
 
 def test_v4_absolute_is_normalized_emel_with_legacy_diagnostic(tmp_path):
     out = score_forecast(_best_air(), Path(tmp_path), None, _confidence())
-    assert out["tan_score_model_version"].unique().tolist() == ["action-spectrum-v1"]
+    assert out["tan_score_model_version"].unique().tolist() == ["action-spectrum-v2"]
     expected_emel = melanogenic_from_broadband(
         out["predicted_uva_wm2"].to_numpy(), out["predicted_uvb_wm2"].to_numpy())
     assert np.allclose(out["melanogenic_effective_irradiance_wm2"].to_numpy(),
@@ -394,10 +394,10 @@ def test_local_reference_staleness_is_loud(tmp_path):
     caldir = Path(tmp_path) / "cal"
     caldir.mkdir()
     (caldir / "local_reference_version.json").write_text(json.dumps(
-        {"tan_score_model_version": "action-spectrum-v1"}))
+        {"tan_score_model_version": "action-spectrum-v2"}))
     out2 = score_forecast(_best_air(), caldir, None, _confidence())
     assert not out2["local_reference_stale"].any()
-    assert out2["local_reference_version"].unique().tolist() == ["action-spectrum-v1"]
+    assert out2["local_reference_version"].unique().tolist() == ["action-spectrum-v2"]
 
 
 def test_half_hour_keeps_constants_without_fabricating_observations():
@@ -415,14 +415,14 @@ def test_half_hour_keeps_constants_without_fabricating_observations():
         "melanogenic_effective_irradiance_wm2": [0.455, 0.597, 0.541],
         "erythemal_irradiance_wm2": [0.125, 0.1625, 0.15],
         "spectral_tier": ["C", "C", "C"],
-        "tan_score_model_version": ["action-spectrum-v1"] * 3,
+        "tan_score_model_version": ["action-spectrum-v2"] * 3,
         "cams_cycle": ["2026-06-21T00:00Z"] * 3,
         "uvi_cams": [5.1, np.nan, np.nan],  # CAMS horizon ends: must stay NaN
     })
     out = build_30min_forecast(hourly, None)
     half = out.loc[out["time"] == "2026-06-21T11:30"].iloc[0]
     assert half["spectral_tier"] == "C"
-    assert half["tan_score_model_version"] == "action-spectrum-v1"
+    assert half["tan_score_model_version"] == "action-spectrum-v2"
     assert half["cams_cycle"] == "2026-06-21T00:00Z"
     late = out.loc[out["time"] == "2026-06-21T13:00"].iloc[0]
     assert pd.isna(late["uvi_cams"])  # never forward-filled into fabrication
@@ -691,7 +691,7 @@ def test_reference_value_override_flags_stale(tmp_path):
 
     caldir = Path(tmp_path)
     (caldir / "local_reference_version.json").write_text(json.dumps(
-        {"tan_score_model_version": "action-spectrum-v1",
+        {"tan_score_model_version": "action-spectrum-v2",
          "global_reference_version": "global-mel-ref-v1-provisional",
          "global_reference_e_mel_wm2": 999.0}))
     out = score_forecast(_best_air(), caldir, None, _confidence())
@@ -780,12 +780,16 @@ def test_version_constants_have_single_source():
     from sunstack import photobiology as _pb
 
     assert _config.TAN_SCORE_MODEL_VERSION == _pb.TAN_SCORE_MODEL_VERSION
-    assert _config.TAN_SCORE_MODEL_VERSION == _pb.PHOTOBIOLOGY_MODEL_VERSION
-    assert _config.TAN_SCORE_MODEL_VERSION == _pb.TAN_DOSE_MODEL_VERSION
+    assert _config.TAN_SCORE_MODEL_VERSION == "action-spectrum-v2"
+    assert _config.PHOTOBIOLOGY_MODEL_VERSION == _pb.PHOTOBIOLOGY_MODEL_VERSION
+    assert _config.PHOTOBIOLOGY_MODEL_VERSION == "delayed-pigmentation-v2"
+    assert _config.ACTION_SPECTRUM_VERSION == _pb.ACTION_SPECTRUM_VERSION
+    assert _config.ACTION_SPECTRUM_VERSION == "parrish-fda-3630-v1"
 
 
 def test_canonical_env_parsing_is_explicit():
     import subprocess
+    import sys as _sys
 
     for value, want in (
         ("off", "False"), ("", "False"), ("0", "False"),
@@ -793,7 +797,7 @@ def test_canonical_env_parsing_is_explicit():
         ("YES", "True"),
     ):
         proc = subprocess.run(
-            ["python3", "-c",
+            [_sys.executable, "-c",
              ("import sys; sys.path.insert(0, 'src'); "
               "from sunstack import config; print(config.REQUIRE_CANONICAL_SPECTRUM)")],
             capture_output=True, text=True, check=False, env={
@@ -1634,8 +1638,8 @@ def _valid_scored_frame(**overrides):
         "tan_forecast_confidence_0_100": [70.0, 72.0, 71.0],
         "melanogenic_effective_irradiance_wm2": [0.5, 0.52, 0.51],
         "erythemal_irradiance_wm2": [0.125, 0.13, 0.128],
-        "tan_score_model_version": ["action-spectrum-v1"] * 3,
-        "spectral_backend": ["tierC-broadband-v1"] * 3,
+        "tan_score_model_version": ["action-spectrum-v2"] * 3,
+        "spectral_backend": ["tierC-broadband-proxy-v2"] * 3,
         "spectral_tier": ["C"] * 3,
         "local_reference_stale": [False] * 3,
     }

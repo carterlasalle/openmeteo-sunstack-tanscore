@@ -239,16 +239,16 @@ def validate_action_spectra(strict_canonical: bool = False) -> list[ValidationIs
     """Fail loudly when the photobiology model cannot be evaluated."""
     issues: list[ValidationIssue] = []
     try:
-        from .photobiology import load_action_spectrum
+        from .photobiology import ACTION_SPECTRUM_STEM, load_action_spectrum
     except ImportError as exc:
         return [ValidationIssue("ERROR", "photobiology", f"photobiology module unavailable: {exc}")]
-    for stem in ("parrish_delayed_melanogenesis", "cie_erythema_reference", "ipd_action_spectrum"):
+    for stem in (ACTION_SPECTRUM_STEM, "cie_erythema_reference", "ipd_action_spectrum"):
         try:
             spec = load_action_spectrum(stem)
         except (FileNotFoundError, ValueError) as exc:
             issues.append(ValidationIssue("ERROR", "photobiology", str(exc)))
             continue
-        if strict_canonical and stem == "parrish_delayed_melanogenesis" and spec.tier != "canonical":
+        if strict_canonical and stem == ACTION_SPECTRUM_STEM and spec.tier != "canonical":
             # Same rule as require_canonical_spectrum: anything but canonical
             # fails, including an "unknown" tier from metadata without a tier
             # key (which must not slip past validation only to be rejected

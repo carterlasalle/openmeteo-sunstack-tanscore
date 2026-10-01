@@ -117,7 +117,9 @@ def test_tandose_constant_is_exact_and_additive():
 
 
 def test_action_spectrum_uvb_orders_above_uva():
-    spec = load_action_spectrum("parrish_delayed_melanogenesis")
+    from sunstack.photobiology import ACTION_SPECTRUM_STEM
+
+    spec = load_action_spectrum(ACTION_SPECTRUM_STEM)
     uvb = effectiveness_at(spec, np.array([290.0, 292.0, 295.0])).mean()
     uva = effectiveness_at(spec, np.array([360.0, 362.0, 365.0])).mean()
     assert uvb / uva > 100.0, f"expected >2 orders, got {uvb/uva:.1f}x"
@@ -147,7 +149,7 @@ def test_photoaddition_two_bins_sum():
     e2 = melanogenic_from_broadband(0.0, 1.0)
     assert abs(float(e12) - (float(e1) + float(e2))) < 1e-12
     # Spectral form: integral of summed spectrum equals sum of integrals.
-    spec = load_action_spectrum("parrish_delayed_melanogenesis")
+    spec = load_action_spectrum()
     from sunstack.photobiology import melanogenic_effective_irradiance
 
     s1 = reconstruct_spectrum_tierC(30.0, 0.0)
@@ -381,7 +383,7 @@ def test_strict_canonical_gate_refuses_provisional():
     # Shipped melanogenesis basis is provisional: strict canonical mode must
     # refuse it loudly rather than silently score with it.
     with pytest.raises(RuntimeError, match="canonical spectrum"):
-        require_canonical_spectrum("parrish_delayed_melanogenesis")
+        require_canonical_spectrum()
     # The erythema reference IS canonical and passes the same gate.
     assert require_canonical_spectrum("cie_erythema_reference").tier == "canonical"
 
@@ -446,7 +448,7 @@ def test_unknown_tier_fails_strict_canonical_gate(monkeypatch):
     from sunstack.validation import validate_action_spectra
 
     stub = ActionSpectrum(
-        name="parrish_delayed_melanogenesis",
+        name="parrish_fda_3630",
         wavelengths_nm=__import__("numpy").arange(280, 401, dtype=float),
         effectiveness=__import__("numpy").full(121, 0.01),
         tier="unknown", source="stub", sha256="x")
@@ -548,7 +550,7 @@ def test_committed_spectra_rebuild_byte_identical(tmp_path, monkeypatch):
     module.main()
     src = Path("data/research/action_spectra")
     stems = ("cie_erythema_reference", "parrish_delayed_melanogenesis",
-             "cie_pigmentation_reference", "ipd_action_spectrum")
+             "parrish_fda_3630", "cie_pigmentation_reference", "ipd_action_spectrum")
     for stem in stems:
         rebuilt = (tmp_path / "spectra" / f"{stem}.csv").read_bytes()
         assert rebuilt == (src / f"{stem}.csv").read_bytes(), stem
@@ -560,10 +562,11 @@ def test_committed_spectra_rebuild_byte_identical(tmp_path, monkeypatch):
 
 
 def test_literature_gates_pass_on_shipped_spectra(tmp_path, monkeypatch):
-    # The 6 literature-anchored numeric gates (Parrish ratio, Keong
-    # photoaddition, endpoint crossing, IPD separation, SED/TanDose
-    # divergence) must hold on the shipped spectra; a spectra regression
-    # must break the suite, not wait for a manual script run.
+    # The 13 literature-informed regression invariants (6 FDA-table anchors +
+    # normalization + Parrish ratio, Keong photoaddition, endpoint separation,
+    # IPD separation, SED/TanDose divergence) must hold on the shipped
+    # spectra; a spectra regression must break the suite, not wait for a
+    # manual script run.
     import importlib.util
     import sys
 
@@ -576,7 +579,7 @@ def test_literature_gates_pass_on_shipped_spectra(tmp_path, monkeypatch):
                         ["check", "--out", str(report)])
     module.main()  # raises SystemExit on any failed gate
     text = report.read_text(encoding="utf-8")
-    assert text.count("[PASS]") == 6
+    assert text.count("[PASS]") == 13
     assert "[FAIL]" not in text
 
 
@@ -599,8 +602,9 @@ def test_tierB_clear_sky_fallback_is_physical():
 
 
 def test_predictor_uses_tierB_when_bundle_missing(tmp_path):
-    # No joblib bundle -> tierB-clear-sky-v1 rows (not uncalibrated), with
-    # per-row fallback to heuristic only where physics inputs miss.
+    # No joblib bundle -> degraded_clear_sky_parametric_v1 rows (not
+    # uncalibrated), with per-row fallback to heuristic only where physics
+    # inputs miss.
     import pandas as pd
 
     from sunstack.tanscore import predict_uva_uvb
@@ -615,5 +619,5 @@ def test_predictor_uses_tierB_when_bundle_missing(tmp_path):
         "is_day": [1, 1],
     })
     uva, uvb, tier = predict_uva_uvb(f, tmp_path)
-    assert list(tier) == ["tierB-clear-sky-v1", "uncalibrated_fallback"]
+    assert list(tier) == ["degraded_clear_sky_parametric_v1", "uncalibrated_fallback"]
     assert uva[0] > 0 and uvb[0] > 0

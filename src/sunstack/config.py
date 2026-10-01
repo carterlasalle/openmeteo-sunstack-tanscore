@@ -210,13 +210,27 @@ ABSOLUTE_UVI_REFERENCE = 20.0  # LEGACY - do not use in v4 calculations
 ABSOLUTE_UVA_REFERENCE_WM2 = 60.0  # LEGACY - do not use in v4 calculations
 ABSOLUTE_TAN_WEIGHTS = {"uvi": 0.55, "uva": 0.30, "interaction": 0.15}  # LEGACY
 
+# v5 version identities (contract §3). Do not mutate values under old labels;
+# recalibration mints a new version. Docs/examples are tested against these
+# constants (see tests/test_v5_contract.py); update both together.
+SCHEMA_VERSION = "sunstack-output-v5"
+TEMPORAL_SEMANTICS_VERSION = "interval-contract-v1"
+PHOTOBIOLOGY_MODEL_VERSION = "delayed-pigmentation-v2"
+ACTION_SPECTRUM_VERSION = "parrish-fda-3630-v1"
+ACTION_SPECTRUM_STEM = "parrish_fda_3630"
 # v4 photobiology: fixed versioned global melanogenic reference (W/m^2).
 # Recalibration creates a new score model version; never silently change.
 GLOBAL_MELANOGENIC_REFERENCE_WM2 = float(os.getenv("SUNSTACK_GLOBAL_MEL_REF_WM2", "1.6"))
 GLOBAL_MELANOGENIC_REFERENCE_VERSION = os.getenv(
     "SUNSTACK_GLOBAL_MEL_REF_VERSION", "global-mel-ref-v1-provisional"
 )
-TAN_SCORE_MODEL_VERSION = "action-spectrum-v1"
+TAN_SCORE_MODEL_VERSION = "action-spectrum-v2"
+SPECTRAL_BACKEND_VERSION_V5 = "tierB-libradtran-emulator-v1"
+SPECTRAL_DEGRADED_BACKEND = "tierC-broadband-proxy-v2"
+SURFACE_MODEL_VERSION = "uv-surface-v1"
+FUSION_VERSION = "calibrated-uvi-fusion-v2"
+CONFIDENCE_VERSION = "calibrated-error-v1"
+WINDOW_RANK_VERSION = "fixed-duration-dose-v2"
 REQUIRE_CANONICAL_SPECTRUM = (
     os.getenv("SUNSTACK_REQUIRE_CANONICAL_SPECTRUM", "0").strip().lower()
     in {"1", "true", "yes", "on"}

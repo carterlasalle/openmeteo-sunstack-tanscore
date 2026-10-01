@@ -29,7 +29,7 @@ from .photobiology import (
     load_action_spectrum,
 )
 
-SPECTRAL_BACKEND_VERSION = "tierC-broadband-v1"
+SPECTRAL_BACKEND_VERSION = "tierC-broadband-proxy-v2"
 SPECTRAL_WAVES_NM = np.arange(280, 401, 1, dtype=float)
 UVB_MASK = (SPECTRAL_WAVES_NM >= 280) & (SPECTRAL_WAVES_NM < 315)
 UVA_MASK = (SPECTRAL_WAVES_NM >= 315) & (SPECTRAL_WAVES_NM <= 400)
@@ -44,21 +44,22 @@ TIER_DESCRIPTIONS = {
 _band_cache: dict[str, tuple[float, float]] = {}
 
 
-def band_effective_weights(spectrum_stem: str = "parrish_delayed_melanogenesis") -> tuple[float, float]:
+def band_effective_weights(spectrum_stem: str | None = None) -> tuple[float, float]:
     """Mean action-spectrum effectiveness over the UVB and UVA bands.
 
     Derived from the loaded spectrum itself (uniform intra-band irradiance
     assumption documented as the Tier-C approximation), NOT hand-tuned.
     Returns (w_uvb, w_uva) with w_uvb >> w_uva for delayed melanogenesis.
     """
-    if spectrum_stem in _band_cache:
-        return _band_cache[spectrum_stem]
-    spec = load_action_spectrum(spectrum_stem)
+    stem = spectrum_stem or config.ACTION_SPECTRUM_STEM
+    if stem in _band_cache:
+        return _band_cache[stem]
+    spec = load_action_spectrum(stem)
     s = effectiveness_at(spec, SPECTRAL_WAVES_NM)
     # Trapezoidal band means (uniform E_lambda within each band).
     w_uvb = float(np.trapezoid(s[UVB_MASK], SPECTRAL_WAVES_NM[UVB_MASK]) / (315 - 280))
     w_uva = float(np.trapezoid(s[UVA_MASK], SPECTRAL_WAVES_NM[UVA_MASK]) / (400 - 315))
-    _band_cache[spectrum_stem] = (w_uvb, w_uva)
+    _band_cache[stem] = (w_uvb, w_uva)
     return w_uvb, w_uva
 
 
@@ -77,7 +78,7 @@ def reconstruct_spectrum_tierC(
 def melanogenic_from_broadband(
     uva_wm2: float | np.ndarray,
     uvb_wm2: float | np.ndarray,
-    spectrum_stem: str = "parrish_delayed_melanogenesis",
+    spectrum_stem: str | None = None,
 ) -> np.ndarray:
     """Tier-C E_mel from broadband UVA/UVB. Wavelength-additive, no interaction."""
     w_uvb, w_uva = band_effective_weights(spectrum_stem)
@@ -248,7 +249,7 @@ def emulator_manifest(spectral_backend: str = SPECTRAL_BACKEND_VERSION) -> dict[
     }
 
 
-TIERB_CLEAR_SKY_VERSION = "tierB-clear-sky-v1"
+TIERB_CLEAR_SKY_VERSION = "degraded_clear_sky_parametric_v1"
 
 
 def tierB_clear_sky_uv(
@@ -257,13 +258,13 @@ def tierB_clear_sky_uv(
     aod340: float | np.ndarray,
     albedo: float | np.ndarray = 0.2,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Analytic clear-sky spectral emulator (Tier-B fallback, no ML).
+    """Analytic clear-sky parametric fallback (degraded Tier C, no ML).
 
     Beer-Lambert direct + parametric diffuse against the TOA spectrum,
     integrated against the shipped action spectra. NOT a libRadtran
-    replacement: honest error bars are ~11 W/m2 UVA / 0.37 UVB on the POWER
-    test split (measured Sep 2026, clear-sky only, no cloud term). Used ONLY
-    when the ML bundle is missing;
+    replacement and NOT Tier B: honest error bars are ~11 W/m2 UVA / 0.37 UVB
+    on the POWER test split (measured Sep 2026, clear-sky only, no cloud
+    term). Used ONLY when the ML bundle is missing;
     the calibrated ML remains the production path whenever available.
 
     Residual-transmission ML on top of a physics baseline was attempted and
@@ -287,17 +288,17 @@ def tierB_clear_sky_uv(
     uvb = np.where(day, toa_uvb * mu * np.clip(t_uvb, 0, 1.2), 0.0)
     return uva, uvb
 
+# Back-compat alias: the old tierB-clear-sky-v1 name survives one migration
+# version so serialized artifacts stay parseable; new code must use
+# degraded_clear_sky_parametric_v1.
+TIERB_CLEAR_SKY_VERSION_LEGACY_ALIAS = "tierB-clear-sky-v1"
+
 
 def spectral_tier_for_row(has_emulator: bool = False, has_reference: bool = False) -> str:
-    """Tier C: implemented (broadband reconstruction). Tier B: analytic
-    clear-sky fallback implemented (tierB-clear-sky-v1); full libRadtran
-    emulator scaffold/contract defined but unwired (no uvspec here).
-    Tier A: reserved. Production resolves C with ML, B fallback without."""
-    if has_reference:
-        return "A"
-    if has_emulator:
-        return "B"
-    return "C"
+    """Tier C: implemented (broadband reconstruction). Tier B: reserved for a
+    validated libRadtran-trained emulator behind the manifest contract below;
+    the analytic clear-sky fallback is degraded Tier C, never Tier B.
+    Tier A: reserved. Production resolves C with ML, degraded-C without."""
     if has_reference:
         return "A"
     if has_emulator:

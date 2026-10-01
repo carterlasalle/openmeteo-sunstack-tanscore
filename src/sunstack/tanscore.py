@@ -232,10 +232,11 @@ def predict_uva_uvb(features: pd.DataFrame, calibration_dir: Path) -> tuple[np.n
         # old scalar stamped full-CAMS on rows past the CAMS horizon).
         tier = np.where(_full, "nasa_power_ml_plus_cams_spectral", "nasa_power_ml")
     else:
-        # Tier-B clear-sky physics fallback (no ML bundle). Beaten badly by
-        # the calibrated model (~11 vs 0.35 UVA MAE) but physical, labeled,
-        # and better than the old 0.055*GHI heuristic. Missing inputs stay
-        # missing (NaN): only confirmed night rows (below) become zero.
+        # Degraded clear-sky parametric fallback (Tier C, no ML bundle).
+        # Beaten badly by the calibrated model (~11 vs 0.35 UVA MAE) but
+        # physical, labeled, and better than the old 0.055*GHI heuristic.
+        # Missing inputs stay missing (NaN): only confirmed night rows
+        # (below) become zero.
         from .spectral import tierB_clear_sky_uv as _tierB
 
         sza = num(features, "sza").to_numpy(dtype=float)
@@ -249,7 +250,7 @@ def predict_uva_uvb(features: pd.DataFrame, calibration_dir: Path) -> tuple[np.n
         _miss = ~(np.isfinite(sza) & np.isfinite(o3) & np.isfinite(aod))
         uva = np.where(_miss, np.clip(0.055 * ghi, 0, 70), uva)
         uvb = np.where(_miss, np.clip(0.10 * uvi, 0, 3), uvb)
-        tier = np.where(_miss, "uncalibrated_fallback", "tierB-clear-sky-v1")
+        tier = np.where(_miss, "uncalibrated_fallback", "degraded_clear_sky_parametric_v1")
     # No sun above the horizon means no surface UV, full stop. The ML models
     # otherwise leak small positive values through the night.
     night = num(features, "is_day").fillna(1) == 0
@@ -433,10 +434,10 @@ def add_sun_posture(frame: pd.DataFrame) -> pd.DataFrame:
 
 def _require_photobiology_or_fail() -> tuple[object, float, str]:
     """Load melanogenesis spectrum + global reference, failing loudly."""
-    from .photobiology import load_action_spectrum
+    from .photobiology import ACTION_SPECTRUM_STEM, load_action_spectrum
 
     try:
-        spec = load_action_spectrum("parrish_delayed_melanogenesis")
+        spec = load_action_spectrum(ACTION_SPECTRUM_STEM)
     except (FileNotFoundError, ValueError) as exc:
         raise RuntimeError(f"ERROR photobiology: {exc}") from exc
     ref = float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2)
@@ -471,9 +472,10 @@ def score_forecast(
     # Strict photobiology gate: missing spectrum or bad reference fails loudly,
     # never silently falls back to the legacy 55/30/15 formula.
     if config.REQUIRE_CANONICAL_SPECTRUM:
+        from .photobiology import ACTION_SPECTRUM_STEM as _STEM
         from .photobiology import require_canonical_spectrum
 
-        require_canonical_spectrum("parrish_delayed_melanogenesis")
+        require_canonical_spectrum(_STEM)
     _spec, global_ref, spectrum_tier = _require_photobiology_or_fail()
 
     uva, uvb, tier = predict_uva_uvb(features, calibration_dir)

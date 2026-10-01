@@ -1675,9 +1675,9 @@ def test_debug_photobiology_reports_full_stack(tmp_path, capsys):
         "uva_dose_1h_j_m2": [100000.0],
         "uvb_dose_1h_j_m2": [3000.0],
         "pigment_darkening_dose_1h_j_m2": [290.0],
-        "spectral_backend": ["tierC-broadband-v1"],
+        "spectral_backend": ["tierC-broadband-proxy-v2"],
         "spectral_tier": ["C"],
-        "tan_score_model_version": ["action-spectrum-v1"],
+        "tan_score_model_version": ["action-spectrum-v2"],
         "cams_cycle": ["none"],
         "tan_calibration_tier": ["nasa_power_ml"],
         "uv_input_disagree": [False],
@@ -1685,7 +1685,7 @@ def test_debug_photobiology_reports_full_stack(tmp_path, capsys):
     }).to_parquet(tables / "tan_forecast_hourly.parquet", index=False)
     debug_photobiology(tmp_path)
     out = capsys.readouterr().out
-    for token in ("parrish_delayed_melanogenesis", "cie_erythema_reference",
+    for token in ("parrish_fda_3630", "cie_erythema_reference",
                   "ipd_action_spectrum", "Tier-C band weights",
                   "global_reference: global-mel-ref-v1-provisional",
                   "pigment_darkening_effective_irradiance",
@@ -1738,8 +1738,8 @@ def test_show_config_exposes_photobiology_model(capsys):
 
     _print_config()
     out = capsys.readouterr().out
-    for token in ("Photobiology model", "tan_score_model=action-spectrum-v1",
-                  "global-mel-ref-v1-provisional", "tierC-broadband-v1",
+    for token in ("Photobiology model", "tan_score_model=action-spectrum-v2",
+                  "global-mel-ref-v1-provisional", "tierC-broadband-proxy-v2",
                   "tandose_max_gap_s=", "skin_tilt_deg=",
                   "uvi_disagree_warn/strong="):
         assert token in out, token
@@ -1809,7 +1809,7 @@ def test_build_local_reference_without_uvb_uses_uvi_fallback(tmp_path):
     ref = build_local_reference(training, tmp_path)
     assert len(ref) == 6
     assert ref["melanogenic_effective_irradiance_wm2"].notna().all()
-    assert (ref["tan_score_model_version"] == "action-spectrum-v1").all()
+    assert (ref["tan_score_model_version"] == "action-spectrum-v2").all()
 
 
 def test_output_helpers_fail_loud_or_noop(tmp_path):

@@ -115,13 +115,15 @@ def _print_config() -> None:
     )
     print(f"CAMS EAC4: {config.CAMS_EAC4_START_YEAR} -> {config.CAMS_EAC4_END_YEAR}")
     print(f"ADS/CAMS credentials detected: {cds_credentials_present()}")
-    print("\nPhotobiology model (v4 action-spectrum):")
+    print("\nPhotobiology model (v5 delayed-pigmentation):")
     from .spectral import SPECTRAL_BACKEND_VERSION as _backend
 
     print(f"  tan_score_model={config.TAN_SCORE_MODEL_VERSION}")
+    print(f"  action_spectrum={config.ACTION_SPECTRUM_VERSION} ({config.ACTION_SPECTRUM_STEM})")
     print(f"  global_reference={config.GLOBAL_MELANOGENIC_REFERENCE_VERSION} "
           f"E_mel={config.GLOBAL_MELANOGENIC_REFERENCE_WM2} W/m^2")
-    print(f"  spectral_backend={_backend} (Tier C production; "
+    print(f"  spectral_backend={_backend} (degraded Tier-C proxy; "
+          f"strict Tier B requires {config.SPECTRAL_BACKEND_VERSION_V5}; "
           f"canonical_required={config.REQUIRE_CANONICAL_SPECTRUM})")
     print(f"  tandose_max_gap_s={config.TANDOSE_MAX_INTERP_GAP_S:g}")
     print(f"  skin_tilt_deg={config.SKIN_TILT_DEG:g} "
@@ -852,10 +854,14 @@ def debug_photobiology(root: Path) -> None:
 
     print("\nSunStack photobiology debug")
     try:
-        from .photobiology import load_action_spectrum, model_metadata
+        from .photobiology import (
+            ACTION_SPECTRUM_STEM,
+            load_action_spectrum,
+            model_metadata,
+        )
         from .spectral import band_effective_weights, emulator_manifest
 
-        for stem in ("parrish_delayed_melanogenesis", "cie_erythema_reference",
+        for stem in (ACTION_SPECTRUM_STEM, "cie_erythema_reference",
                      "ipd_action_spectrum"):
             try:
                 spec = load_action_spectrum(stem)

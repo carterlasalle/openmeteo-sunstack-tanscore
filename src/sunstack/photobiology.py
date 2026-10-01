@@ -22,11 +22,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-MODEL_VERSION = "action-spectrum-v1"
-TAN_SCORE_MODEL_VERSION = "action-spectrum-v1"
-TAN_DOSE_MODEL_VERSION = "action-spectrum-v1"
-PHOTOBIOLOGY_MODEL_VERSION = "action-spectrum-v1"
-ACTION_SPECTRUM_TIER_PROVISIONAL = "provisional"
+MODEL_VERSION = "delayed-pigmentation-v2"
+TAN_SCORE_MODEL_VERSION = "action-spectrum-v2"
+TAN_DOSE_MODEL_VERSION = "action-spectrum-v2"
+PHOTOBIOLOGY_MODEL_VERSION = "delayed-pigmentation-v2"
+ACTION_SPECTRUM_VERSION = "parrish-fda-3630-v1"
+ACTION_SPECTRUM_STEM = "parrish_fda_3630"
 
 REQUIRED_DOMAIN_NM = (280.0, 400.0)
 
@@ -96,7 +97,7 @@ def _load_meta(stem: str) -> dict:
     return json.loads(meta_path.read_text(encoding="utf-8"))
 
 
-def load_action_spectrum(stem: str = "parrish_delayed_melanogenesis") -> ActionSpectrum:
+def load_action_spectrum(stem: str = ACTION_SPECTRUM_STEM) -> ActionSpectrum:
     """Load and strictly validate an action spectrum resource."""
     if stem in _cache:
         return _cache[stem]
@@ -160,7 +161,7 @@ def load_action_spectrum(stem: str = "parrish_delayed_melanogenesis") -> ActionS
     return spec
 
 
-def require_canonical_spectrum(stem: str = "parrish_delayed_melanogenesis") -> ActionSpectrum:
+def require_canonical_spectrum(stem: str = ACTION_SPECTRUM_STEM) -> ActionSpectrum:
     """Strict production gate: refuse provisional spectra when canonical required."""
     spec = load_action_spectrum(stem)
     if spec.tier != "canonical":
@@ -180,7 +181,9 @@ def effectiveness_at(spec: ActionSpectrum, wavelengths_nm: np.ndarray) -> np.nda
     corrupt the UVA/UVB biological ratio. Interpolate in log10 space.
     """
     w = np.asarray(wavelengths_nm, dtype=float)
-    if bool(((w < spec.wavelengths_nm.min() - 1e-9) | (w > spec.wavelengths_nm.max() + 1e-9)).any()):
+    lo = float(np.min(spec.wavelengths_nm))
+    hi = float(np.max(spec.wavelengths_nm))
+    if bool(((w < lo - 1e-9) | (w > hi + 1e-9)).any()):
         raise ValueError(
             "ERROR photobiology: target wavelengths outside action-spectrum domain"
         )
@@ -195,7 +198,7 @@ def melanogenic_effective_irradiance(
 ) -> float:
     """E_mel = integral E_lambda * S_mel dlambda (trapezoidal in wavelength)."""
     if spec is None:
-        spec = load_action_spectrum("parrish_delayed_melanogenesis")
+        spec = load_action_spectrum(ACTION_SPECTRUM_STEM)
     e = np.asarray(spectral_irradiance_wm2nm, dtype=float)
     w = np.asarray(wavelengths_nm, dtype=float)
     if e.shape != w.shape:
@@ -332,7 +335,7 @@ def reference_minutes(
 
 def model_metadata(global_reference: dict | None = None) -> dict[str, object]:
     try:
-        mel = load_action_spectrum("parrish_delayed_melanogenesis")
+        mel = load_action_spectrum(ACTION_SPECTRUM_STEM)
         mel_meta = {
             "action_spectrum_name": mel.name,
             "action_spectrum_sha256": mel.sha256,
