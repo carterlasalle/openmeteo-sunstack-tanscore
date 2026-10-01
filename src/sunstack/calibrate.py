@@ -365,12 +365,28 @@ def build_training_dataset(
     if base.empty:
         return base
     if openmeteo_hist is not None and not openmeteo_hist.empty:
-        om = _utc_ns(openmeteo_hist.copy().sort_values("time_utc"))
-        om = om.rename(columns={c: f"om_{c}" for c in om.columns if c not in {"time_utc", "source", "model"}})
-        base = pd.merge_asof(
-            base.sort_values("time_utc"), om.sort_values("time_utc"), on="time_utc",
-            direction="nearest", tolerance=timedelta(minutes=35),
+        from .temporal import (
+            align_training_intervals,
+            openmeteo_hourly_to_intervals,
+            power_hourly_to_intervals,
         )
+
+        if "interval_midpoint" not in base:
+            base = power_hourly_to_intervals(base)
+        om = _utc_ns(openmeteo_hist.copy().sort_values("time_utc"))
+        if "interval_midpoint" not in om:
+            om = openmeteo_hourly_to_intervals(om, time_col="time_utc")
+        temporal = {
+            "time_utc", "source", "model", "interval_start", "interval_end",
+            "interval_midpoint", "radiation_support_type", "temporal_semantics_version",
+        }
+        om = om.rename(columns={c: f"om_{c}" for c in om.columns if c not in temporal})
+        base = align_training_intervals(base, om)
+        base = base.rename(columns={
+            c: c.removeprefix("pred_") for c in base.columns if c.startswith("pred_om_")
+        })
+        base = base.rename(columns={"pred_source": "source", "pred_model": "model"})
+        base = base.drop(columns=["pred_time_utc"], errors="ignore")
         if not isinstance(base, pd.DataFrame):
             raise TypeError("training merge must produce a DataFrame")
     calibration_dir.mkdir(parents=True, exist_ok=True)

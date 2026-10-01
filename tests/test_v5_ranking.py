@@ -30,6 +30,7 @@ def _day() -> pd.DataFrame:
         "wind_speed_10m": [5.0] * 4,
         "wind_gusts_10m": [6.0] * 4,
         "apparent_temperature": [75.0] * 4,
+        "comfort_band": ["perfect"] * 4,
     })
 
 
@@ -67,6 +68,41 @@ def test_hard_blocked_strongest_excluded_from_usable_but_retained() -> None:
     assert str(usable[0]) != str(strongest[0])
     assert str(strongest[0]) == "2026-06-21 10:00:00"
 
+
+def test_comfortable_window_excludes_hard_blocked_and_warm_slots() -> None:
+    from sunstack.opportunity import best_fixed_dose_window, build_daily_summary
+
+    day = _day()
+    day["melanogenic_effective_irradiance_wm2"] = [1.0, 0.8, 0.6, 0.4]
+    day["outdoor_blocked"] = [True, False, False, False]
+    day["comfort_band"] = ["too hot", "warm", "perfect", "sun-warmed"]
+    strongest = best_fixed_dose_window(day, 30, usable_only=False)
+    usable = best_fixed_dose_window(day, 30, usable_only=True)
+    comfortable = best_fixed_dose_window(day, 30, usable_only=True, comfort_min=2)
+    assert strongest is not None and usable is not None and comfortable is not None
+    assert [str(window[0]) for window in (strongest, usable, comfortable)] == [
+        "2026-06-21 10:00:00",
+        "2026-06-21 10:30:00",
+        "2026-06-21 11:00:00",
+    ]
+    row = build_daily_summary(day).iloc[0]
+    assert str(row["best_comfortable_usable_30m_start"]) == "2026-06-21T11:00:00"
+    assert str(row["best_comfortable_usable_30m_end"]) == "2026-06-21T11:30:00"
+    assert row["best_comfortable_usable_30m_dose_j_m2"] == 900.0
+
+
+def test_comfort_min_breaks_equal_dose_ties() -> None:
+    from sunstack.opportunity import best_fixed_dose_window
+
+    day = _day()
+    day["melanogenic_effective_irradiance_wm2"] = [0.5] * 4
+    day["outdoor_blocked"] = [False] * 4
+    day["comfort_band"] = ["cool", "warm", "sun-warmed", "perfect"]
+    cool_or_better = best_fixed_dose_window(day, 30, comfort_min=1)
+    sun_warmed_or_better = best_fixed_dose_window(day, 30, comfort_min=2)
+    assert cool_or_better is not None and sun_warmed_or_better is not None
+    assert str(cool_or_better[0]) == "2026-06-21 10:00:00"
+    assert str(sun_warmed_or_better[0]) == "2026-06-21 11:00:00"
 
 def test_confidence_only_breaks_defined_ties() -> None:
     from sunstack.opportunity import best_fixed_dose_window
@@ -106,3 +142,4 @@ def test_daily_summary_carries_both_rankings() -> None:
     assert row["exposure_basis"] == "environmental_horizontal"
     assert str(row["strongest_30m_start"]) == "2026-06-21T10:00:00"
     assert str(row["best_usable_30m_start"]) == "2026-06-21T10:00:00"
+    assert str(row["best_comfortable_usable_30m_start"]) == "2026-06-21T10:00:00"

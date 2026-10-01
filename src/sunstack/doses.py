@@ -1,11 +1,13 @@
 """Time-integrated doses: TanDose (melanogenic), SED (erythemal), UVA/UVB physical.
 
-All integrals use trapezoidal time integration over ACTUAL timestamps, never
-value * nominal interval. Gaps larger than config.TANDOSE_MAX_INTERP_GAP_S
-split the integration and mark tan_dose_complete/sed_complete = False with a
-coverage fraction. Night rows integrate as zero.
+Point samples use trapezoidal integration over actual timestamps; interval
+means use their exact rectangular support. Gaps or incomplete interval cover
+mark tan_dose_complete/sed_complete = False with a coverage fraction. Night
+rows integrate as zero.
 """
 from __future__ import annotations
+
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -19,6 +21,7 @@ from .photobiology import (
     integrate_tandose,
     reference_minutes,
 )
+from .temporal import integrate_interval_means_exact
 
 
 def _utc_seconds(frame: pd.DataFrame) -> np.ndarray:
@@ -30,6 +33,99 @@ def _utc_seconds(frame: pd.DataFrame) -> np.ndarray:
     # would nuke the whole frame's doses: _rolling_integral skips them loudly
     # via NaN doses + incomplete flags.
     return t.map(lambda x: x.timestamp() if pd.notna(x) else float("nan")).to_numpy(dtype=float)
+
+
+def _interval_bounds_seconds(frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray] | None:
+    for start_col, end_col in (
+        ("interval_start_utc", "interval_end_utc"),
+        ("interval_start", "interval_end"),
+    ):
+        if start_col in frame and end_col in frame:
+            start = pd.to_datetime(frame[start_col], utc=True, errors="coerce")
+            end = pd.to_datetime(frame[end_col], utc=True, errors="coerce")
+            return (
+                start.map(lambda x: x.timestamp() if pd.notna(x) else float("nan")).to_numpy(dtype=float),
+                end.map(lambda x: x.timestamp() if pd.notna(x) else float("nan")).to_numpy(dtype=float),
+            )
+    return None
+
+
+def _uses_interval_means(frame: pd.DataFrame) -> bool:
+    support = frame.get("radiation_support_type")
+    return (
+        isinstance(support, pd.Series)
+        and bool(support.fillna("").eq("interval_mean").all())
+        and _interval_bounds_seconds(frame) is not None
+    )
+
+
+def _interval_mean_integral(
+    frame: pd.DataFrame,
+    vals: np.ndarray | pd.Series,
+    start_s: float,
+    end_s: float,
+    bounds: tuple[np.ndarray, np.ndarray] | None = None,
+) -> tuple[float, bool, float]:
+    if not np.isfinite(start_s) or not np.isfinite(end_s) or end_s <= start_s:
+        return float("nan"), False, 0.0
+    bounds = _interval_bounds_seconds(frame) if bounds is None else bounds
+    if bounds is None:
+        return float("nan"), False, 0.0
+    starts, ends = bounds
+    values = np.asarray(vals, dtype=float)
+    if values.shape != starts.shape:
+        return float("nan"), False, 0.0
+    overlap = np.minimum(ends, end_s) - np.maximum(starts, start_s)
+    overlap = np.where(np.isfinite(overlap), np.maximum(overlap, 0.0), 0.0)
+    selected = overlap > 0
+    if not bool(selected.any()):
+        return float("nan"), False, 0.0
+    dose, values_complete, _ = integrate_interval_means_exact(
+        overlap[selected], values[selected]
+    )
+    span = end_s - start_s
+    valid = selected & np.isfinite(values)
+    covered = float(overlap[valid].sum())
+    geometry = float(overlap[selected].sum())
+    coverage = float(np.clip(covered / span, 0.0, 1.0))
+    complete = bool(
+        values_complete
+        and geometry >= span - 1e-6
+        and covered >= span - 1e-6
+    )
+    return dose, complete, coverage
+
+
+def _rolling_interval_integral(
+    frame: pd.DataFrame, vals: np.ndarray, window_s: float
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    dose = np.full(len(vals), np.nan)
+    complete = np.zeros(len(vals), dtype=bool)
+    coverage = np.zeros(len(vals), dtype=float)
+    bounds = _interval_bounds_seconds(frame)
+    if bounds is None:
+        return dose, complete, coverage
+    _, ends = bounds
+    for i, end_s in enumerate(ends):
+        if np.isfinite(end_s):
+            dose[i], complete[i], coverage[i] = _interval_mean_integral(
+                frame, vals, end_s - window_s, end_s, bounds
+            )
+    return dose, complete, coverage
+
+
+def _window_utc_seconds(value: str | pd.Timestamp, *, local: bool = True) -> float:
+    stamp = value if isinstance(value, pd.Timestamp) else pd.Timestamp(value)
+    if not isinstance(stamp, pd.Timestamp):
+        return float("nan")
+    if stamp.tzinfo is None:
+        if local:
+            stamp = stamp.tz_localize(
+                ZoneInfo(config.TIMEZONE), ambiguous=False, nonexistent="shift_forward"
+            )
+        else:
+            stamp = stamp.tz_localize("UTC")
+    return float(stamp.tz_convert("UTC").timestamp())
 
 
 def _rolling_integral(
@@ -94,14 +190,12 @@ def _rolling_dose(
     frame: pd.DataFrame, value_col: str, window_s: float, out_name: str,
     kind: str,
 ) -> pd.Series:
-    """Trailing-window trapezoidal dose ending at each row's timestamp.
-
-    Missing (NaN) samples are absent data, never zeros — see _rolling_integral.
-    """
-    vals = pd.to_numeric(frame[value_col], errors="coerce").to_numpy(dtype=float) \
-        if value_col in frame else np.full(len(frame), np.nan)
-    secs = _utc_seconds(frame)
-    dose, _, _ = _rolling_integral(vals, secs, window_s)
+    """Trailing-window dose ending at each interval end or point timestamp."""
+    vals = num(frame, value_col).to_numpy(dtype=float)
+    if _uses_interval_means(frame):
+        dose, _, _ = _rolling_interval_integral(frame, vals, window_s)
+    else:
+        dose, _, _ = _rolling_integral(vals, _utc_seconds(frame), window_s)
     if kind == "sed":
         dose = dose / 100.0
     return pd.Series(dose, index=frame.index, name=out_name)
@@ -116,12 +210,14 @@ def _window_flags(frame: pd.DataFrame, window_s: float,
     UNKNOWN dose never wears a complete flag. Pass value_col=None only for
     pure timestamp grids.
     """
-    secs = _utc_seconds(frame)
-    if value_col is not None and value_col in frame:
-        vals = pd.to_numeric(frame[value_col], errors="coerce").to_numpy(dtype=float)
+    if value_col is None:
+        vals = np.zeros(len(frame))
     else:
-        vals = np.zeros(len(frame)) if value_col is None else np.full(len(frame), np.nan)
-    _, complete, coverage = _rolling_integral(vals, secs, window_s)
+        vals = num(frame, value_col).to_numpy(dtype=float)
+    if _uses_interval_means(frame):
+        _, complete, coverage = _rolling_interval_integral(frame, vals, window_s)
+    else:
+        _, complete, coverage = _rolling_integral(vals, _utc_seconds(frame), window_s)
     return (pd.Series(complete, index=frame.index),
             pd.Series(np.round(coverage, 4), index=frame.index))
 
@@ -135,9 +231,7 @@ def add_interval_doses(frame: pd.DataFrame) -> pd.DataFrame:
         out["melanogenic_effective_irradiance_wm2"] = np.nan
     if "erythemal_irradiance_wm2" not in out:
         if "uv_index" in out:
-            out["erythemal_irradiance_wm2"] = (
-                pd.to_numeric(out["uv_index"], errors="coerce") / 40.0
-            )
+            out["erythemal_irradiance_wm2"] = num(out, "uv_index") / 40.0
         else:
             out["erythemal_irradiance_wm2"] = np.nan
     e_mel = num(out, "melanogenic_effective_irradiance_wm2")
@@ -165,9 +259,9 @@ def add_interval_doses(frame: pd.DataFrame) -> pd.DataFrame:
         out[f"uva_dose_{label}_j_cm2"] = (out[f"uva_dose_{label}_j_m2"] / 1e4).round(5)
         out[f"pigment_darkening_dose_{label}_j_m2"] = _rolling_dose(
             work, "_pig", sec, "", "tandose").to_numpy()
-        # Row-level gap marking (§1.3): timestamp-only, shared by every dose
-        # family on the same grid. UVA/UVB/pigment doses share the TanDose
-        # flags; SED carries its own pair.
+        # Row-level support coverage is shared by every dose family on the
+        # same grid. UVA/UVB/pigment doses share the TanDose flags; SED carries
+        # its own pair.
         done, cov = _window_flags(work, sec, "_e_mel")
         out[f"tan_dose_{label}_complete"] = done.to_numpy(dtype=bool)
         out[f"tan_dose_{label}_coverage_fraction"] = cov.to_numpy(dtype=float)
@@ -190,9 +284,7 @@ def add_interval_doses(frame: pd.DataFrame) -> pd.DataFrame:
 def _group_col(group: pd.DataFrame, name: str) -> pd.Series:
     # Missing input is UNKNOWN (NaN), never zero exposure. integrate_* skip
     # non-finite samples, so a wholly missing column yields NaN/incomplete.
-    if name not in group.columns:
-        return pd.Series(np.nan, index=group.index, dtype="float64")
-    return pd.to_numeric(group[name], errors="coerce")
+    return num(group, name)
 
 
 def _ery_or_uvi(group: pd.DataFrame, ery: pd.Series) -> pd.Series:
@@ -204,8 +296,7 @@ def _ery_or_uvi(group: pd.DataFrame, ery: pd.Series) -> pd.Series:
     # Rowwise: fill ONLY the holes from UVI (audit: the .any() check kept
     # null ery where UVI existed). combine_first never invents where both miss.
     if "uv_index" in group.columns:
-        _derived = pd.to_numeric(group["uv_index"], errors="coerce") / 40.0
-        return ery.combine_first(_derived)
+        return ery.combine_first(num(group, "uv_index") / 40.0)
     return ery
 
 
@@ -222,8 +313,6 @@ def day_totals(frame: pd.DataFrame) -> pd.DataFrame:
     # day at non-UTC sites and silently drop dawn exposure from day totals.
     if "time_utc" in work.columns:
         try:
-            from zoneinfo import ZoneInfo
-
             tz = ZoneInfo(config.TIMEZONE)
             local = pd.to_datetime(work["time_utc"], utc=True).dt.tz_convert(tz)
             work["_date"] = local.dt.date.astype(str)
@@ -236,17 +325,57 @@ def day_totals(frame: pd.DataFrame) -> pd.DataFrame:
         except AttributeError:
             work["_date"] = wall.astype(str).str.slice(0, 10)
     gap = float(config.TANDOSE_MAX_INTERP_GAP_S)
+    interval_means = _uses_interval_means(work)
     rows = []
     for date, g in work.sort_values("_secs").groupby("_date"):
-        e = _group_col(g, "melanogenic_effective_irradiance_wm2")
-        ery = _ery_or_uvi(g, _group_col(g, "erythemal_irradiance_wm2"))
-        uva = _group_col(g, "predicted_uva_wm2")
-        uvb = _group_col(g, "predicted_uvb_wm2")
-        t = pd.to_datetime(g["time_utc"] if "time_utc" in g else g["time"], utc=True)
-        td = integrate_tandose(t, e, gap)
-        sd = integrate_sed(t, ery, gap)
-        uva_d = integrate_band_dose(t, uva, gap)
-        uvb_d = integrate_band_dose(t, uvb, gap)
+        source = work if interval_means else g
+        e = _group_col(source, "melanogenic_effective_irradiance_wm2")
+        ery = _ery_or_uvi(source, _group_col(source, "erythemal_irradiance_wm2"))
+        uva = _group_col(source, "predicted_uva_wm2")
+        uvb = _group_col(source, "predicted_uvb_wm2")
+        if interval_means:
+            day_start = _window_utc_seconds(str(date))
+            day_end = _window_utc_seconds(
+                str(pd.Timestamp(str(date)) + pd.DateOffset(days=1))
+            )
+            td_dose, td_complete, td_coverage = _interval_mean_integral(
+                source, e, day_start, day_end
+            )
+            sd_dose, sd_complete, sd_coverage = _interval_mean_integral(
+                source, ery, day_start, day_end
+            )
+            uva_dose, uva_complete, uva_coverage = _interval_mean_integral(
+                source, uva, day_start, day_end
+            )
+            uvb_dose, uvb_complete, uvb_coverage = _interval_mean_integral(
+                source, uvb, day_start, day_end
+            )
+            td = {
+                "tan_dose_melanogenic_j_m2": td_dose,
+                "tan_dose_complete": td_complete,
+                "tan_dose_coverage_fraction": td_coverage,
+            }
+            sd = {
+                "sed": sd_dose / 100.0,
+                "sed_complete": sd_complete,
+                "sed_coverage_fraction": sd_coverage,
+            }
+            uva_d = {
+                "dose_j_m2": uva_dose,
+                "complete": uva_complete,
+                "coverage_fraction": uva_coverage,
+            }
+            uvb_d = {
+                "dose_j_m2": uvb_dose,
+                "complete": uvb_complete,
+                "coverage_fraction": uvb_coverage,
+            }
+        else:
+            t = pd.to_datetime(g["time_utc"] if "time_utc" in g else g["time"], utc=True)
+            td = integrate_tandose(t, e, gap)
+            sd = integrate_sed(t, ery, gap)
+            uva_d = integrate_band_dose(t, uva, gap)
+            uvb_d = integrate_band_dose(t, uvb, gap)
         day_dose = round(float(td["tan_dose_melanogenic_j_m2"]), 1)
         day_ref_min = round(reference_minutes(
             float(td["tan_dose_melanogenic_j_m2"]),
@@ -278,16 +407,23 @@ def window_dose(frame: pd.DataFrame, start, end,
                 max_gap_s: float | None = None) -> dict[str, float]:
     """Cumulative doses over a candidate window [start, end].
 
-    Samples are instantaneous: the end stamp bounds the final trapezoid leg,
-    so it is included (half-open ends would silently drop the last interval
-    of every window dose).
+    Interval means are clipped to the exact window span; point samples retain
+    the existing inclusive-endpoint trapezoid semantics.
     """
     gap = float(config.TANDOSE_MAX_INTERP_GAP_S) if max_gap_s is None else float(max_gap_s)
     sub = frame.copy()
-    sub["_t"] = pd.to_datetime(sub["dt"] if "dt" in sub else sub["time"], errors="coerce")
-    mask = (sub["_t"] >= pd.to_datetime(start)) & (sub["_t"] <= pd.to_datetime(end))
-    g = sub.loc[mask]
-    if g.empty:
+    interval_means = _uses_interval_means(sub)
+    window_is_local = "dt" in sub or "time" in sub
+    g = pd.DataFrame()
+    if interval_means:
+        source = sub
+    else:
+        time_col = "dt" if "dt" in sub else "time"
+        sub["_t"] = pd.to_datetime(sub[time_col], errors="coerce")
+        mask = (sub["_t"] >= pd.to_datetime(start)) & (sub["_t"] <= pd.to_datetime(end))
+        g = sub.loc[mask]
+        source = g
+    if not interval_means and g.empty:
         # No samples inside the window: exposure is UNKNOWN (NaN), never
         # zero — zero would claim a measured absence of sun.
         nan = float("nan")
@@ -303,18 +439,51 @@ def window_dose(frame: pd.DataFrame, start, end,
             "delayed_pigmentation_dose_best_window_coverage_fraction": nan,
             "sed_best_window_complete": False,
             "sed_best_window_coverage_fraction": nan}
-    t = pd.to_datetime(g["dt"] if "dt" in g else g["time"], utc=True)
-
     def _gcol(name: str) -> pd.Series:
-        # Missing input is UNKNOWN (NaN), never zero exposure.
-        if name not in g.columns:
-            return pd.Series(np.nan, index=g.index, dtype="float64")
-        return pd.to_numeric(g[name], errors="coerce")
+        return _group_col(source, name)
 
-    td = integrate_tandose(t, _gcol("melanogenic_effective_irradiance_wm2"), gap)
-    sd = integrate_sed(t, _ery_or_uvi(g, _gcol("erythemal_irradiance_wm2")), gap)
-    uva_d = integrate_band_dose(t, _gcol("predicted_uva_wm2"), gap)
-    uvb_d = integrate_band_dose(t, _gcol("predicted_uvb_wm2"), gap)
+    if interval_means:
+        window_start = _window_utc_seconds(start, local=window_is_local)
+        window_end = _window_utc_seconds(end, local=window_is_local)
+        td_dose, td_complete, td_coverage = _interval_mean_integral(
+            source, _gcol("melanogenic_effective_irradiance_wm2"), window_start, window_end
+        )
+        sd_dose, sd_complete, sd_coverage = _interval_mean_integral(
+            source, _ery_or_uvi(source, _gcol("erythemal_irradiance_wm2")),
+            window_start, window_end,
+        )
+        uva_dose, uva_complete, uva_coverage = _interval_mean_integral(
+            source, _gcol("predicted_uva_wm2"), window_start, window_end
+        )
+        uvb_dose, uvb_complete, uvb_coverage = _interval_mean_integral(
+            source, _gcol("predicted_uvb_wm2"), window_start, window_end
+        )
+        td = {
+            "tan_dose_melanogenic_j_m2": td_dose,
+            "tan_dose_complete": td_complete,
+            "tan_dose_coverage_fraction": td_coverage,
+        }
+        sd = {
+            "sed": sd_dose / 100.0,
+            "sed_complete": sd_complete,
+            "sed_coverage_fraction": sd_coverage,
+        }
+        uva_d = {
+            "dose_j_m2": uva_dose,
+            "complete": uva_complete,
+            "coverage_fraction": uva_coverage,
+        }
+        uvb_d = {
+            "dose_j_m2": uvb_dose,
+            "complete": uvb_complete,
+            "coverage_fraction": uvb_coverage,
+        }
+    else:
+        t = pd.to_datetime(g["dt"] if "dt" in g else g["time"], utc=True)
+        td = integrate_tandose(t, _gcol("melanogenic_effective_irradiance_wm2"), gap)
+        sd = integrate_sed(t, _ery_or_uvi(g, _gcol("erythemal_irradiance_wm2")), gap)
+        uva_d = integrate_band_dose(t, _gcol("predicted_uva_wm2"), gap)
+        uvb_d = integrate_band_dose(t, _gcol("predicted_uvb_wm2"), gap)
     win_dose = round(float(td["tan_dose_melanogenic_j_m2"]), 1)
     win_complete = bool(td["tan_dose_complete"])
     win_coverage = round(float(td["tan_dose_coverage_fraction"]), 3)

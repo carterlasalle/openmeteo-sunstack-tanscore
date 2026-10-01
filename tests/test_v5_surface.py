@@ -39,6 +39,27 @@ def test_preset_schema_provenance_complete() -> None:
             assert 0.0 < p.proxy_reflectance < 1.0
             assert p.reflectance_low <= p.proxy_reflectance <= p.reflectance_high
 
+def test_surface_yaml_matches_presets() -> None:
+    from dataclasses import asdict
+    from pathlib import Path
+
+    from sunstack.surface import (
+        PRESETS,
+        load_surface_materials,
+        validate_surface_materials,
+    )
+
+    materials = load_surface_materials(
+        Path(__file__).resolve().parents[1]
+        / "data" / "research" / "surfaces" / "surface_materials.yaml"
+    )
+    assert {material["slug"] for material in materials} == set(PRESETS)
+    for material in materials:
+        slug = material["slug"]
+        assert isinstance(slug, str)
+        assert material == asdict(PRESETS[slug])
+    validate_surface_materials()
+
 
 def test_grass_less_than_dry_sand_dry_more_than_wet() -> None:
     from sunstack.surface import PRESETS

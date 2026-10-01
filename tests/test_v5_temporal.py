@@ -60,6 +60,113 @@ def test_training_intervals_align_not_raw_timestamps() -> None:
     assert float(merged["pred_ghi"].iloc[0]) == 800.0
 
 
+
+def test_history_normalizers_attach_interval_metadata() -> None:
+    from sunstack.history import _openmeteo_hourly_frame, normalize_nasa_power
+
+    power = normalize_nasa_power({
+        "properties": {"parameter": {"ALLSKY_SFC_UVA": {"2026062112": 30.0}}}
+    })
+    openmeteo = _openmeteo_hourly_frame(
+        {"hourly": {"time": ["2026-06-21T13:00Z"], "shortwave_radiation": [800.0]}},
+        "openmeteo_historical_forecast",
+        "best_match",
+    )
+    required = {
+        "interval_start", "interval_end", "interval_midpoint",
+        "radiation_support_type", "temporal_semantics_version",
+    }
+    assert required.issubset(power.columns)
+    assert required.issubset(openmeteo.columns)
+    assert power["time_utc"].iloc[0] == pd.Timestamp("2026-06-21T12:00Z")
+    assert openmeteo["time_utc"].iloc[0] == pd.Timestamp("2026-06-21T13:00Z")
+    assert openmeteo["interval_start"].iloc[0] == pd.Timestamp("2026-06-21T12:00Z")
+
+
+def test_build_training_dataset_joins_openmeteo_by_midpoint(monkeypatch, tmp_path) -> None:
+    from sunstack import calibrate
+
+    monkeypatch.setattr(
+        calibrate,
+        "prepare_nasa_training",
+        lambda *_: pd.DataFrame({
+            "time_utc": pd.to_datetime(["2026-06-21T12:00Z"], utc=True),
+            "uva": [30.0],
+        }),
+    )
+    openmeteo = pd.DataFrame({
+        "time_utc": pd.to_datetime(
+            ["2026-06-21T12:00Z", "2026-06-21T13:00Z"], utc=True
+        ),
+        "shortwave_radiation": [100.0, 800.0],
+    })
+    training = calibrate.build_training_dataset(
+        pd.DataFrame(), openmeteo, pd.DataFrame(), tmp_path
+    )
+    # POWER's 12:00 start-anchored interval matches OM's 13:00 end-anchored
+    # interval; a raw timestamp merge would select the 100 W/m² row instead.
+    assert float(training["om_shortwave_radiation"].iloc[0]) == 800.0
+
+
+def test_dose_routing_uses_exact_interval_means_and_point_trapezoids() -> None:
+    from sunstack.doses import add_interval_doses, day_totals, window_dose
+
+    ends = pd.date_range("2026-06-21T12:00Z", periods=3, freq="30min")
+    interval_means = pd.DataFrame({
+        "time_utc": ends,
+        "dt": ends,
+        "interval_start_utc": ends - pd.Timedelta(minutes=30),
+        "interval_end_utc": ends,
+        "radiation_support_type": "interval_mean",
+        "melanogenic_effective_irradiance_wm2": [1.0, 2.0, 3.0],
+        "erythemal_irradiance_wm2": [1.0, 2.0, 3.0],
+        "predicted_uva_wm2": [1.0, 2.0, 3.0],
+        "predicted_uvb_wm2": [1.0, 2.0, 3.0],
+    })
+    point_samples = interval_means.drop(
+        columns=["interval_start_utc", "interval_end_utc"]
+    ).assign(radiation_support_type="instant")
+
+    interval_out = add_interval_doses(interval_means)
+    point_out = add_interval_doses(point_samples)
+    assert float(interval_out["tan_dose_1h_j_m2"].iloc[-1]) == 9000.0
+    assert float(point_out["tan_dose_1h_j_m2"].iloc[-1]) == 7200.0
+    assert float(day_totals(interval_means)["tan_dose_day_j_m2"].iloc[0]) == 10800.0
+    assert float(day_totals(point_samples)["tan_dose_day_j_m2"].iloc[0]) == 7200.0
+    assert window_dose(
+        interval_means, ends[0], ends[-1]
+    )["tan_dose_best_window_j_m2"] == 9000.0
+    assert window_dose(
+        point_samples, ends[0], ends[-1]
+    )["tan_dose_best_window_j_m2"] == 7200.0
+
+
+def test_half_hour_interval_columns_survive_record_serialization() -> None:
+    from sunstack.opportunity import build_30min_forecast
+    from sunstack.ui import _records
+
+    half_hour = build_30min_forecast(pd.DataFrame({
+        "time": ["2026-06-21T12:00", "2026-06-21T13:00"],
+        "uv_index": [5.0, 5.0],
+        "is_day": [True, True],
+        "temperature_2m": [24.0, 24.0],
+        "relative_humidity_2m": [50.0, 50.0],
+        "wind_speed_10m": [1.0, 1.0],
+        "weather_code": [0, 0],
+    }))
+    record = _records(half_hour)[0]
+    assert {
+        "interval_start_utc", "interval_end_utc", "interval_midpoint_utc"
+    }.issubset(record)
+    assert record["radiation_support_type"] == "interval_mean"
+    assert record["temporal_semantics_version"] == "interval-contract-v1"
+    start = pd.Timestamp(record["interval_start_utc"])
+    end = pd.Timestamp(record["interval_end_utc"])
+    midpoint = pd.Timestamp(record["interval_midpoint_utc"])
+    assert end - start == pd.Timedelta(minutes=30)
+    assert midpoint - start == pd.Timedelta(minutes=15)
+
+
 def test_interval_mean_dose_is_rectangular_exact() -> None:
     from sunstack.temporal import integrate_interval_means_exact
 

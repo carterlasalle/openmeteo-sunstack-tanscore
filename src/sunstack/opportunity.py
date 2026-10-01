@@ -11,6 +11,7 @@ import pvlib.location
 
 from . import config
 from .calibrate import num, scol
+from .temporal import TEMPORAL_SEMANTICS_VERSION
 
 LOG = logging.getLogger("sunstack")
 
@@ -363,9 +364,19 @@ def attach_fitzpatrick(df: pd.DataFrame, skin_type: int | None) -> pd.DataFrame:
 def _as_utc(stamps: pd.Series) -> pd.Series:
     parsed = pd.to_datetime(stamps)
     if getattr(parsed.dt, "tz", None) is None:
-        parsed = parsed.dt.tz_localize(
-            ZoneInfo(config.TIMEZONE), ambiguous="infer", nonexistent="shift_forward"
-        )
+        # Fall-back duplicates repeat wall-clock labels (test: two 01:00s):
+        # ambiguous="infer" raises when it cannot order them, so duplicated
+        # labels take first-occurrence order instead of aborting the run.
+        try:
+            parsed = parsed.dt.tz_localize(
+                ZoneInfo(config.TIMEZONE), ambiguous="infer",
+                nonexistent="shift_forward",
+            )
+        except ValueError:
+            parsed = parsed.dt.tz_localize(
+                ZoneInfo(config.TIMEZONE), ambiguous=True,
+                nonexistent="shift_forward",
+            )
     return parsed.dt.tz_convert("UTC")
 
 
@@ -760,10 +771,18 @@ def build_30min_forecast(
                      "tan_score_model_version"):
             if _col in _final:
                 out[_col] = _final[_col].to_numpy()
+    # The interpolated half-hour grid is a backward-mean grid: ``dt`` labels
+    # the interval end, so every row represents [dt - 30m, dt).
+    interval_end = _as_utc(out["dt"])
+    out["interval_start_utc"] = interval_end - pd.Timedelta(minutes=30)
+    out["interval_end_utc"] = interval_end
+    out["interval_midpoint_utc"] = interval_end - pd.Timedelta(minutes=15)
+    out["radiation_support_type"] = "interval_mean"
+    out["temporal_semantics_version"] = TEMPORAL_SEMANTICS_VERSION
     # Reapply merged opportunity after sub-hour corrections, carrying the
     # requested temperature floor (audit: used to fall back to 50F default).
     out = apply_outdoor_feasibility(out, min_temp_f)
-    # Trailing interval doses (TanDose/SED/UVA/UVB) via trapezoidal integration.
+    # Trailing interval doses route by each frame's temporal support tag.
     try:
         from .doses import add_interval_doses as _add_doses
 
@@ -857,8 +876,10 @@ def best_fixed_dose_window(
     Candidates are explicit [start, start+duration) intervals on the 30-min
     grid. Primary key: expected E_mel dose. Near-ties (within
     dose_tolerance_frac or the model uncertainty floor) break toward lower
-    expected error, then comfort, then earliest start. Local percentile never
-    enters the physical objective. Returns (start, end, dose_J_m2).
+    expected error, then earliest start. Local percentile never enters the
+    physical objective. `comfort_min` requires every stamp to meet a rank from
+    `comfort_band`: perfect=3, sun-warmed=2, cool/warm=1, too cold/too hot=0;
+    hard-blocked or unknown bands rank 0. Returns (start, end, dose_J_m2).
     """
     if day.empty:
         return None
@@ -871,13 +892,28 @@ def best_fixed_dose_window(
     n_slots = n_legs + 1
     e_mel = _num(d, "melanogenic_effective_irradiance_wm2")
     conf = _num(d, "tan_forecast_confidence_0_100")
-    blocked = d["outdoor_blocked"].fillna(False) if "outdoor_blocked" in d else False
+    blocked_raw = d.get("outdoor_blocked", False)
+    blocked = (blocked_raw.fillna(False).astype(bool)
+               if isinstance(blocked_raw, pd.Series) else False)
     stamps = d["dt"].reset_index(drop=True)
     e_vals = e_mel.reset_index(drop=True)
     c_vals = conf.reset_index(drop=True)
     if isinstance(blocked, pd.Series):
         blocked = blocked.reset_index(drop=True)
-    best: tuple[object, object, float] | None = None
+    comfort_rank: pd.Series | None = None
+    if comfort_min is not None:
+        bands = d.get("comfort_band")
+        comfort_rank = (
+            bands.map({
+                "perfect": 3.0, "sun-warmed": 2.0, "cool": 1.0, "warm": 1.0,
+                "too cold": 0.0, "too hot": 0.0,
+            }).fillna(0.0).reset_index(drop=True)
+            if isinstance(bands, pd.Series)
+            else pd.Series(0.0, index=range(len(d)))
+        )
+        if isinstance(blocked, pd.Series):
+            comfort_rank = comfort_rank.mask(blocked, 0.0)
+    best: tuple[pd.Timestamp, pd.Timestamp, float] | None = None
     best_err = float("inf")
     for i in range(len(d) - n_slots + 1):
         # Candidate [start, start+duration): n_slots stamps bound n_legs
@@ -897,6 +933,8 @@ def best_fixed_dose_window(
             continue  # night/zero window: no physical stimulus to rank
         if usable_only and isinstance(blocked, pd.Series) and bool(blocked.iloc[window_idx].any()):
             continue
+        if comfort_rank is not None and bool((comfort_rank.iloc[window_idx] < comfort_min).any()):
+            continue
         vals = [float(seg.iloc[j]) for j in range(len(seg))]
         legs = sum(0.5 * (vals[k] + vals[k + 1]) * 1800.0 for k in range(n_slots - 1)) if n_slots > 1 else 0.0
         dose = float(legs)
@@ -908,9 +946,7 @@ def best_fixed_dose_window(
             best_err = err
     if best is None:
         return None
-    start = pd.to_datetime(best[0])
-    end = pd.to_datetime(best[1])
-    return (start, end, float(best[2]))
+    return best
 
 
 def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
@@ -971,6 +1007,9 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
         # passing hard outdoor constraints. Local percentile never enters.
         strongest_30m = best_fixed_dose_window(daylight, 30, usable_only=False)
         usable_30m = best_fixed_dose_window(daylight, 30, usable_only=True)
+        comfortable_usable_30m = best_fixed_dose_window(
+            daylight, 30, usable_only=True, comfort_min=2
+        )
         try:
             from .doses import day_totals as _day_totals
             from .doses import window_dose as _window_dose
@@ -1056,6 +1095,9 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                 "best_usable_30m_start": usable_30m[0].isoformat() if usable_30m else None,
                 "best_usable_30m_end": usable_30m[1].isoformat() if usable_30m else None,
                 "best_usable_30m_dose_j_m2": round(usable_30m[2], 1) if usable_30m else np.nan,
+                "best_comfortable_usable_30m_start": comfortable_usable_30m[0].isoformat() if comfortable_usable_30m else None,
+                "best_comfortable_usable_30m_end": comfortable_usable_30m[1].isoformat() if comfortable_usable_30m else None,
+                "best_comfortable_usable_30m_dose_j_m2": round(comfortable_usable_30m[2], 1) if comfortable_usable_30m else np.nan,
                 "window_rank_version": "fixed-duration-dose-v2",
                 "exposure_basis": "environmental_horizontal",
                 "tan_dose_best_window_j_m2": float(_win_doses.get("tan_dose_best_window_j_m2", float("nan"))),

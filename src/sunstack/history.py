@@ -24,6 +24,7 @@ except ImportError:  # Lightweight fallback; uv sync installs retry-requests nor
 import requests_cache
 
 from . import config
+from .temporal import openmeteo_hourly_to_intervals, power_hourly_to_intervals
 
 NASA_POWER_URL = "https://power.larc.nasa.gov/api/temporal/hourly/point"
 HISTORICAL_FORECAST_URL = "https://historical-forecast-api.open-meteo.com/v1/forecast"
@@ -93,7 +94,7 @@ def normalize_nasa_power(payload: dict[str, Any]) -> pd.DataFrame:
         series = pd.Series([values.get(k, np.nan) for k in ordered], dtype="float64")
         series = series.replace(-999.0, np.nan).replace(-999, np.nan)
         out[name] = series
-    return out
+    return power_hourly_to_intervals(out)
 
 
 def fetch_nasa_power_history(
@@ -174,7 +175,7 @@ def _openmeteo_hourly_frame(payload: dict[str, Any], source: str, model: str) ->
     df["latitude_grid"] = payload.get("latitude")
     df["longitude_grid"] = payload.get("longitude")
     df["elevation_m"] = payload.get("elevation")
-    return df
+    return openmeteo_hourly_to_intervals(df, time_col="time_utc")
 
 
 def fetch_openmeteo_historical_forecast(

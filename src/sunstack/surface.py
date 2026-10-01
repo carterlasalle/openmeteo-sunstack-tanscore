@@ -22,6 +22,7 @@ as a flat degraded reflectance only when the caller allows it.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -102,6 +103,30 @@ PRESETS: dict[str, SurfaceProfile] = {
         "custom", "Custom reflectance", "lambertian", 0.0, 0.0, 1.0,
         "custom", "caller-supplied reflectances", "custom", False),
 }
+
+def load_surface_materials(path: Path) -> list[dict[str, object]]:
+    """Load the version-controlled surface provenance registry."""
+    import yaml
+
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, list):
+        raise TypeError("surface materials registry must be a list")
+    return raw
+
+
+def validate_surface_materials() -> None:
+    """Assert that the surface provenance registry matches the runtime presets."""
+    materials = load_surface_materials(
+        Path(__file__).resolve().parents[2]
+        / "data" / "research" / "surfaces" / "surface_materials.yaml"
+    )
+    by_slug = {material["slug"]: material for material in materials}
+    assert set(by_slug) == set(PRESETS)
+    assert len(by_slug) == len(materials)
+    for slug, profile in PRESETS.items():
+        material = by_slug[slug]
+        for field in ("proxy_reflectance", "reflectance_low", "reflectance_high"):
+            assert abs(float(material[field]) - getattr(profile, field)) <= 1e-12
 
 SURFACE_EXTENT_MODES = ("local", "broad")
 

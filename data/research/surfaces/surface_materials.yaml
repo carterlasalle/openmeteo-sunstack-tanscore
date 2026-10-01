@@ -1,0 +1,150 @@
+- slug: "unknown"
+  display_name: "Unknown surface"
+  optical_model: "none"
+  proxy_reflectance: 0.0
+  reflectance_low: 0.0
+  reflectance_high: 0.0
+  spectral_quality: "none"
+  source_citation: "no assertion"
+  state: "unknown"
+  rt_background_ok: false
+- slug: "grass_summer"
+  display_name: "Summer grass"
+  optical_model: "lambertian"
+  proxy_reflectance: 0.0285
+  reflectance_low: 0.020
+  reflectance_high: 0.037
+  spectral_quality: "broadband_uv_proxy"
+  source_citation: "IARC UV reflectance table (NCBI NBK401584): summer lawn grass 2.0-3.7% UVB"
+  state: "dry summer lawn"
+  rt_background_ok: true
+- slug: "grass_winter"
+  display_name: "Winter grass"
+  optical_model: "lambertian"
+  proxy_reflectance: 0.0400
+  reflectance_low: 0.030
+  reflectance_high: 0.050
+  spectral_quality: "broadband_uv_proxy"
+  source_citation: "IARC table dormant-grass range 3-5% UVB"
+  state: "dormant/brown"
+  rt_background_ok: true
+- slug: "dry_beach_sand"
+  display_name: "Dry beach sand"
+  optical_model: "lambertian"
+  proxy_reflectance: 0.1650
+  reflectance_low: 0.150
+  reflectance_high: 0.180
+  spectral_quality: "broadband_uv_proxy"
+  source_citation: "IARC table: dry light beach sand 15-18% UVB"
+  state: "dry"
+  rt_background_ok: true
+- slug: "wet_beach_sand"
+  display_name: "Wet beach sand"
+  optical_model: "lambertian"
+  proxy_reflectance: 0.0710
+  reflectance_low: 0.060
+  reflectance_high: 0.082
+  spectral_quality: "broadband_uv_proxy"
+  source_citation: "IARC table: wet sand ~7% UVB"
+  state: "wet"
+  rt_background_ok: true
+- slug: "light_concrete"
+  display_name: "Light concrete"
+  optical_model: "lambertian"
+  proxy_reflectance: 0.1100
+  reflectance_low: 0.100
+  reflectance_high: 0.120
+  spectral_quality: "broadband_uv_proxy"
+  source_citation: "IARC table: light concrete 10-12% UVB"
+  state: "dry"
+  rt_background_ok: true
+- slug: "aged_concrete"
+  display_name: "Aged concrete"
+  optical_model: "lambertian"
+  proxy_reflectance: 0.0760
+  reflectance_low: 0.070
+  reflectance_high: 0.082
+  spectral_quality: "broadband_uv_proxy"
+  source_citation: "IARC table: aged concrete 7.0-8.2% UVB"
+  state: "weathered"
+  rt_background_ok: true
+- slug: "fresh_asphalt"
+  display_name: "Fresh asphalt"
+  optical_model: "lambertian"
+  proxy_reflectance: 0.0455
+  reflectance_low: 0.041
+  reflectance_high: 0.050
+  spectral_quality: "broadband_uv_proxy"
+  source_citation: "IARC table: fresh asphalt 4.1-5.0% UVB"
+  state: "fresh"
+  rt_background_ok: true
+- slug: "aged_asphalt"
+  display_name: "Aged asphalt"
+  optical_model: "lambertian"
+  proxy_reflectance: 0.0695
+  reflectance_low: 0.050
+  reflectance_high: 0.089
+  spectral_quality: "broadband_uv_proxy"
+  source_citation: "IARC table: aged asphalt 5.0-8.9% UVB"
+  state: "weathered"
+  rt_background_ok: true
+- slug: "weathered_wood_deck"
+  display_name: "Weathered wood deck"
+  optical_model: "lambertian"
+  proxy_reflectance: 0.0640
+  reflectance_low: 0.050
+  reflectance_high: 0.078
+  spectral_quality: "broadband_uv_proxy"
+  source_citation: "representative measured value, weathered wood"
+  state: "weathered"
+  rt_background_ok: false
+- slug: "open_water"
+  display_name: "Open water"
+  optical_model: "water_fresnel"
+  proxy_reflectance: 0.0330
+  reflectance_low: 0.020
+  reflectance_high: 0.060
+  spectral_quality: "broadband_uv_proxy"
+  source_citation: "diffuse baseline ~3%; specular geometry-dependent, can be much higher"
+  state: "calm-to-rippled"
+  rt_background_ok: true
+- slug: "sea_foam"
+  display_name: "Sea foam"
+  optical_model: "lambertian"
+  proxy_reflectance: 0.2750
+  reflectance_low: 0.250
+  reflectance_high: 0.300
+  spectral_quality: "broadband_uv_proxy"
+  source_citation: "IARC table: sea foam 25-30% UVB"
+  state: "foamy"
+  rt_background_ok: false
+- slug: "fresh_snow"
+  display_name: "Fresh snow"
+  optical_model: "lambertian"
+  proxy_reflectance: 0.88
+  reflectance_low: 0.80
+  reflectance_high: 0.90
+  spectral_quality: "broadband_uv_proxy"
+  source_citation: "literature commonly ~0.8-0.9 UVB; spectral snow model preferred"
+  state: "fresh"
+  rt_background_ok: true
+- slug: "aged_snow"
+  display_name: "Aged snow"
+  optical_model: "lambertian"
+  proxy_reflectance: 0.50
+  reflectance_low: 0.40
+  reflectance_high: 0.60
+  spectral_quality: "broadband_uv_proxy"
+  source_citation: "representative two-day-old snow; spectral snow model preferred"
+  state: "aged"
+  rt_background_ok: true
+- slug: "custom"
+  display_name: "Custom reflectance"
+  optical_model: "lambertian"
+  proxy_reflectance: 0.0
+  reflectance_low: 0.0
+  reflectance_high: 1.0
+  spectral_quality: "custom"
+  source_citation: "caller-supplied reflectances"
+  state: "custom"
+  rt_background_ok: false
