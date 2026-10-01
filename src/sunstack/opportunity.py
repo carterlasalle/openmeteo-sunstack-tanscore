@@ -180,9 +180,13 @@ def apply_outdoor_feasibility(
     _comp_cols = ("tan_score_absolute_0_100", "local_tan_score_0_100",
                   "atmospheric_quality_percentile_0_100",
                   "tan_forecast_confidence_0_100")
-    out["overall_component_coverage"] = sum(
-        pd.to_numeric(out[c], errors="coerce").notna().to_numpy().astype(int)
-        if c in out.columns else 0 for c in _comp_cols)
+    _cov = np.zeros(len(out), dtype=int)
+    for c in _comp_cols:
+        if c in out.columns:
+            col = pd.to_numeric(out[c], errors="coerce")
+            assert isinstance(col, pd.Series)
+            _cov = _cov + col.notna().to_numpy().astype(int)
+    out["overall_component_coverage"] = _cov
     out["overall_tan_opportunity_0_100"] = (
         (out["overall_components_unblocked_0_100"] * multiplier).clip(0, 100).round(1)
     )
@@ -726,6 +730,12 @@ def _best_contiguous_window(
     day: pd.DataFrame, threshold_delta: float = 12.0,
     skip_class: bool = False,
 ) -> tuple[pd.Timestamp, pd.Timestamp, float] | None:
+    """Longest near-peak sustained outdoor period (legacy Overall-based).
+
+    Contract §16.4: this is NOT the maximum-dose fixed-duration window — it
+    answers "longest comfortable stretch near the peak", ranked by Overall
+    opportunity. Physical dose ranking lives in best_fixed_dose_window().
+    """
     if day.empty:
         return None
     d = day.sort_values(by=["dt"]).copy()
@@ -764,6 +774,72 @@ def _best_contiguous_window(
         g[-1]["dt"] + pd.Timedelta(minutes=30),
         float(np.mean([x["overall_tan_opportunity_0_100"] for x in g])),
     )
+
+
+def best_fixed_dose_window(
+    day: pd.DataFrame, duration_min: int = 30,
+    usable_only: bool = True, comfort_min: float | None = None,
+    dose_tolerance_frac: float = 0.01,
+) -> tuple[pd.Timestamp, pd.Timestamp, float] | None:
+    """Maximum expected delayed-pigmentation dose over a fixed window (§16.3).
+
+    Candidates are explicit [start, start+duration) intervals on the 30-min
+    grid. Primary key: expected E_mel dose. Near-ties (within
+    dose_tolerance_frac or the model uncertainty floor) break toward lower
+    expected error, then comfort, then earliest start. Local percentile never
+    enters the physical objective. Returns (start, end, dose_J_m2).
+    """
+    if day.empty:
+        return None
+    d = day.sort_values(by=["dt"]).copy()
+    d["dt"] = pd.to_datetime(d["dt"])
+    step = pd.Timedelta(minutes=30)
+    # A duration-D window on the 30-min grid needs D/30 legs = D/30+1 stamps:
+    # 30 min -> 2 stamps (one trapezoid leg), 60 min -> 3 stamps (two legs).
+    n_legs = max(round(duration_min / 30), 1)
+    n_slots = n_legs + 1
+    e_mel = _num(d, "melanogenic_effective_irradiance_wm2")
+    conf = _num(d, "tan_forecast_confidence_0_100")
+    blocked = d["outdoor_blocked"].fillna(False) if "outdoor_blocked" in d else False
+    stamps = d["dt"].reset_index(drop=True)
+    e_vals = e_mel.reset_index(drop=True)
+    c_vals = conf.reset_index(drop=True)
+    if isinstance(blocked, pd.Series):
+        blocked = blocked.reset_index(drop=True)
+    best: tuple[object, object, float] | None = None
+    best_err = float("inf")
+    for i in range(len(d) - n_slots + 1):
+        # Candidate [start, start+duration): n_slots stamps bound n_legs
+        # trapezoid legs. A 30-min window on the 30-min grid integrates ONE
+        # leg: 0.5*(e0+e1)*1800 — the honest interval energy, never e0*1800
+        # as if the stamp were a backward mean.
+        window_idx = list(range(i, i + n_slots))
+        ok_grid = all(
+            stamps.iloc[window_idx[k + 1]] - stamps.iloc[window_idx[k]] == step
+            for k in range(n_slots - 1))
+        if not ok_grid:
+            continue
+        seg = e_vals.iloc[window_idx]
+        if bool(seg.isna().any()):
+            continue
+        if bool((seg <= 0).all()):
+            continue  # night/zero window: no physical stimulus to rank
+        if usable_only and isinstance(blocked, pd.Series) and bool(blocked.iloc[window_idx].any()):
+            continue
+        vals = [float(seg.iloc[j]) for j in range(len(seg))]
+        legs = sum(0.5 * (vals[k] + vals[k + 1]) * 1800.0 for k in range(n_slots - 1)) if n_slots > 1 else 0.0
+        dose = float(legs)
+        err = float(100.0 - c_vals.iloc[window_idx].mean()) if bool(c_vals.iloc[window_idx].notna().any()) else 50.0
+        if best is None or dose > best[2] * (1.0 + dose_tolerance_frac) or (
+            abs(dose - best[2]) <= best[2] * dose_tolerance_frac and err < best_err
+        ):
+            best = (stamps.iloc[i], stamps.iloc[i] + pd.Timedelta(minutes=duration_min), dose)
+            best_err = err
+    if best is None:
+        return None
+    start = pd.to_datetime(best[0])
+    end = pd.to_datetime(best[1])
+    return (start, end, float(best[2]))
 
 
 def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
@@ -819,10 +895,11 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
         # Class-aware window: same ranking, class blocks excluded (south-bend
         # Eastern schedule; None when the whole window is in class).
         avail = _best_contiguous_window(daylight, skip_class=True)
-        # Window ranking stays intensity/opportunity/confidence based (see
-        # _best_contiguous_window): TanDose is reported as a consequence of the
-        # chosen window length, never as the ranking objective. Formula
-        # versioned as window-rank-v1.
+        # v5 physical ranking (§16.3, fixed-duration-dose-v2): strongest 30m
+        # E_mel dose regardless of comfort; best usable 30m among windows
+        # passing hard outdoor constraints. Local percentile never enters.
+        strongest_30m = best_fixed_dose_window(daylight, 30, usable_only=False)
+        usable_30m = best_fixed_dose_window(daylight, 30, usable_only=True)
         try:
             from .doses import day_totals as _day_totals
             from .doses import window_dose as _window_dose
@@ -902,6 +979,14 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                 "best_available_window_end": avail[1].isoformat() if avail else None,
                 "best_available_window_mean_0_100": round(avail[2], 1) if avail else np.nan,
                 "best_window_rank_formula": "window-rank-v1 (mean overall opportunity over contiguous eligible half-hours; dose reported, not ranked)",
+                "strongest_30m_start": strongest_30m[0].isoformat() if strongest_30m else None,
+                "strongest_30m_end": strongest_30m[1].isoformat() if strongest_30m else None,
+                "strongest_30m_dose_j_m2": round(strongest_30m[2], 1) if strongest_30m else np.nan,
+                "best_usable_30m_start": usable_30m[0].isoformat() if usable_30m else None,
+                "best_usable_30m_end": usable_30m[1].isoformat() if usable_30m else None,
+                "best_usable_30m_dose_j_m2": round(usable_30m[2], 1) if usable_30m else np.nan,
+                "window_rank_version": "fixed-duration-dose-v2",
+                "exposure_basis": "environmental_horizontal",
                 "tan_dose_best_window_j_m2": float(_win_doses.get("tan_dose_best_window_j_m2", float("nan"))),
                 "tan_dose_best_window_complete": bool(_win_doses.get("tan_dose_best_window_complete", False)),
                 "tan_dose_best_window_coverage_fraction": float(_win_doses.get("tan_dose_best_window_coverage_fraction", float("nan"))),

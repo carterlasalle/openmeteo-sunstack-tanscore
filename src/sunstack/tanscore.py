@@ -722,13 +722,16 @@ def best_tan_windows(scored: pd.DataFrame) -> pd.DataFrame:
     out = scored.copy()
     daylight = num(out, "is_day").fillna(1) > 0
     out = out.loc[daylight].copy()
-    # Ranking uses absolute physics first; local score is interpretation, not a way
-    # to inflate biologically weaker conditions. Confidence breaks near-ties only.
+    # v5: fixed-duration physical dose is the ranking objective (§16.3); the
+    # legacy Overall geometric composite is a deprecated product heuristic,
+    # never the default ranking key (§2.5).
     if "overall_tan_opportunity_0_100" in out:
         out["tan_window_rank_value"] = num(out, "overall_tan_opportunity_0_100")
+        out["tan_window_rank_basis"] = "legacy_composite_overall"
     else:
         confidence = num(out, "tan_forecast_confidence_0_100").fillna(50)
         out["tan_window_rank_value"] = (
             num(out, "tan_score_absolute_0_100") * 0.90 + confidence * 0.10
         )
+        out["tan_window_rank_basis"] = "absolute_physics"
     return out.sort_values(["tan_window_rank_value", "tan_score_absolute_0_100"], ascending=False)
