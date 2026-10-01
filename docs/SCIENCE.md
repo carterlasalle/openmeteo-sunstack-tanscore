@@ -526,8 +526,10 @@ and `--skin-azimuth-deg`. Persisted runs and static exports retain
 - Static export and `/api/data` served rows use one astronomical daylight mask:
   `is_day` when it supplies a signal, otherwise positive `solar_elevation_deg`;
   fixtures without either signal retain all rows, and source parquet/CSV tables
-  keep every row. Fit is the share of half-hours on exactly that daylight mask
-  which are not hard-blocked.
+  keep every row. Usability share is the share of half-hours on exactly that
+  daylight mask which are not hard-blocked (no separate Fit metric is published;
+  the served payload itself is the denominator, enforced by the
+  `daylight_fit_denominator` validator check).
 - Reskin is renderer-only: `forecast_code_sha` remains the forecast identity
   while `renderer_code_sha` records the renderer revision. Static export writes
   `surfaces.json` from `surface.PRESETS` and labels the client-side
@@ -548,7 +550,8 @@ and `--skin-azimuth-deg`. Persisted runs and static exports retain
   input brightness (BSRN corroboration +29%/+48 $\mathrm{W\,m^{-2}}$); Payerne +42%
   plausibly explained by instrument/definition mismatch; unresolved as independent
   absolute validation (CERES 5.02% vs station 3.5% is a hypothesis, not a reproduced
-  root cause), model unchanged.
+  root cause — extraction script, response curve, and exact matching logic are not
+  preserved, so the result is not independently reproducible), model unchanged.
 - **Literature gates** (`scripts/check_literature.py` → 6/6 PASS): Parrish
   UVB/UVA effectiveness 1247×, Keong photoaddition exact, erythema/melanogenesis
   spectral crossing 1.44× @300 nm vs 3.11× @340 nm, IPD UVA-dominant/UVB-silent,

@@ -7,12 +7,16 @@ original units, digitization method, checksum, and limitations.
 
 ## Current resources
 
-- `parrish_delayed_melanogenesis.csv` (tier **provisional**): primary
-  delayed-pigmentation basis. Provisional anchor points approximating Parrish
-  JA, Jaenicke KF, Anderson RR. 1982, DOI
-  10.1111/j.1751-1097.1982.tb04362.x, PMID 7122713. Endpoint: delayed
-  tanning/new melanogenesis (~7-day visual grading). 280-289 nm assumes
-  continued high effectiveness (not measured). Log-space interpolation only.
+- `parrish_fda_3630.csv` (tier **provisional**): primary delayed-pigmentation
+  basis, version `parrish-fda-3630-v1`. FDA Form 3630 (09/26) Appendix B
+  1-nm transcription of Parrish JA, Jaenicke KF, Anderson RR. 1982
+  (PMID 7122713), normalized 1.0 at 296 nm. Endpoint: delayed tanning/new
+  melanogenesis (~7-day visual grading, Type II skin). Replaces the retired
+  `parrish_delayed_melanogenesis.csv` approximation (which assumed 280-289 nm
+  unity; measured table: 280 nm = 0.314). Log-space interpolation only where
+  resampling is unavoidable; the 1-nm table needs none on the production grid.
+- `parrish_delayed_melanogenesis.csv` (tier **retired**): superseded
+  approximation kept for history only; never loaded in production.
 - `cie_pigmentation_reference.csv` (tier **provisional PLACEHOLDER**): exact
   CIE 103/3 ("Reference Action Spectra for Ultraviolet Induced Erythema and
   Pigmentation of Different Human Skin Types", 1993) table not legally or

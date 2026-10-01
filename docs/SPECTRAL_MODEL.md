@@ -33,9 +33,12 @@ melanin-color prediction.
   a validated spectral emulator.
 - **D** unavailable (strict mode fails).
 
-Strict mode requires a gate-passing backend; `--allow-degraded` may permit C
-with its tier on every output. The legacy 55/30/15 formula is never a silent
-fallback.
+Current status: no gate-passing Tier-B emulator is wired (`SUNSTACK_TIERB_MANIFEST`
+unset, no uvspec binary/corpus in this environment), so strict runs publish
+Tier-C by default with its tier on every output. A tier A/B claim without a
+validated manifest fails loudly instead of scoring silently as Tier C.
+`--allow-degraded` additionally permits pre-manifest/sklearn-drift bundles.
+The legacy 55/30/15 formula is never a silent fallback.
 
 ## Temporal and erythemal hierarchy
 

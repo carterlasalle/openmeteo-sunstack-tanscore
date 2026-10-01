@@ -561,6 +561,38 @@ def test_committed_spectra_rebuild_byte_identical(tmp_path, monkeypatch):
         assert meta["checksum_sha256"] == actual, stem
 
 
+def test_delayed_pigmentation_spectrum_authoritative_anchors() -> None:
+    """Contract §24.1: FDA-3630 anchors pin the shipped transcription."""
+    import numpy as np
+
+    from sunstack.photobiology import (
+        ACTION_SPECTRUM_STEM,
+        effectiveness_at,
+        load_action_spectrum,
+    )
+
+    mel = load_action_spectrum(ACTION_SPECTRUM_STEM)
+    for wave, want in ((280.0, 0.314285), (296.0, 1.0), (302.0, 0.815892),
+                       (315.0, 0.0294593), (340.0, 0.00151841), (400.0, 0.000179336)):
+        got = float(effectiveness_at(mel, np.array([wave])).mean())
+        assert abs(got - want) / max(want, 1e-12) < 1e-6, (wave, got, want)
+
+
+def test_action_spectrum_normalization_at_reference_wavelength() -> None:
+    """Contract §24.1: table maximum 1.0 sits at 296 nm."""
+    import numpy as np
+
+    from sunstack.photobiology import (
+        ACTION_SPECTRUM_STEM,
+        effectiveness_at,
+        load_action_spectrum,
+    )
+
+    mel = load_action_spectrum(ACTION_SPECTRUM_STEM)
+    assert mel.name == ACTION_SPECTRUM_STEM
+    assert float(effectiveness_at(mel, np.array([296.0])).mean()) == 1.0
+
+
 def test_literature_gates_pass_on_shipped_spectra(tmp_path, monkeypatch):
     # The 13 literature-informed regression invariants (6 FDA-table anchors +
     # normalization + Parrish ratio, Keong photoaddition, endpoint separation,
