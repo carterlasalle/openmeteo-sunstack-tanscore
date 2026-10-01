@@ -165,22 +165,52 @@ def apply_skin_plane(
     frame: pd.DataFrame,
     tilt_deg: float | None = None,
     azimuth_deg: float | None = None,
+    surface_slug: str | None = None,
+    surface_extent: str = "local",
 ) -> pd.DataFrame:
     """Attach skin-plane E_mel alongside the horizontal environmental reference.
 
-    Environmental columns (E_mel, TanScore) are never overwritten: posture and
-    tilt produce additional `skin_plane_*` columns for context.
+    Environmental columns (E_mel, TanScore) are never overwritten: posture,
+    tilt, and LOCAL surface produce additional `skin_plane_*` columns for
+    context. Contract §12-13: direct/diffuse/reflected components are
+    explicit and separate; the local surface NEVER mutates horizontal
+    environmental fields; CAMS forecast_albedo stays regional input.
     """
     from .calibrate import num as _num
+    from .surface import (
+        SURFACE_MODEL_VERSION as _SURFACE_VERSION,
+    )
+    from .surface import (
+        lambertian_ground_view_factor as _ground_view,
+    )
+    from .surface import (
+        resolve_surface as _resolve_surface,
+    )
 
     plane = resolve_skin_plane(tilt_deg, azimuth_deg)
+    surface = _resolve_surface(surface_slug)
+    if surface_extent not in ("local", "broad"):
+        raise ValueError(
+            f"ERROR surface: surface_extent must be local|broad, got {surface_extent!r}")
     out = frame.copy()
+    out["surface_material_slug"] = surface.slug
+    out["surface_display_name"] = surface.display_name
+    out["surface_extent_mode"] = surface_extent
+    out["surface_model_quality"] = surface.spectral_quality
+    out["surface_uva_reflectance"] = surface.proxy_reflectance
+    out["surface_uvb_reflectance"] = surface.proxy_reflectance
+    out["surface_reflectance_source"] = surface.source_citation
+    out["surface_reflection_uncertainty"] = surface.reflectance_high - surface.reflectance_low
+    out["surface_model_version"] = _SURFACE_VERSION
     if "melanogenic_effective_irradiance_wm2" not in out:
         return out
     if abs(plane.tilt_deg) < 1e-9:
         out["skin_plane_e_mel_wm2"] = out["melanogenic_effective_irradiance_wm2"]
         out["skin_plane_factor"] = 1.0
         out["skin_plane_standard"] = "horizontal environmental reference"
+        out["skin_plane_ground_reflected_delayed_pigmentation_wm2"] = 0.0
+        out["skin_plane_ground_reflected_uva_wm2"] = 0.0
+        out["skin_plane_ground_reflected_uvb_wm2"] = 0.0
         return out
     sza = _num(out, "sza").fillna(90.0 - _num(out, "solar_elevation_deg").fillna(0.0))
     saz = _num(out, "solar_azimuth_deg").fillna(180.0)
@@ -200,6 +230,18 @@ def apply_skin_plane(
     out["skin_plane_standard"] = (
         f"tilt {plane.tilt_deg:g}deg az {plane.azimuth_deg:g}deg (horizontal reference preserved)"
     )
+    # Explicit local reflected components (§12.8): Lambertian ground view ×
+    # local surface proxy × horizontal broadband, kept separate from the
+    # horizontal environmental fields. Flat plane: zero by geometry.
+    gv = _ground_view(plane.tilt_deg)
+    ghi = _num(out, "shortwave_radiation").fillna(
+        direct.fillna(0.0) + diffuse.fillna(0.0))
+    refl_uva = ghi * surface.proxy_reflectance * gv
+    refl_uvb = ghi * surface.proxy_reflectance * gv
+    out["skin_plane_ground_reflected_uva_wm2"] = np.round(refl_uva, 4)
+    out["skin_plane_ground_reflected_uvb_wm2"] = np.round(refl_uvb, 4)
+    out["skin_plane_ground_reflected_delayed_pigmentation_wm2"] = np.round(
+        refl_uvb * 0.562322 + refl_uva * 0.002774, 5)
     return out
 
 
