@@ -187,8 +187,10 @@ $$E_{\mathrm{DP},h}(t) = \int_{280}^{400} E_{\lambda,h}(t,\lambda)\, S_{\mathrm{
 
 $$ \mathrm{Absolute}(t) = \mathrm{clip}\!\left(100\,\frac{E_{\mathrm{DP},h}(t)}{E_{\mathrm{ref}}},\, 0,\, 100\right), \qquad E_{\mathrm{ref}} = 1.6\ \mathrm{W\,m^{-2}} $$
 
-The optional skin-plane counterpart is built from direct, diffuse, and local
-reflected components before the same action-spectrum convolution. The action
+The optional skin-plane counterpart applies the broadband geometric plane
+factor to the horizontal $E_{\mathrm{DP}}$ (Tier-C approximation: UV is not
+re-convolved per component) and reports the band-weighted local reflected
+component separately. The action
 spectrum identity is `parrish-fda-3630-v1`; strict canonical gates fail loudly
 when its required source/backend is unavailable, while degraded output remains
 explicitly labeled.
@@ -419,7 +421,7 @@ $[t, t{+}30m)$ lives on the row at $t{+}30m$. Day totals group by **local** date
 
 ---
 
-## 8. Sub-hour engine — native HRRR forecast + clear-sky-index interpolation
+## 8. Sub-hour engine — native HRRR forecast + clearness-index interpolation
 
 `build_30min_forecast` resamples hourly → 30-min on the union grid with
 time-interpolation **inside** each column's observed span only (past-horizon
@@ -442,7 +444,7 @@ geometry is recomputed per :30 stamp. Native HRRR values are native HRRR
   interpolated spectral value is never presented as native; `subhour_source`
   is retained), then final UVI fusion, percentiles, feasibility, and trailing
   doses are recomputed from those final parents. Pre-sunrise ghost-light and
-  clear-sky-index plumbing remain independently checked.
+  clearness-index plumbing remain independently checked.
 
 ---
 
