@@ -9,7 +9,14 @@ import numpy as np
 import pandas as pd
 
 from . import config
-from .calibrate import MODEL_FEATURES, absolute_tan_score, num, scol, solar_features
+from .calibrate import (
+    MODEL_FEATURES,
+    SERVING_REFERENCE_BANDS,
+    absolute_tan_score,
+    num,
+    scol,
+    solar_features,
+)
 from .temporal import cams_accumulation_to_interval_means
 
 
@@ -323,6 +330,39 @@ def add_local_scores(forecast: pd.DataFrame, local_ref: pd.DataFrame) -> pd.Data
     out["local_tan_score_0_100"] = np.round(local_scores, 1)
     out["atmospheric_quality_percentile_0_100"] = np.round(atm_scores, 1)
     return out
+
+def _add_serving_local_scores(
+    forecast: pd.DataFrame,
+    references: dict[str, pd.DataFrame],
+    fallback_ref: pd.DataFrame,
+) -> tuple[pd.DataFrame, np.ndarray]:
+    """Score each forecast row against its matching archived forecast lead."""
+    out = forecast.copy()
+    out["local_tan_score_0_100"] = np.nan
+    out["atmospheric_quality_percentile_0_100"] = np.nan
+    lead_days = np.arange(len(out), dtype=float) / 24.0
+    bands = tuple(SERVING_REFERENCE_BANDS)
+    row_bands = np.select(
+        [lead_days < 1.0, lead_days < 3.0, lead_days < 7.0],
+        [bands[0], bands[1], bands[2]],
+        default="fallback",
+    )
+    fallback = np.zeros(len(out), dtype=bool)
+    for band in (*bands, "fallback"):
+        positions = np.flatnonzero(row_bands == band)
+        if not len(positions):
+            continue
+        reference = references.get(band)
+        if reference is None or reference.empty:
+            fallback[positions] = True
+            reference = fallback_ref
+        scored = add_local_scores(out.iloc[positions], reference)
+        for column in (
+            "local_tan_score_0_100",
+            "atmospheric_quality_percentile_0_100",
+        ):
+            out.iloc[positions, out.columns.get_loc(column)] = scored[column].to_numpy()
+    return out, fallback
 
 
 def _grade_absolute(score: float) -> str:
@@ -668,8 +708,53 @@ def score_forecast(
         pass
     local_ref = (pd.read_parquet(ref_path)
                  if (_ref_usable and ref_path.exists()) else pd.DataFrame())
-    out = add_local_scores(out, local_ref)
-    out["local_tan_label"] = [_grade_local(float(x)) for x in num(out, "local_tan_score_0_100").fillna(np.nan)]
+    _lead_refs: dict[str, pd.DataFrame] = {}
+    _lead_version = "unknown"
+    try:
+        _lead_path = calibration_dir / "lead_reference_manifest.json"
+        if _lead_path.exists():
+            _lead_manifest = _json.loads(_lead_path.read_text(encoding="utf-8"))
+            _lead_version = str(_lead_manifest.get("tan_score_model_version", "unknown"))
+            _lead_model_ok = (_lead_manifest.get("tan_score_model_version")
+                              == config.TAN_SCORE_MODEL_VERSION)
+            _lead_refver_ok = (_lead_manifest.get("global_reference_version")
+                               == config.GLOBAL_MELANOGENIC_REFERENCE_VERSION)
+            _lead_bands = _lead_manifest.get("bands", [])
+            if _lead_model_ok and _lead_refver_ok and isinstance(_lead_bands, list):
+                for _band in _lead_bands:
+                    if _band not in SERVING_REFERENCE_BANDS:
+                        continue
+                    _band_path = calibration_dir / f"local_reference_serving_{_band}.parquet"
+                    if _band_path.exists():
+                        _band_ref = pd.read_parquet(_band_path)
+                        if not _band_ref.empty:
+                            _lead_refs[_band] = _band_ref
+    except (AttributeError, OSError, ValueError, TypeError):
+        _lead_refs = {}
+    import logging as _logging
+
+    if _lead_refs:
+        out, _fallback = _add_serving_local_scores(out, _lead_refs, local_ref)
+        out["local_reference_fallback"] = _fallback
+        _served = ~_fallback
+        if _served.any():
+            out.loc[_served, "local_reference_version"] = _lead_version
+            out.loc[_served, "local_reference_stale"] = False
+        if _fallback.any():
+            _logging.getLogger("sunstack").warning(
+                "Serving local reference unavailable for forecast lead; "
+                "falling back to legacy local_reference.parquet"
+            )
+    else:
+        out = add_local_scores(out, local_ref)
+        out["local_reference_fallback"] = True
+        _logging.getLogger("sunstack").warning(
+            "Serving local references unavailable; "
+            "falling back to legacy local_reference.parquet"
+        )
+    out["local_tan_label"] = [
+        _grade_local(float(x)) for x in num(out, "local_tan_score_0_100").fillna(np.nan)
+    ]
 
     # Reliability from the calibrated error model (§11): confidence is a
     # monotonic transform of expected error, never of sunniness. Ensemble

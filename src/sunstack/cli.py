@@ -15,6 +15,7 @@ import pandas as pd
 from . import config
 from .calibrate import (
     build_local_reference,
+    build_serving_reference,
     build_training_dataset,
     compute_openmeteo_model_skill,
     prepare_nasa_training,
@@ -236,6 +237,10 @@ def _bootstrap_inner(
     model_metrics = train_uv_models(model_training, calibration_dir)
     local_ref = build_local_reference(model_training, calibration_dir)
     skill = compute_openmeteo_model_skill(previous, om_hist, calibration_dir)
+    # Lead-aware serving references rebuild alongside the legacy reference so
+    # fresh bootstraps never ship without them; missing hindcast inputs fall
+    # back to legacy percentiles loudly at score time (no silent failure).
+    build_serving_reference(source_dir, calibration_dir, config.TIMEZONE)
     if strict and local_ref.empty:
         raise DataValidationError("Local TanScore reference climatology is empty")
 

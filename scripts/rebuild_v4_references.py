@@ -1,4 +1,4 @@
-"""Rebuild v4 references: local_reference (per site) + empirical grounding for the global reference.
+"""Rebuild per-site local and serving lead references plus global empirical grounding.
 
 Order of operations (adoption-safe):
 
@@ -7,8 +7,7 @@ Order of operations (adoption-safe):
    adopted value/version to the runtime config AND the manifest BEFORE any
    local reference is built, so local percentiles, version files, and the
    manifest can never disagree.
-3. Build each site's local reference (melanogenic-effective scoring; legacy
-   55/30/15 kept as a diagnostic column only).
+3. Build each site's legacy local reference and lead-aware serving references.
 
 Re-run after any action-spectrum or spectral-backend change.
 """
@@ -26,9 +25,12 @@ import pandas as pd
 
 sys.path.insert(0, "src")
 
-from sunstack import config  # noqa: E402
-from sunstack.calibrate import build_local_reference  # noqa: E402
-from sunstack.spectral import melanogenic_from_broadband  # noqa: E402
+from sunstack import config
+from sunstack.calibrate import (
+    build_local_reference,
+    build_serving_reference,
+)
+from sunstack.spectral import melanogenic_from_broadband
 
 
 def _git_sha() -> str:
@@ -124,6 +126,17 @@ def main() -> None:
             print(f"{site.slug}: rebuilt local_reference ({len(ref)} rows, "
                   f"model={config.TAN_SCORE_MODEL_VERSION}, "
                   f"ref={config.GLOBAL_MELANOGENIC_REFERENCE_VERSION})")
+            source_dir = root / ("data/calibration_sources" if site.default
+                                 else f"data/sites/{site.slug}/calibration_sources")
+            serving = build_serving_reference(
+                source_dir / "tables" / "openmeteo_previous_runs",
+                caldir,
+                site.timezone,
+            )
+            serving_summary = ", ".join(
+                f"{band}={len(frame)}" for band, frame in serving.items()
+            ) or "none"
+            print(f"{site.slug}: rebuilt serving references ({serving_summary})")
 
 
 if __name__ == "__main__":

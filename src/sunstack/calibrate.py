@@ -46,6 +46,12 @@ MODEL_FEATURES = [
     "sza", "temp_c", "rh", "pressure_kpa", "ozone_du", "aod340", "aod380",
 ]
 
+SERVING_REFERENCE_BANDS: dict[str, tuple[int, ...]] = {
+    "0_24h": (0, 1),
+    "24_72h": (2, 3),
+    "3_7d": (4, 5, 6, 7),
+}
+
 NASA_RENAME = {
     "ALLSKY_SFC_UVA": "uva",
     "ALLSKY_SFC_UVB": "uvb",
@@ -353,6 +359,208 @@ def build_local_reference(training: pd.DataFrame, calibration_dir: Path) -> pd.D
         }, indent=2), encoding="utf-8",
     )
     return ref
+
+def build_serving_reference(
+    previous_runs_dir: Path,
+    calibration_dir: Path,
+    site_tz: str | ZoneInfo,
+) -> dict[str, pd.DataFrame]:
+    """Build lead-aware local percentiles from archived Open-Meteo forecasts."""
+    import logging as _logging
+
+    from .photobiology import absolute_tan_score_from_melanogenic_irradiance
+    from .spectral import melanogenic_from_broadband, tierB_clear_sky_uv
+
+    log = _logging.getLogger("sunstack")
+    calibration_dir.mkdir(parents=True, exist_ok=True)
+    # Keep this mapping in lockstep with tanscore.build_live_feature_frame:
+    # importing that module here would create a calibrate↔tanscore cycle.
+    def serving_features(hindcast: pd.DataFrame) -> pd.DataFrame:
+        out = hindcast.copy()
+        out["time_utc"] = pd.to_datetime(
+            scol(out, "time"), utc=True
+        ).astype("datetime64[ns, UTC]")
+        elevation = num(out, "elevation_m").dropna()
+        altitude = float(elevation.median()) if elevation.notna().any() else 220.0
+        solar = solar_features(scol(out, "time_utc"), altitude)
+        for column in solar:
+            if column != "time_utc":
+                out[column] = scol(solar, column).to_numpy()
+        out["ghi"] = num(out, "shortwave_radiation")
+        out["dni"] = num(out, "direct_normal_irradiance")
+        out["dhi"] = num(out, "diffuse_radiation")
+        toa = num(out, "terrestrial_radiation")
+        out["kt"] = out["ghi"] / toa.where(toa > 1)
+        out["cloud"] = num(out, "cloud_cover")
+        out["temp_c"] = (num(out, "temperature_2m") - 32.0) * (5.0 / 9.0)
+        out["rh"] = num(out, "relative_humidity_2m")
+        out["pressure_kpa"] = num(out, "surface_pressure") / 10.0
+        out["aod55"] = num(out, "air__aerosol_optical_depth")
+        out["ozone_du"] = np.nan
+        out["aod340"] = np.nan
+        out["aod380"] = np.nan
+        out["cams_forecast_albedo"] = np.nan
+        out["albedo"] = num(out, "cams_forecast_albedo").fillna(0.20)
+        for feature in MODEL_FEATURES:
+            if feature not in out:
+                out[feature] = np.nan
+        out["is_day"] = (num(out, "sza") < 90).astype(int)
+        return out
+
+    bundle_path = calibration_dir / "uva_uvb_models.joblib"
+    bundle = joblib.load(bundle_path) if bundle_path.exists() else None
+    if isinstance(bundle, dict):
+        manifest = bundle.get("manifest")
+        if (isinstance(manifest, dict)
+                and manifest.get("model_version") != config.TAN_SCORE_MODEL_VERSION):
+            raise RuntimeError(
+                f"UVA/UVB bundle model_version={manifest.get('model_version')} != "
+                f"runtime {config.TAN_SCORE_MODEL_VERSION}: retrain with "
+                f"`sunstack bootstrap`."
+            )
+
+    def predict_hindcast(features: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        if bundle is not None:
+            X = features.reindex(columns=bundle["features"])
+            return (
+                np.clip(bundle["uva_model"].predict(X), 0, None),
+                np.clip(bundle["uvb_model"].predict(X), 0, None),
+            )
+        sza = num(features, "sza").to_numpy(dtype=float)
+        o3 = num(features, "ozone_du").to_numpy(dtype=float)
+        aod = num(features, "aod340").to_numpy(dtype=float)
+        albedo = num(features, "albedo").fillna(0.2).to_numpy(dtype=float)
+        uva, uvb = tierB_clear_sky_uv(sza, o3, aod, albedo)
+        missing = ~(np.isfinite(sza) & np.isfinite(o3) & np.isfinite(aod))
+        uva = np.where(
+            missing,
+            np.clip(0.055 * num(features, "ghi").to_numpy(dtype=float), 0, 70),
+            uva,
+        )
+        uvb = np.where(
+            missing,
+            np.clip(0.10 * num(features, "uv_index").to_numpy(dtype=float), 0, 3),
+            uvb,
+        )
+        night = num(features, "is_day").fillna(1).to_numpy(dtype=float) == 0
+        return np.where(night, 0.0, uva), np.where(night, 0.0, uvb)
+    sources: list[pd.DataFrame] = []
+    for model in config.PREVIOUS_RUN_MODELS:
+        path = previous_runs_dir / f"previous_runs__{model}.parquet"
+        if not path.exists():
+            log.warning("Serving reference source missing: %s", path)
+            continue
+        try:
+            source = pd.read_parquet(path)
+        except (OSError, ValueError) as exc:
+            log.warning("Serving reference source unreadable %s: %s", path, exc)
+            continue
+        if source.empty or "time_utc" not in source:
+            log.warning("Serving reference source has no usable timestamps: %s", path)
+            continue
+        sources.append(source)
+
+    refs: dict[str, pd.DataFrame] = {}
+    for band, leads in SERVING_REFERENCE_BANDS.items():
+        inputs: list[pd.DataFrame] = []
+        for source in sources:
+            for lead in leads:
+                suffix = "" if lead == 0 else f"_previous_day{lead}"
+                hindcast = pd.DataFrame({
+                    "time": pd.to_datetime(scol(source, "time_utc"), utc=True),
+                })
+                for field in (
+                    "cloud_cover", "shortwave_radiation", "diffuse_radiation",
+                    "direct_normal_irradiance", "uv_index", "uv_index_clear_sky",
+                    "temperature_2m", "relative_humidity_2m", "surface_pressure",
+                    "terrestrial_radiation", "air__aerosol_optical_depth",
+                    "uva", "uvb", "predicted_uva_wm2", "predicted_uvb_wm2",
+                ):
+                    column = f"{field}{suffix}"
+                    if column in source:
+                        hindcast[field] = scol(source, column).to_numpy()
+                if "elevation_m" in source:
+                    hindcast["elevation_m"] = num(source, "elevation_m").to_numpy()
+                inputs.append(hindcast)
+        if not inputs:
+            log.warning("Skipping serving reference %s: no hindcast rows", band)
+            continue
+
+        mapped: list[pd.DataFrame] = []
+        for hindcast in inputs:
+            features = serving_features(hindcast)
+            predicted_uva, predicted_uvb = predict_hindcast(features)
+            source_uva = np.full(len(hindcast), np.nan)
+            source_uvb = np.full(len(hindcast), np.nan)
+            for uva_column, uvb_column in (
+                ("uva", "uvb"),
+                ("predicted_uva_wm2", "predicted_uvb_wm2"),
+            ):
+                if uva_column in hindcast:
+                    candidate = num(hindcast, uva_column).to_numpy(dtype=float)
+                    source_uva = np.where(np.isfinite(source_uva), source_uva, candidate)
+                if uvb_column in hindcast:
+                    candidate = num(hindcast, uvb_column).to_numpy(dtype=float)
+                    source_uvb = np.where(np.isfinite(source_uvb), source_uvb, candidate)
+            uva = np.where(np.isfinite(source_uva), source_uva, predicted_uva)
+            uvb = np.where(np.isfinite(source_uvb), source_uvb, predicted_uvb)
+            daylight = ((num(features, "ghi").fillna(0) > 10)
+                        & (num(features, "sza").fillna(180) < 90)).to_numpy()
+            valid = daylight & np.isfinite(uva) & np.isfinite(uvb)
+            if valid.any():
+                mapped.append(pd.DataFrame({
+                    "time_utc": pd.to_datetime(scol(features, "time_utc"), utc=True),
+                    "uva": uva,
+                    "uvb": uvb,
+                    "sza": num(features, "sza"),
+                    "ghi": num(features, "ghi"),
+                }).loc[valid].copy())
+        if not mapped:
+            log.warning(
+                "Skipping serving reference %s: no finite hindcast UVA/UVB equivalents",
+                band,
+            )
+            continue
+        ref = pd.concat(mapped, ignore_index=True)
+        try:
+            e_mel = melanogenic_from_broadband(
+                scol(ref, "uva").to_numpy(dtype=float),
+                scol(ref, "uvb").to_numpy(dtype=float),
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            raise RuntimeError(f"ERROR photobiology: {exc}") from exc
+        ref["melanogenic_effective_irradiance_wm2"] = np.round(e_mel, 5)
+        ref["absolute_tan_score_0_100"] = np.round(
+            absolute_tan_score_from_melanogenic_irradiance(
+                e_mel, float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2)
+            ), 1,
+        )
+        ref["tan_score_model_version"] = config.TAN_SCORE_MODEL_VERSION
+        ref["global_reference_version"] = config.GLOBAL_MELANOGENIC_REFERENCE_VERSION
+        tz = ZoneInfo(site_tz) if isinstance(site_tz, str) else site_tz
+        local = pd.to_datetime(scol(ref, "time_utc"), utc=True).dt.tz_convert(tz)
+        ref["time_local"] = local.astype(str)
+        ref["day_of_year"] = local.dt.dayofyear
+        ref["local_hour"] = local.dt.hour + local.dt.minute / 60.0
+        ref["solar_elevation_deg"] = 90.0 - num(ref, "sza")
+        ref["year"] = local.dt.year
+        ref.to_parquet(calibration_dir / f"local_reference_serving_{band}.parquet",
+                       index=False)
+        refs[band] = ref
+
+    (calibration_dir / "lead_reference_manifest.json").write_text(
+        json.dumps({
+            "bands": list(refs),
+            "row_counts": {band: len(ref) for band, ref in refs.items()},
+            "tan_score_model_version": config.TAN_SCORE_MODEL_VERSION,
+            "global_reference_version": config.GLOBAL_MELANOGENIC_REFERENCE_VERSION,
+            "fallback": (
+                "Use local_reference.parquet when the serving lead band is unavailable."
+            ),
+        }, indent=2),
+        encoding="utf-8",
+    )
+    return refs
 
 
 def build_training_dataset(
