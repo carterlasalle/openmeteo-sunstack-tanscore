@@ -482,12 +482,12 @@ def _run_live_inner(
         LOG.info("Fetching EPA/NWS operational UVI for %s", epa_zip)
         epa_hourly, _ = fetch_epa_uv_forecast(run_dir, epa_zip)
         best_air = best_air.merge(epa_hourly.loc[:, ["time", "uvi_epa"]], on="time", how="left") if not epa_hourly.empty else best_air
-    tan_hourly = score_forecast(best_air, calibration_dir, cams_direct, sun_windows)
+    tan_hourly = score_forecast(best_air, calibration_dir, cams_direct, sun_windows,
+                               strict=strict)
     tan_hourly = apply_outdoor_feasibility(tan_hourly, min_temp_f)
     tan_hourly = attach_fitzpatrick(tan_hourly, skin_type)
     try:
         from .doses import add_interval_doses as _add_hourly_doses
-
         tan_hourly = _add_hourly_doses(tan_hourly)
     except (ImportError, ValueError) as exc:
         LOG.error("[doses] hourly interval-dose integration failed: %s", exc)

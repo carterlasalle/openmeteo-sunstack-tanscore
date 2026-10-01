@@ -19,10 +19,6 @@ from pathlib import Path
 from typing import TypedDict, cast
 
 FATAL_CHECKS = [
-    # Contract §22 fatal checks; numbered as in the contract. Items 13, 16,
-    # 19, 20 (confidence contract, static Fit denominator, stale-reference and
-    # pre-manifest gates) have no serialized signal yet and stay unlisted
-    # rather than pass vacuously.
     "schema_version_present",
     "action_spectrum_checksum",
     "manifests_compatible",
@@ -35,12 +31,14 @@ FATAL_CHECKS = [
     "peaks_are_true_maxima",
     "at_best_from_window",
     "feasibility_missingness_honest",
+    "confidence_contract",
     "source_counts_bounded",
     "surface_local_mode_invariant",
     "no_deprecated_ranking_key",
     "row_summary_version_agreement",
+    "no_stale_local_reference",
+    "no_premanifest_model",
 ]
-
 # Fields whose name says "value at the selected best window/time": each must
 # equal its source column on the row the daily row selects (best_30m_start),
 # never another metric's peak. (source columns, absolute tolerance)
@@ -196,6 +194,22 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
         failures["manifests_compatible"].append(str(exc))
 
     rows = _rows_of(hourly if hourly else half)
+    # §22.19 no stale local reference: rows stamped stale fail — a published
+    # artifact must never present legacy percentiles as current. Rows without
+    # the signal predate the gate and are skipped, never failed.
+    for _stale_row in _rows_of(half or hourly):
+        if _stale_row.get("local_reference_stale") is True:
+            failures["no_stale_local_reference"].append(
+                f"{_stale_row.get('time')}: local_reference_stale=true")
+            break
+    # §22.20 no pre-manifest model: rows whose calibration tier is missing
+    # (never scored by a manifest-bound bundle) fail. Tier present = gated
+    # upstream; tier absent = unpublished provenance.
+    for _tier_row in _rows_of(half or hourly):
+        if "tan_calibration_tier" in _tier_row and not _tier_row.get("tan_calibration_tier"):
+            failures["no_premanifest_model"].append(
+                f"{_tier_row.get('time')}: tan_calibration_tier missing")
+            break
     for row in rows:
         stamp = row.get("time")
         # Same triple the fusion consumes (state._stack_sources): uvi_openmeteo
@@ -223,6 +237,25 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
         for key in ("tan_score_model_version", "spectral_backend"):
             if key in row and key in summary and row[key] != summary[key]:
                 failures["row_summary_version_agreement"].append(f"{stamp}: {key} {row[key]} != summary {summary[key]}")
+        # §22.13 confidence contract: confidence must be a calibrated function
+        # of expected error (100*exp(-err/1.2), never sunniness), possibly
+        # reduced by the published disagreement penalties (uv_input_disagree
+        # halves, uvi spread ×0.85 mild / ×0.65 strong; physics untouched).
+        # Recompute the mapping from the row's own uvi_expected_abs_error and
+        # require the published confidence to match one of the legal states.
+        # Rows without an error estimate are skipped (pre-contract artifacts).
+        _err = row.get("uvi_expected_abs_error")
+        _conf = row.get("tan_forecast_confidence_0_100")
+        if _is_finite(_err) and _is_finite(_conf):
+            import math as _math
+
+            _base_conf = round(
+                min(100.0, max(1.0, 100.0 * _math.exp(-_num(_err) / 1.2))), 1)
+            _legal = {round(_base_conf * f, 1)
+                      for f in (1.0, 0.85, 0.65, 0.5, 0.5 * 0.85, 0.5 * 0.65)}
+            if min(abs(_num(_conf) - v) for v in _legal) > 1.5:
+                failures["confidence_contract"].append(
+                    f"{stamp}: confidence {_conf} not in {sorted(_legal)}")
 
     day_rows = _rows_of(daily)
     half_rows = _rows_of(half)

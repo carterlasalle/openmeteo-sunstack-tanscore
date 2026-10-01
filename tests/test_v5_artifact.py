@@ -43,8 +43,12 @@ def _trailing_30m(i: int) -> float:
 
 
 def _good_artifact() -> dict[str, object]:
+    import math as _math
+
     rows: list[dict[str, object]] = []
     for i, (t, u, e) in enumerate(zip(_TIMES, _UVI, _E_MEL)):
+        _err = round(0.5 + 0.1 * i, 3)
+        _conf = round(min(100.0, max(1.0, 100.0 * _math.exp(-_err / 1.2))), 1)
         row: dict[str, object] = {
             "time": t,
             "uv_index": u, "uvi_cams": u + 0.5, "uvi_epa": u - 0.5,
@@ -54,11 +58,15 @@ def _good_artifact() -> dict[str, object]:
             "delayed_pigmentation_effective_irradiance_horizontal_wm2": e,
             "tan_score_absolute_0_100": 30.0 + i,
             "local_tan_score_0_100": 50.0 + i,
-            "tan_forecast_confidence_0_100": 40.0 + i,
+            "tan_forecast_confidence_0_100": _conf,
+            "uvi_expected_abs_error": _err,
+            "confidence_version": "calibrated-error-v1",
             "temperature_2m": 70.0 + i,
             "precipitation_probability": float(i),
             "tan_score_model_version": "action-spectrum-v2",
             "spectral_backend": "tierC-broadband-proxy-v2",
+            "tan_calibration_tier": "nasa_power_ml_plus_cams_spectral",
+            "local_reference_stale": False,
             "is_day": 1,
             "outdoor_feasibility_0_100": 90.0,
             "outdoor_feasibility_complete": True,
@@ -102,9 +110,8 @@ def _good_artifact() -> dict[str, object]:
             "day_local_peak_0_100": 52.0,
             # Values at the selected best 30-min interval (12:30 row), never
             # another metric's peak.
-            "day_absolute_at_best_usable_30m_0_100": 31.0,
             "day_local_at_best_usable_30m_0_100": 51.0,
-            "day_confidence_at_peak_0_100": 41.0,
+            "day_confidence_at_peak_0_100": 60.7,
             "uvi_at_best": 6.0,
             "temperature_at_best_f": 71.0,
             "precip_at_best_pct": 1.0,
@@ -164,7 +171,7 @@ def test_validator_passes_clean_fixture(tmp_path: Path) -> None:
     assert out["passed"] is True, out["failures"]
     checks = out["checks"]
     assert isinstance(checks, list)
-    assert len(cast(list[object], checks)) == 16
+    assert len(cast(list[object], checks)) == 19
 
 
 def test_validator_fails_diverged_fixture(tmp_path: Path) -> None:

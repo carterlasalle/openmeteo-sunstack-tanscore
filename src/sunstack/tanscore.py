@@ -188,13 +188,15 @@ def build_live_feature_frame(best: pd.DataFrame, cams_direct: pd.DataFrame | Non
     return out
 
 
-def _load_bundle(calibration_dir: Path):
+def _load_bundle(calibration_dir: Path, *, strict: bool = True):
     """Load the UVA/UVB bundle, failing closed on version mismatch.
 
     A stale pickle (old sklearn, old model version) must never masquerade
-    as the current model: warn loudly on sklearn drift, error on model
-    version drift. Bundles trained before manifests existed load with a
-    warning (back-compat), not a failure.
+    as the current model: missing manifest, sklearn drift, and model version
+    drift are all fatal in strict mode. Degraded mode (--allow-degraded)
+    keeps the old warn-and-continue behavior for pre-manifest bundles and
+    sklearn drift, but model-version drift still errors (a wrong-model pickle
+    is never acceptable output).
     """
     import logging as _logging
 
@@ -204,9 +206,11 @@ def _load_bundle(calibration_dir: Path):
     bundle = joblib.load(path)
     man = bundle.get("manifest") if isinstance(bundle, dict) else None
     if not isinstance(man, dict):
-        _logging.getLogger("sunstack").warning(
-            "UVA/UVB bundle has no manifest (pre-manifest training); "
-            "retrain with `sunstack bootstrap` to bind versions.")
+        msg = ("UVA/UVB bundle has no manifest (pre-manifest training); "
+               "retrain with `sunstack bootstrap` to bind versions.")
+        if strict:
+            raise RuntimeError(f"ERROR bundle: {msg}")
+        _logging.getLogger("sunstack").warning("%s", msg)
         return bundle
     try:
         import sklearn as _sk
@@ -214,10 +218,11 @@ def _load_bundle(calibration_dir: Path):
     except ImportError:
         _rt_sk = "unknown"
     if man.get("sklearn_version") != _rt_sk:
-        _logging.getLogger("sunstack").warning(
-            "UVA/UVB bundle trained under sklearn %s, runtime is %s; "
-            "retrain to remove version skew.",
-            man.get("sklearn_version"), _rt_sk)
+        msg = (f"UVA/UVB bundle trained under sklearn {man.get('sklearn_version')}, "
+               f"runtime is {_rt_sk}; retrain to remove version skew.")
+        if strict:
+            raise RuntimeError(f"ERROR bundle: {msg}")
+        _logging.getLogger("sunstack").warning("%s", msg)
     if man.get("model_version") != config.TAN_SCORE_MODEL_VERSION:
         raise RuntimeError(
             f"UVA/UVB bundle model_version={man.get('model_version')} != "
@@ -226,8 +231,9 @@ def _load_bundle(calibration_dir: Path):
     return bundle
 
 
-def predict_uva_uvb(features: pd.DataFrame, calibration_dir: Path) -> tuple[np.ndarray, np.ndarray, str]:
-    bundle = _load_bundle(calibration_dir)
+def predict_uva_uvb(features: pd.DataFrame, calibration_dir: Path,
+                    *, strict: bool = True) -> tuple[np.ndarray, np.ndarray, str]:
+    bundle = _load_bundle(calibration_dir, strict=strict)
     if bundle is not None:
         X = features.reindex(columns=bundle["features"])
         uva = np.clip(bundle["uva_model"].predict(X), 0, None)
@@ -493,6 +499,8 @@ def score_forecast(
     calibration_dir: Path,
     cams_direct: pd.DataFrame | None = None,
     forecast_confidence: pd.DataFrame | None = None,
+    *,
+    strict: bool = True,
 ) -> pd.DataFrame:
     from .photobiology import (
         TAN_SCORE_MODEL_VERSION as _TSV,
@@ -519,7 +527,7 @@ def score_forecast(
 
         require_canonical_spectrum(_STEM)
     _spec, global_ref, spectrum_tier = _require_photobiology_or_fail()
-    uva, uvb, tier = predict_uva_uvb(features, calibration_dir)
+    uva, uvb, tier = predict_uva_uvb(features, calibration_dir, strict=strict)
     out = features.copy()
     # v5 contract §11.4 coverage fractions: computed from the bundle/backend
     # manifest feature list after mapping — the old hand-written column names
@@ -528,7 +536,7 @@ def score_forecast(
     # or any score (no error-model coupling — no historical calibration shows
     # a coverage→error relationship, so uncertainty stays calibrated-error-v1).
     _schema: list[str] = []
-    _bundle = _load_bundle(calibration_dir)
+    _bundle = _load_bundle(calibration_dir, strict=strict)
     if isinstance(_bundle, dict):
         _man = _bundle.get("manifest")
         if isinstance(_man, dict) and isinstance(_man.get("feature_schema"), list):
@@ -693,6 +701,12 @@ def score_forecast(
                 _ver.get("tan_score_model_version", "unknown"))
             _model_ok = (_ver.get("tan_score_model_version")
                          == config.TAN_SCORE_MODEL_VERSION)
+            _spec_ok = (_ver.get("action_spectrum_version", None) in
+                        (None, config.ACTION_SPECTRUM_VERSION))
+            _tier_ok = (_ver.get("spectral_backend_version", None) in
+                        (None, config.SPECTRAL_DEGRADED_BACKEND))
+            _temp_ok = (_ver.get("temporal_semantics_version", None) in
+                        (None, config.TEMPORAL_SEMANTICS_VERSION))
             _refver_ok = (_ver.get("global_reference_version", None) in
                           (None, config.GLOBAL_MELANOGENIC_REFERENCE_VERSION))
             _refval = _ver.get("global_reference_e_mel_wm2", None)
@@ -702,7 +716,8 @@ def score_forecast(
             # Absolute silently: without a recorded value to compare, a mere
             # version match is not enough to trust the file. Missing value is
             # tolerated only for files written before the value was recorded.
-            _ref_usable = bool(_model_ok and _refver_ok and _refval_ok)
+            _ref_usable = bool(_model_ok and _spec_ok and _tier_ok and _temp_ok
+                               and _refver_ok and _refval_ok)
             out["local_reference_stale"] = not _ref_usable
     except (OSError, ValueError, TypeError):
         pass
@@ -717,10 +732,21 @@ def score_forecast(
             _lead_version = str(_lead_manifest.get("tan_score_model_version", "unknown"))
             _lead_model_ok = (_lead_manifest.get("tan_score_model_version")
                               == config.TAN_SCORE_MODEL_VERSION)
+            _lead_spec_ok = (_lead_manifest.get("action_spectrum_version", None) in
+                             (None, config.ACTION_SPECTRUM_VERSION))
+            _lead_tier_ok = (_lead_manifest.get("spectral_backend_version", None) in
+                             (None, config.SPECTRAL_DEGRADED_BACKEND))
+            _lead_temp_ok = (_lead_manifest.get("temporal_semantics_version", None) in
+                             (None, config.TEMPORAL_SEMANTICS_VERSION))
             _lead_refver_ok = (_lead_manifest.get("global_reference_version")
                                == config.GLOBAL_MELANOGENIC_REFERENCE_VERSION)
+            _lead_refval = _lead_manifest.get("global_reference_e_mel_wm2", None)
+            _lead_refval_ok = (_lead_refval is None or float(_lead_refval) ==
+                               float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2))
             _lead_bands = _lead_manifest.get("bands", [])
-            if _lead_model_ok and _lead_refver_ok and isinstance(_lead_bands, list):
+            _lead_ok = (_lead_model_ok and _lead_spec_ok and _lead_tier_ok
+                        and _lead_temp_ok and _lead_refver_ok and _lead_refval_ok)
+            if _lead_ok and isinstance(_lead_bands, list):
                 for _band in _lead_bands:
                     if _band not in SERVING_REFERENCE_BANDS:
                         continue

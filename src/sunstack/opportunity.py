@@ -430,6 +430,15 @@ def build_30min_forecast(
         "shortwave_radiation_instant",
         "overall_tan_opportunity_0_100",
         "tan_score_absolute_0_100",
+        # reliability (contract §11.3/§22.13): confidence rides the same grid
+        # so half-hour rows carry final-state confidence, never a stale copy.
+        "tan_forecast_confidence_0_100",
+        "uvi_expected_abs_error",
+        "uvi_prediction_interval_low",
+        "uvi_prediction_interval_high",
+        "strong_sun_probability_0_100",
+        # provenance carried per-row for the serialized gates
+        "tan_calibration_tier",
         # weather / feasibility (P0: these were silently dropped when
         # object-typed, so 30-min rows read as comfortable and dry)
         "temperature_2m",
@@ -565,7 +574,8 @@ def build_30min_forecast(
                     if col in sub:
                         out.loc[changed, col] = sub[col].to_numpy()
     # Discrete WMO weather codes / day-night flags must never be numerically interpolated.
-    for discrete in ("weather_code", "is_day"):
+    for discrete in ("weather_code", "is_day", "local_reference_stale",
+                     "local_reference_fallback"):
         if discrete in h.columns:
             nearest = (
                 h[discrete]
@@ -582,7 +592,9 @@ def build_30min_forecast(
     for constant in ("spectral_tier", "spectral_backend", "tan_score_model_version",
                      "tan_dose_model_version", "global_reference_version",
                      "photobiology_action_spectrum_tier", "tan_calibration_tier",
-                     "local_reference_version", "cams_cycle"):
+                     "confidence_version",
+                     "local_reference_version", "local_reference_stale",
+                     "cams_cycle"):
         if constant in h.columns:
             out[constant] = (
                 h[constant]

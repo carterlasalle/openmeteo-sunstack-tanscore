@@ -353,6 +353,9 @@ def build_local_reference(training: pd.DataFrame, calibration_dir: Path) -> pd.D
     (calibration_dir / "local_reference_version.json").write_text(
         json.dumps({
             "tan_score_model_version": config.TAN_SCORE_MODEL_VERSION,
+            "action_spectrum_version": config.ACTION_SPECTRUM_VERSION,
+            "spectral_backend_version": config.SPECTRAL_DEGRADED_BACKEND,
+            "temporal_semantics_version": config.TEMPORAL_SEMANTICS_VERSION,
             "global_reference_version": config.GLOBAL_MELANOGENIC_REFERENCE_VERSION,
             "global_reference_e_mel_wm2": config.GLOBAL_MELANOGENIC_REFERENCE_WM2,
             "rows": len(ref),
@@ -411,13 +414,15 @@ def build_serving_reference(
     bundle = joblib.load(bundle_path) if bundle_path.exists() else None
     if isinstance(bundle, dict):
         manifest = bundle.get("manifest")
-        if (isinstance(manifest, dict)
-                and manifest.get("model_version") != config.TAN_SCORE_MODEL_VERSION):
+        if not isinstance(manifest, dict):
+            raise TypeError(
+                "UVA/UVB bundle has no manifest (pre-manifest training); "
+                "retrain with `sunstack bootstrap` to bind versions.")
+        if manifest.get("model_version") != config.TAN_SCORE_MODEL_VERSION:
             raise RuntimeError(
                 f"UVA/UVB bundle model_version={manifest.get('model_version')} != "
                 f"runtime {config.TAN_SCORE_MODEL_VERSION}: retrain with "
-                f"`sunstack bootstrap`."
-            )
+                f"`sunstack bootstrap`.")
 
     def predict_hindcast(features: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
         if bundle is not None:
@@ -553,7 +558,11 @@ def build_serving_reference(
             "bands": list(refs),
             "row_counts": {band: len(ref) for band, ref in refs.items()},
             "tan_score_model_version": config.TAN_SCORE_MODEL_VERSION,
+            "action_spectrum_version": config.ACTION_SPECTRUM_VERSION,
+            "spectral_backend_version": config.SPECTRAL_DEGRADED_BACKEND,
+            "temporal_semantics_version": config.TEMPORAL_SEMANTICS_VERSION,
             "global_reference_version": config.GLOBAL_MELANOGENIC_REFERENCE_VERSION,
+            "global_reference_e_mel_wm2": config.GLOBAL_MELANOGENIC_REFERENCE_WM2,
             "fallback": (
                 "Use local_reference.parquet when the serving lead band is unavailable."
             ),
