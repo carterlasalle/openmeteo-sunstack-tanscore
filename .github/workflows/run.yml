@@ -64,7 +64,7 @@ jobs:
         # Gate on the machine-readable error count instead: any real error
         # fails the step; warnings never block the science gate.
         run: |
-          uv run --with basedpyright==1.40.1 basedpyright --level error --outputjson > /tmp/bp.json
+          uv run --with basedpyright==1.40.1 basedpyright --level error --outputjson > /tmp/bp.json || true
           python3 -c "import json,sys; d=json.load(open('/tmp/bp.json')); e=d.get('summary',{}).get('errorCount',-1); print(f'basedpyright errors={e}'); sys.exit(1 if e else 0)"
       - name: Literature-informed regression invariants
         run: uv run python scripts/check_literature.py
