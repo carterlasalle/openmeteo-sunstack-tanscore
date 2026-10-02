@@ -36,9 +36,9 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
     site-refresh renders UI-only updates from committed docs/ with this, so a
     fresh checkout without data/latest can still republish the page.
     """
-    from .ui import HTML
+    from . import serving as _serving_mod
 
-    html = HTML
+    html = _serving_mod.HTML
     html = _swap_once(
         html,
         "/api/data?skin_type=${s}&min_temp=${m}&personal_mmd=${p}&personal_mmd_basis=${b}&surface=${encodeURIComponent(sf)}&skin_tilt_deg=${encodeURIComponent(t)}&skin_azimuth_deg=${encodeURIComponent(a)}&location=${encodeURIComponent(LOC)}",
@@ -128,8 +128,9 @@ def reskin_static_dir(
     it is left alone — rebuilding it from the daylight-filtered payload rows
     would degrade the UV peaks vs the full-hourly build in export_static_site.
     """
+    from .build_sha import build_sha
     from .opportunity import fitzpatrick_context
-    from .ui import _resolve_site, _site_nav, build_sha
+    from .serving import _resolve_site, _site_nav
 
     page = Path(page_dir)
     payload: dict[str, object] = json.loads(
@@ -181,8 +182,9 @@ def export_static_site(
     the default export carries no personal data.
     """
     from . import config
+    from .build_sha import build_sha
     from .opportunity import fitzpatrick_context
-    from .ui import (
+    from .serving import (
         _daylight_payload_rows,
         _filtered_payload,
         _records,
@@ -190,9 +192,7 @@ def export_static_site(
         _site_nav,
         build_calendar_ics,
         build_interval_ics,
-        build_sha,
     )
-
     site = _resolve_site(site_slug)
     entered = config.use_site(site)
     entered.__enter__()

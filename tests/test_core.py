@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from sunstack import tanscore
 from sunstack.calibrate import absolute_tan_score, prepare_nasa_training, solar_features
 from sunstack.history import _candidate_cams_cycles, normalize_nasa_power
 from sunstack.opportunity import _best_contiguous_window
@@ -66,7 +67,7 @@ def test_local_percentile_is_interpretation_not_physics():
         }
     )
     out = add_local_scores(forecast, ref)
-    assert out.loc[1, "local_tan_score_0_100"] > out.loc[0, "local_tan_score_0_100"]
+    assert out["local_tan_score_0_100"].iloc[1] > out["local_tan_score_0_100"].iloc[0]
     assert forecast.loc[1, "tan_score_absolute_0_100"] == 50.0
 
 
@@ -100,7 +101,7 @@ def _opportunity_row(**overrides):
 
 def test_overall_merges_context_without_erasing_absolute_scale():
     out = apply_outdoor_feasibility(_opportunity_row())
-    overall = out.loc[0, "overall_tan_opportunity_0_100"]
+    overall = out["overall_tan_opportunity_0_100"].iloc[0]
     assert 50 < overall < 65
     assert overall <= 64  # absolute + configured 20-point headroom
     assert out.loc[0, "outdoor_feasibility_0_100"] == 100
@@ -132,7 +133,7 @@ def test_fitzpatrick_is_context_not_environmental_multiplier():
         out1.loc[0, "tan_score_absolute_0_100"]
         == out6.loc[0, "tan_score_absolute_0_100"]
     )
-    assert "higher erythema" in out1.loc[0, "personal_uv_risk_context"]
+    assert "higher erythema" in str(out1.loc[0, "personal_uv_risk_context"])
 
 
 def test_merges_tolerate_mixed_datetime_units():
@@ -236,7 +237,9 @@ def test_best_window_end_is_exclusive_for_hourly_highlight():
             "outdoor_blocked": [False] * 6,
         }
     )
-    start, end, _ = _best_contiguous_window(day)
+    window = _best_contiguous_window(day)
+    assert window is not None
+    start, end, _ = window
     assert start == dts[0] and end == dts[3] + pd.Timedelta(minutes=30)
     hours = ["2026-09-15T12:00", "2026-09-15T13:00", "2026-09-15T14:00"]
     lit = [t for t in hours if start.isoformat()[:16] <= t < end.isoformat()[:16]]
@@ -336,7 +339,7 @@ def test_cams_group_unpublished_skips_single_retries(monkeypatch):
 
     monkeypatch.setattr(history, "_retrieve_cams", fake_retrieve)
     monkeypatch.setattr(history, "normalize_cams_netcdf_zip", lambda *a: __import__("pandas").DataFrame())
-    manifest: list = []
+    manifest: list[dict[str, object]] = []
     frames, complete = history._fetch_cams_cycle(
         __import__("pathlib").Path("/tmp/nonexistent-cams-test"),
         object(), manifest, __import__("datetime").date(2026, 9, 24), "12:00", True,
@@ -872,7 +875,7 @@ def test_daily_summary_keeps_status_and_wind_peaks():
     assert row["day_peak_wind_mph"] == 26.0
     assert row["day_peak_gust_mph"] == 34.0
     assert row["day_high_feels_like_f"] == 74.0
-    ui = Path("src/sunstack/ui.py").read_text(encoding="utf-8")
+    ui = Path("src/sunstack/serving.py").read_text(encoding="utf-8")
     assert "<th>Temp</th><th>Wind</th>" in ui, "hourly table needs a Wind column"
     assert "wind_gusts_10m" in ui and "windy" in ui, "gusty days/cells call out wind"
 
@@ -1053,11 +1056,11 @@ def test_overnight_rows_score_zero_opportunity_not_residual():
         }
     )
     out = apply_outdoor_feasibility(df, None)
-    assert float(out.loc[1, "overall_tan_opportunity_0_100"]) == 0.0
-    assert float(out.loc[1, "overall_components_unblocked_0_100"]) == 0.0
+    assert out["overall_tan_opportunity_0_100"].iloc[1] == 0.0
+    assert out["overall_components_unblocked_0_100"].iloc[1] == 0.0
     # Environmental score is physics, not usability: untouched.
-    assert float(out.loc[1, "tan_score_absolute_0_100"]) == 30.0
-    assert float(out.loc[0, "overall_tan_opportunity_0_100"]) > 0.0
+    assert out["tan_score_absolute_0_100"].iloc[1] == 30.0
+    assert out["overall_tan_opportunity_0_100"].iloc[0] > 0.0
 
 
 def test_hrrr_correction_stays_bounded_against_kt_baseline():
@@ -1162,7 +1165,7 @@ def test_location_calibrate_workflow_is_post_merge_only():
     wf = yaml.safe_load(
         Path(".github/workflows/location-calibrate.yml").read_text(encoding="utf-8")
     )
-    on = wf.get("on", True) or True
+    on = wf.get("on", {})
     assert "pull_request_target" not in on, (
         "calibration must never run on unapproved proposals"
     )
@@ -1194,7 +1197,7 @@ def test_location_intake_workflow_holds_no_secrets():
     assert "CDSAPI_URL" not in text and "CDSAPI_KEY" not in text, (
         "intake must never touch CAMS credentials"
     )
-    assert "pull_request_target" in (wf.get("on", True) or True), (
+    assert "pull_request_target" in wf.get("on", {}), (
         "intake validates unapproved proposals"
     )
     perms = wf.get("permissions", {})
@@ -1206,7 +1209,7 @@ def test_location_propose_workflow_is_issue_triggered_and_secret_free():
 
     text = Path(".github/workflows/location-propose.yml").read_text(encoding="utf-8")
     wf = yaml.safe_load(text)
-    on = wf.get("on", True) or True
+    on = wf.get("on", {})
     assert "issues" in on, "propose triggers on [Location] issues"
     scrubbed = text.replace("nobody gets secrets", "")
     assert "secrets." not in scrubbed, "propose must never read any GitHub secret"
@@ -1229,7 +1232,7 @@ def test_location_propose_workflow_is_issue_triggered_and_secret_free():
     )
     assert "Allow GitHub Actions to create and approve pull requests" in text
     assert "allow_pr" in text, "maintainer can re-run with PR creation enabled"
-    ui = Path("src/sunstack/ui.py").read_text(encoding="utf-8")
+    ui = Path("src/sunstack/serving.py").read_text(encoding="utf-8")
     assert "peak_precip_probability_pct" in ui and "c0392b" in ui, (
         "rainy days/cells highlight red"
     )
@@ -1331,7 +1334,7 @@ def test_site_refresh_workflow_is_ui_only_and_secret_free():
 
     text = Path(".github/workflows/site-refresh.yml").read_text(encoding="utf-8")
     wf = yaml.safe_load(text)
-    on = wf.get("on", True) or True
+    on = wf.get("on", {})
     assert "workflow_dispatch" in on, "refresh stays manually runnable"
     assert "workflow_run" in on, "refresh fires after each forecast run"
     assert (on.get("workflow_run", {}) or {}).get("workflows") == ["forecast-run"]
@@ -2005,12 +2008,13 @@ def test_location_registry_rejects_malformed_shapes(tmp_path):
 def test_render_static_html_falls_back_to_loaddata_anchor(monkeypatch):
     # Template variants without the init() anchor must still get skin
     # wiring via the legacy loadData() anchor, never a half-swapped page.
-    import sunstack.ui as _ui
+    import sunstack.serving as _serving
     from sunstack.output import render_static_html
 
-    variant = _ui.HTML.replace("init();\n</script>", "loadData();\n</script>")
+    variant = _serving.HTML.replace("init();\n</script>", "loadData();\n</script>")
     assert "loadData();\n</script>" in variant
-    monkeypatch.setattr(_ui, "HTML", variant)
+    monkeypatch.setattr(_serving, "HTML", variant)
+    monkeypatch.setattr("sunstack.ui.HTML", variant)
     html = render_static_html("20260923_000000")
     assert "loadData().then(initSkin);\n</script>" in html
 
@@ -2018,12 +2022,15 @@ def test_render_static_html_falls_back_to_loaddata_anchor(monkeypatch):
 def test_percentile_helpers_reject_non_series_loudly():
     import pytest
 
-    from sunstack.tanscore import _circular_doy_distance, _percentile, fnum
+    from sunstack.tanscore import fnum
+
+    percentile = tanscore.__dict__["_percentile"]
+    circular_doy_distance = tanscore.__dict__["_circular_doy_distance"]
 
     with pytest.raises(TypeError, match="must be a Series"):
-        _percentile([1.0, 2.0], 1.5)
+        percentile([1.0, 2.0], 1.5)
     with pytest.raises(TypeError, match="must be a Series"):
-        _circular_doy_distance([200, 210], 205)
+        circular_doy_distance([200, 210], 205)
     row = pd.Series({"a": 5.0, "b": None, "c": "junk"})
     assert fnum(row, "a") == 5.0
     assert pd.isna(fnum(row, "missing"))

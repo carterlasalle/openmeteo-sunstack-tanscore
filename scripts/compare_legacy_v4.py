@@ -71,14 +71,14 @@ def _section(df: pd.DataFrame) -> tuple[list[str], pd.DataFrame]:
         "",
     ]
     uva_s = pd.to_numeric(
-        df["uva"] if "uva" in df else df.get("predicted_uva_wm2"), errors="coerce")
+        df["uva"] if "uva" in df else df["predicted_uva_wm2"], errors="coerce")
     if "uvb" in df:
         uvb_s = pd.to_numeric(df["uvb"], errors="coerce")
     else:
-        uvb_s = pd.to_numeric(df.get("predicted_uvb_wm2"), errors="coerce")
+        uvb_s = pd.to_numeric(df["predicted_uvb_wm2"], errors="coerce")
     ratio = (uva_s / uvb_s.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan)
     day = (pd.to_numeric(
-        df["ghi"] if "ghi" in df else df.get("shortwave_radiation"),
+        df["ghi"] if "ghi" in df else df["shortwave_radiation"],
         errors="coerce").fillna(0) > 10) | (leg > 1)
     work = pd.DataFrame({"leg": leg, "new": new, "ratio": ratio}).loc[day].dropna()
     if len(work) >= 100:
@@ -113,10 +113,10 @@ def _answered_questions(df: pd.DataFrame) -> list[str]:
     lines = ["## Inspection questions, answered on the live run", ""]
     leg = pd.to_numeric(df["legacy_absolute_tan_score_55_30_15"], errors="coerce")
     new = pd.to_numeric(df["tan_score_absolute_0_100"], errors="coerce")
-    peak = new.idxmax()
-    peak_abs, peak_leg = float(new.loc[peak]), float(leg.loc[peak])
-    peak_local = pd.to_numeric(df.get("local_tan_score_0_100"),
-                               errors="coerce").loc[peak]
+    peak_position = int(new.argmax())
+    peak_abs, peak_leg = float(new.iloc[peak_position]), float(leg.iloc[peak_position])
+    peak_local = pd.to_numeric(df["local_tan_score_0_100"],
+                               errors="coerce").iloc[peak_position]
     lines.append(
         f"- Excellent-locally without globally near-100: peak Absolute hour "
         f"scores v4 {peak_abs:.1f} (legacy {peak_leg:.1f}) with Local "

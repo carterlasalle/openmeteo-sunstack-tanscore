@@ -53,13 +53,13 @@ _FUSION_WEIGHT_CAP = 0.6  # max single-source share: no false certainty
 # slack redistributed to the uncapped sources. Per-row weights restrict these
 # shares to finite sources and renormalize.
 _RAW = np.array([1.0 / m**2 for m in _SOURCE_MAE])
-_FIXED_SHARES = np.clip(_RAW / _RAW.sum(), 0.0, _FUSION_WEIGHT_CAP)
-_FIXED_SHARES = _FIXED_SHARES / _FIXED_SHARES.sum()
+_fixed_shares = np.clip(_RAW / _RAW.sum(), 0.0, _FUSION_WEIGHT_CAP)
+_FIXED_SHARES_NORM: np.ndarray = _fixed_shares / _fixed_shares.sum()
 
 
 def _source_weights(finite: np.ndarray) -> np.ndarray:
     # A source-free row keeps NaN weights, hence NaN consensus (never zero).
-    weights = np.where(finite, np.asarray(_FIXED_SHARES)[:, None], np.nan)
+    weights = np.where(finite, np.asarray(_FIXED_SHARES_NORM)[:, None], np.nan)
     with np.errstate(divide="ignore", invalid="ignore"):
         return weights / np.nansum(weights, axis=0)
 

@@ -85,7 +85,7 @@ def _package_bytes(*parts: str) -> bytes | None:
     return None
 
 
-def _load_meta(stem: str) -> dict:
+def _load_meta(stem: str) -> dict[str, object]:
     raw = _package_bytes("action_spectra", f"{stem}.meta.json")
     if raw is not None:
         return json.loads(raw.decode("utf-8"))
@@ -227,7 +227,7 @@ def absolute_tan_score_from_melanogenic_irradiance(
 def _epoch_seconds(times_utc: pd.Series) -> np.ndarray:
     """Resolution-independent epoch seconds (pandas 3 has non-nano units)."""
     t = pd.to_datetime(times_utc, utc=True)
-    return t.map(lambda x: x.timestamp()).to_numpy(dtype=float)
+    return t.map(lambda x: x.timestamp() if not pd.isna(x) else float("nan")).to_numpy(dtype=float)
 
 
 def _trapezoidal_dose(
@@ -338,7 +338,7 @@ def reference_minutes(
     return float(tandose_j_m2 / e_mel_global_reference_wm2 / 60.0)
 
 
-def model_metadata(global_reference: dict | None = None) -> dict[str, object]:
+def model_metadata(global_reference: dict[str, object] | None = None) -> dict[str, object]:
     try:
         mel = load_action_spectrum(ACTION_SPECTRUM_STEM)
         mel_meta = {

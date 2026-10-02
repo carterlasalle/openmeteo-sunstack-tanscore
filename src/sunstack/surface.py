@@ -108,10 +108,15 @@ def load_surface_materials(path: Path) -> list[dict[str, object]]:
     """Load the version-controlled surface provenance registry."""
     import yaml
 
-    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    raw: object = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(raw, list):
         raise TypeError("surface materials registry must be a list")
-    return raw
+    out: list[dict[str, object]] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise TypeError("surface materials registry entries must be mappings")
+        out.append({str(k): v for k, v in entry.items()})
+    return out
 
 
 def validate_surface_materials() -> None:
@@ -126,7 +131,8 @@ def validate_surface_materials() -> None:
     for slug, profile in PRESETS.items():
         material = by_slug[slug]
         for field in ("proxy_reflectance", "reflectance_low", "reflectance_high"):
-            assert abs(float(material[field]) - getattr(profile, field)) <= 1e-12
+            raw_val = material[field]
+            assert abs(float(raw_val if isinstance(raw_val, (str, int, float)) else float("nan")) - getattr(profile, field)) <= 1e-12
 
 SURFACE_EXTENT_MODES = ("local", "broad")
 

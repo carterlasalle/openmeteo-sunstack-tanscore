@@ -19,7 +19,9 @@ xr = pytest.importorskip("xarray")
 from sunstack import history
 
 
-def _write_ds(path: Path, coords: dict, var_name: str = "uvbed") -> Path:
+def _write_ds(
+    path: Path, coords: dict[str, np.typing.ArrayLike], var_name: str = "uvbed"
+) -> Path:
     lat = np.array([41.5, 42.0])
     lon = np.array([-86.5, -86.0])
     dims = tuple(coords) + ("latitude", "longitude")

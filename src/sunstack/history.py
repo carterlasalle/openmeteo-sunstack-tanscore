@@ -92,7 +92,7 @@ def normalize_nasa_power(payload: dict[str, Any]) -> pd.DataFrame:
         if not isinstance(values, dict):
             continue
         series = pd.Series([values.get(k, np.nan) for k in ordered], dtype="float64")
-        series = series.replace(-999.0, np.nan).replace(-999, np.nan)
+        series = series.mask(series.isin([-999.0, -999]), np.nan)
         out[name] = series
     return power_hourly_to_intervals(out)
 
@@ -330,7 +330,8 @@ def normalize_epa_hourly(payload: object) -> pd.DataFrame:
             # ZIP's local time, matching the site-local wall clock join key.
             dt = datetime.strptime(  # noqa: DTZ007
                 str(row.get("DATE_TIME", "")).strip(), "%b/%d/%Y %I %p")
-            val = float(row.get("UV_VALUE"))  # type: ignore[arg-type]
+            raw_uv = row.get("UV_VALUE")
+            val = float(raw_uv if raw_uv is not None else float("nan"))
         except (ValueError, TypeError):
             continue
         if not np.isfinite(val):
@@ -355,7 +356,8 @@ def normalize_epa_daily(payload: object) -> pd.DataFrame:
             # Date-only parse is intentional: EPA DATE is a calendar-day label.
             day = datetime.strptime(  # noqa: DTZ007
                 str(row.get("DATE", "")).strip(), "%b/%d/%Y").date().isoformat()
-            val = float(row.get("UV_INDEX"))  # type: ignore[arg-type]
+            raw_idx = row.get("UV_INDEX")
+            val = float(raw_idx if raw_idx is not None else float("nan"))
         except (ValueError, TypeError):
             continue
         if not np.isfinite(val):

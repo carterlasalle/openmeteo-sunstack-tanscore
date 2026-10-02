@@ -514,14 +514,14 @@ def build_30min_forecast(
         kt_h = pd.Series(kt_h, index=h.index)
         stamps = pd.to_datetime(out["dt"])
         kt_30 = (
-            kt_h.reindex(h.index.union(stamps))
+            kt_h.reindex(h.index.union(pd.DatetimeIndex(stamps)))
             .sort_index()
             .interpolate(method="time")
             .reindex(stamps)
         )
         toa_30 = _toa_wm2(_as_utc(stamps))
         lin_ghi = np.asarray(
-            ghi_h.reindex(h.index.union(stamps))
+            ghi_h.reindex(h.index.union(pd.DatetimeIndex(stamps)))
             .sort_index()
             .interpolate(method="time")
             .reindex(stamps),
@@ -936,7 +936,7 @@ def best_fixed_dose_window(
         # trapezoid legs. A 30-min window on the 30-min grid integrates ONE
         # leg: 0.5*(e0+e1)*1800 — the honest interval energy, never e0*1800
         # as if the stamp were a backward mean.
-        window_idx = list(range(i, i + n_slots))
+        window_idx = np.asarray(list(range(i, i + n_slots)), dtype=int)
         ok_grid = all(
             stamps.iloc[window_idx[k + 1]] - stamps.iloc[window_idx[k]] == step
             for k in range(n_slots - 1))
@@ -997,23 +997,27 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
         if daylight.empty:
             continue
         score = _num(daylight, "overall_tan_opportunity_0_100").fillna(0)
-        best_idx = score.idxmax()
-        best = daylight.loc[best_idx]
+        _order = score.reset_index(drop=True)
+        _flat = daylight.reset_index(drop=True)
+        _pos = _order.idxmax()
+        best = _flat.iloc[[int(_pos) if isinstance(_pos, (int, np.integer)) else 0]].iloc[0]
         # Best one-hour rolling pair.
         s = daylight.sort_values(by=["dt"]).reset_index(drop=True)
-        best_hour = None
+        best_hour: object = None
         best_hour_score = -1.0
         for i in range(len(s) - 1):
-            if s.loc[i + 1, "dt"] - s.loc[i, "dt"] != pd.Timedelta(minutes=30):
+            cur = pd.to_datetime(s["dt"].iloc[i + 1])
+            prev = pd.to_datetime(s["dt"].iloc[i])
+            if cur - prev != pd.Timedelta(minutes=30):
                 continue
-            window_rows = s.loc[i : i + 1]
+            window_rows = s.iloc[i : i + 2]
             if not isinstance(window_rows, pd.DataFrame):
                 raise TypeError("rolling window slice must be a DataFrame")
             pair = _num(window_rows, "overall_tan_opportunity_0_100").fillna(0)
             avg = float(pair.mean())
             if avg > best_hour_score:
                 best_hour_score = avg
-                best_hour = s.loc[i, "dt"]
+                best_hour = s["dt"].iloc[i]
         window = _best_contiguous_window(daylight)
         # Class-aware window: same ranking, class blocks excluded (south-bend
         # Eastern schedule; None when the whole window is in class).
@@ -1044,12 +1048,26 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
         # neighboring slot's dose relabeled.
         def _col_at(col: str, stamp, _grid: pd.DataFrame = g) -> float:
             try:
-                hit = _grid.loc[pd.to_datetime(_grid["dt"]) == pd.to_datetime(stamp), col]
+                _cmp = pd.to_datetime(_grid["dt"])
+                _cmp_idx = _cmp if isinstance(_cmp, pd.Series) else pd.Series(_cmp, index=_grid.index)
+                hit = _grid.loc[pd.DatetimeIndex(_cmp_idx) == pd.to_datetime(stamp), col]
                 return float(hit.iloc[0]) if len(hit) else float("nan")
             except (KeyError, ValueError, IndexError, TypeError):
                 return float("nan")
-        _best_end = best["dt"] + pd.Timedelta(minutes=30)
-        best_hour_end = (best_hour + pd.Timedelta(minutes=60)) if best_hour is not None else None
+        def _as_ts(v: object) -> pd.Timestamp:
+            if isinstance(v, pd.Timestamp):
+                return v
+            if v is None:
+                return pd.Timestamp("NaT")
+            if isinstance(v, str):
+                return pd.to_datetime(v)
+            if isinstance(v, (int, float)):
+                return pd.to_datetime(v, unit="s")
+            return pd.to_datetime(str(v))
+        _best_dt = _as_ts(best["dt"] if "dt" in best else daylight["dt"].iloc[0])
+        _best_end = _best_dt + pd.Timedelta(minutes=30)
+        _bh_ts = _as_ts(best_hour) if best_hour is not None else pd.Timestamp("NaT")
+        best_hour_end = (_bh_ts + pd.Timedelta(minutes=60)) if best_hour is not None else None
         try:
             from .doses import window_dose as _wd2
 
@@ -1084,10 +1102,10 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                 "day_confidence_at_peak_0_100": round(
                     float(best.get("tan_forecast_confidence_0_100", np.nan)), 1
                 ),
-                "best_30m_start": best["dt"].isoformat(),
+                "best_30m_start": _best_dt.isoformat(),
                 "best_30m_tan_dose_j_m2": _col_at("tan_dose_30m_j_m2", _best_end),
                 "best_30m_sed": _col_at("sed_30m", _best_end),
-                "best_hour_start": best_hour.isoformat()
+                "best_hour_start": _as_ts(best_hour).isoformat()
                 if best_hour is not None
                 else None,
                 "best_hour_score_0_100": round(best_hour_score, 1)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -8,7 +9,7 @@ from typing import cast
 
 from dotenv import load_dotenv
 
-_DOTENV_LOADED: bool = load_dotenv()
+_ = load_dotenv()
 
 
 @dataclass(frozen=True)
@@ -137,20 +138,21 @@ def current_site() -> Site | None:
     return _SITE_STACK[-1] if _SITE_STACK else None
 
 
-_SITE_LOCK = None
-def site_lock():
+_site_lock: threading.RLock | None = None
+def site_lock() -> threading.RLock:
     """Process-wide reentrant lock serializing per-site runs.
 
     use_site mutates module globals (thread-unsafe by construction); holders
     of this lock cannot interleave coordinates. Use with `with site_lock()`
     around run_one_site / refresh handlers.
     """
-    global _SITE_LOCK
-    if _SITE_LOCK is None:
-        import threading as _threading
-
-        _SITE_LOCK = _threading.RLock()
-    return _SITE_LOCK
+    global _site_lock
+    if _site_lock is None:
+        _site_lock = threading.RLock()
+    lock = _site_lock
+    if lock is None:  # pragma: no cover - threading.RLock() never returns None
+        raise RuntimeError("site lock unavailable")
+    return lock
 
 
 class use_site:
@@ -177,7 +179,7 @@ class use_site:
         _SITE_STACK.append(self._site)
         return self._site
 
-    def __exit__(self, *exc: object) -> bool:
+    def __exit__(self, *_exc: object) -> bool:
         active = globals()
         active["LATITUDE"] = self._saved["LATITUDE"]
         active["LONGITUDE"] = self._saved["LONGITUDE"]

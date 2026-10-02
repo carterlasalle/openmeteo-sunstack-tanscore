@@ -236,7 +236,7 @@ def test_tierB_manifest_validator_fails_loudly():
 
     from sunstack.spectral import validate_tierB_manifest
 
-    good = {
+    good: dict[str, object] = {
         "spectral_emulator_version": "em-v1",
         "spectral_training_manifest_sha256": "abc123",
         "libradtran_version": "2.5.0",
@@ -543,6 +543,7 @@ def test_committed_spectra_rebuild_byte_identical(tmp_path, monkeypatch):
 
     spec = importlib.util.spec_from_file_location(
         "build_action_spectra", "scripts/build_action_spectra.py")
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     monkeypatch.setattr(sys, "argv",
@@ -604,6 +605,7 @@ def test_literature_gates_pass_on_shipped_spectra(tmp_path, monkeypatch):
 
     spec = importlib.util.spec_from_file_location(
         "check_literature", "scripts/check_literature.py")
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     report = tmp_path / "literature_sanity.md"

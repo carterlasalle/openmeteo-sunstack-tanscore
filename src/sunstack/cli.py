@@ -54,7 +54,6 @@ from .opportunity import (
     build_30min_forecast,
     build_daily_summary,
 )
-from .output import write_frame
 from .tanscore import best_tan_windows, score_forecast
 from .validation import (
     DataValidationError,
@@ -578,6 +577,10 @@ def _run_live_inner(
         for _col in _personal_cols:
             if _col in _frame.columns:
                 _frame.drop(columns=[_col], inplace=True)
+    from .output import (
+        write_frame as _write_frame,  # deferred: output imports ui template; cli must stay import-light
+    )
+
     for frame, name in [
         (det_hourly, "deterministic_hourly"),
         (det_daily, "deterministic_daily"),
@@ -597,7 +600,7 @@ def _run_live_inner(
         (daily_tan, "tan_daily_summary"),
         (tan_windows, "best_tan_windows"),
     ]:
-        write_frame(frame, table_dir, name)
+        _write_frame(frame, table_dir, name)
 
     source_health = [
         {
@@ -700,7 +703,7 @@ def _run_live_inner(
     # Provenance split: forecast identity (what generated these rows) vs
     # renderer identity (what last touched the static page). A UI-only reskin
     # must update renderer_* only — never forecast_code_sha. See output.py.
-    from .ui import build_sha as _build_sha
+    from .build_sha import build_sha as _build_sha
     summary["forecast_code_sha"] = _build_sha()
     summary["fusion_version"] = config.FUSION_VERSION
     summary["input_manifest"] = {
@@ -1438,7 +1441,8 @@ def main() -> None:
             from .ui import serve
 
             serve(
-                root, host=args.host, port=args.port, open_browser=not args.no_browser
+                root, host=args.host, port=args.port, open_browser=not args.no_browser,
+                run_live_fn=run_live,
             )
         elif args.command == "export":
             from .output import export_static_site

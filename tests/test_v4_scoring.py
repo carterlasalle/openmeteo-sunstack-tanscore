@@ -195,10 +195,11 @@ def test_sustained_window_prefers_longer_eligible_group():
     assert first.loc[0, "best_window_end"] == scaled.loc[0, "best_window_end"]
     # The longer eligible group wins on sustained opportunity, not on dose.
     # Windows display average intensity AND cumulative dose side by side.
-    assert np.isfinite(first.loc[0, "best_window_mean_0_100"])
-    assert first.loc[0, "tan_dose_best_window_j_m2"] > 0
-    assert scaled.loc[0, "tan_dose_best_window_j_m2"] == (
-        first.loc[0, "tan_dose_best_window_j_m2"] * 10)
+    first_mean = first["best_window_mean_0_100"].iloc[0]
+    first_dose = first["tan_dose_best_window_j_m2"].iloc[0]
+    assert np.isfinite(first_mean)
+    assert first_dose > 0
+    assert scaled["tan_dose_best_window_j_m2"].iloc[0] == first_dose * 10
 
 
 def test_canonical_dose_columns_exist():
@@ -286,7 +287,7 @@ def test_sub_grid_windows_are_nan_not_zero():
     assert dosed["tan_dose_30m_j_m2"].isna().all()
     assert dosed["tan_dose_15m_j_m2"].isna().all()
     assert not dosed.loc[0, "tan_dose_30m_complete"]
-    assert dosed.loc[1, "tan_dose_1h_j_m2"] > 0
+    assert dosed["tan_dose_1h_j_m2"].iloc[1] > 0
     assert bool(dosed.loc[1, "tan_dose_1h_complete"])
     # Night rows with real coverage integrate as true zero, not NaN.
     night = frame.copy()
@@ -338,8 +339,10 @@ def test_absolute_ignores_location_while_local_uses_it():
         "solar_elevation_deg": [60.0],
         "tan_score_absolute_0_100": [50.0],
     })
-    assert (add_local_scores(fc, ref_low).loc[0, "local_tan_score_0_100"] >
-            add_local_scores(fc, ref_high).loc[0, "local_tan_score_0_100"])
+    assert (
+        add_local_scores(fc, ref_low)["local_tan_score_0_100"].iloc[0]
+        > add_local_scores(fc, ref_high)["local_tan_score_0_100"].iloc[0]
+    )
 
 
 def test_pigment_channel_never_enters_opportunity():
@@ -371,6 +374,7 @@ def test_tierB_contract_covers_every_carried_cams_field(tmp_path):
     from sunstack.spectral import emulator_manifest
 
     contract = emulator_manifest()["tierB_reserved_inputs"]
+    assert isinstance(contract, dict)
     for key in ("cams_aod_355", "cams_aod_400", "cams_abs_aod_380",
                 "cams_ssa_355", "cams_asymmetry_400", "cams_water_vapor",
                 "cams_cloud_liquid_water", "cams_cloud_ice_water",
@@ -446,13 +450,13 @@ def test_missing_inputs_integrate_as_unknown_not_zero():
     assert dosed["tan_dose_30m_j_m2"].isna().all()
     assert not dosed["tan_dose_30m_complete"].any()
     # But the erythemal path (UVI present) still integrates: no needless degrade.
-    assert dosed.loc[2, "sed_30m"] > 0
+    assert dosed["sed_30m"].iloc[2] > 0
     assert bool(dosed.loc[2, "sed_30m_complete"])
     days = day_totals(
         frame.assign(time_utc=pd.to_datetime(frame["time"], utc=True)))
     assert pd.isna(days.loc[0, "tan_dose_day_j_m2"])
     assert not bool(days.loc[0, "tan_dose_complete"])
-    assert days.loc[0, "sed_day_total"] > 0
+    assert days["sed_day_total"].iloc[0] > 0
 
 
 def test_primitive_with_no_valid_samples_is_unknown():
@@ -579,7 +583,7 @@ def test_day_totals_use_wall_date_without_time_utc(monkeypatch):
     })
     days = day_totals(frame)
     assert len(days) == 1 and days.loc[0, "date"] == "2026-06-21"
-    assert days.loc[0, "tan_dose_day_j_m2"] > 0
+    assert days["tan_dose_day_j_m2"].iloc[0] > 0
 
 
 def test_configured_gap_threshold_reaches_day_and_window(monkeypatch):
@@ -603,7 +607,7 @@ def test_configured_gap_threshold_reaches_day_and_window(monkeypatch):
     assert split["tan_dose_best_window_j_m2"] == 2 * 0.5 * 3600
     days = day_totals(frame)
     assert not bool(days.loc[0, "tan_dose_complete"])
-    assert days.loc[0, "tan_dose_coverage_fraction"] < 1.0
+    assert days["tan_dose_coverage_fraction"].iloc[0] < 1.0
     monkeypatch.setattr(_config, "TANDOSE_MAX_INTERP_GAP_S", 10800.0)
     assert window_dose(frame, stamps[0], stamps[3])["tan_dose_best_window_j_m2"] > 0
     assert day_totals(frame).loc[0, "tan_dose_complete"]
@@ -824,6 +828,7 @@ def _load_script(name):
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(name, f"scripts/{name}.py")
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -1040,9 +1045,9 @@ def test_all_days_csv_head_matches_daily_row_keys():
     daily = build_daily_summary(half)
     frames = {"dHead": set(daily.iloc[0].index)}
     for head_name, row_keys in frames.items():
-        m = re.search(r"const " + head_name + r"=\[(.*?)\]", HTML)
-        assert m, f"{head_name} export head not found in template"
-        head = re.findall(r"'([^']+)'", m.group(1))
+        match = re.search(r"const " + head_name + r"=\[(.*?)\]", HTML)
+        assert match is not None
+        head = re.findall(r"'([^']+)'", match.group(1))
         assert len(head) > 10, (head_name, head)
         missing = [k for k in head if k not in row_keys]
         assert not missing, (head_name, missing)
@@ -1057,9 +1062,11 @@ def test_all_days_csv_head_matches_daily_row_keys():
                      "sed_30m_complete", "sed_30m_coverage_fraction")
     for key in interval_keys:
         assert key in hourly.columns and key in half.columns, key
-    heads = {name: re.findall(
-        r"'([^']+)'", re.search(r"const " + name + r"=\[(.*?)\]", HTML).group(1))
-        for name in ("hHead", "qHead")}
+    heads = {}
+    for name in ("hHead", "qHead"):
+        match = re.search(r"const " + name + r"=\[(.*?)\]", HTML)
+        assert match is not None
+        heads[name] = re.findall(r"'([^']+)'", match.group(1))
     assert set(interval_keys[:6]) <= set(heads["hHead"])
     assert set(interval_keys[6:]) <= set(heads["qHead"])
 
@@ -1574,7 +1581,9 @@ def test_training_drops_constant_features_loudly(tmp_path, caplog):
             training[feat] = np.nan
     with caplog.at_level(logging.WARNING, logger="sunstack"):
         report = train_uv_models(training, tmp_path)
-    assert set(report["dropped_constant_features"]) >= {"aod340", "ozone_du"}
+    dropped_features = report["dropped_constant_features"]
+    assert isinstance(dropped_features, list)
+    assert set(dropped_features) >= {"aod340", "ozone_du"}
     import joblib
 
     bundle = joblib.load(tmp_path / "uva_uvb_models.joblib")
@@ -2167,7 +2176,7 @@ def test_registry_zip_parses_and_intake_accepts_zip(tmp_path):
     sites = {s.slug: s for s in load_sites()}
     assert sites["south-bend"].zip == "46556"
     assert sites["pacific-palisades"].zip == "90272"
-    from issue_location_to_pr import build_entry
+    from scripts.issue_location_to_pr import build_entry
 
     assert "zip" not in build_entry({
         "location-name": "X", "slug": "x", "latitude": "0",

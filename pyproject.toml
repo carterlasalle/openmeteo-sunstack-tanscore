@@ -70,6 +70,7 @@ dev = [
     "lizard>=1.24.0",
     "mypy>=2.3.1",
     "nox>=2026.8.17",
+    "pandas-stubs>=3.0.5.260914",
     "py-spy>=0.4.2",
     "pyanalyze>=0.13.1",
     "pydoclint>=0.9.1",

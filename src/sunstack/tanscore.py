@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -119,7 +120,7 @@ def _cams_features(cams: pd.DataFrame | None) -> pd.DataFrame:
         irr = np.full(len(cams), np.nan, dtype=float)
         # Helper rows follow its internal stable time sort; scatter back.
         order = np.argsort(
-            times.map(lambda x: x.timestamp()).to_numpy(dtype=float), kind="stable"
+            times.map(lambda x: x.timestamp() if not pd.isna(x) else float("nan")).to_numpy(dtype=float), kind="stable"
         )
         irr[order] = diffs["interval_mean_wm2"].to_numpy(dtype=float)
         out["cams_downward_surface_uv_wm2"] = irr
@@ -245,7 +246,7 @@ def _load_bundle(calibration_dir: Path, *, strict: bool = True):
 
 
 def predict_uva_uvb(features: pd.DataFrame, calibration_dir: Path,
-                    *, strict: bool = True) -> tuple[np.ndarray, np.ndarray, str]:
+                    *, strict: bool = True) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     bundle = _load_bundle(calibration_dir, strict=strict)
     if bundle is not None:
         X = features.reindex(columns=bundle["features"])
@@ -328,8 +329,10 @@ def add_local_scores(forecast: pd.DataFrame, local_ref: pd.DataFrame) -> pd.Data
     local_times = pd.to_datetime(scol(out, "time_utc"), utc=True).dt.tz_convert(ZoneInfo(config.TIMEZONE))
     local_scores = []
     atm_scores = []
-    for idx, row in out.iterrows():
-        lt = local_times.loc[idx]
+    for pos in range(len(out)):
+        row = out.iloc[pos]
+        _lt = local_times.iloc[pos] if pos < len(local_times) else local_times.iloc[0]
+        lt = _lt if isinstance(_lt, pd.Timestamp) else pd.to_datetime(_lt)
         doy = int(lt.dayofyear)
         elev = fnum(row, "solar_elevation_deg")
         score = fnum(row, "tan_score_absolute_0_100")
@@ -387,7 +390,9 @@ def _add_serving_local_scores(
             "geometry_conditioned_transmission_percentile_0_100",
             "atmospheric_quality_percentile_0_100",
         ):
-            out.iloc[positions, out.columns.get_loc(column)] = scored[column].to_numpy()
+            _col = out.columns.get_loc(str(column))
+            assert isinstance(_col, int)
+            out.iloc[positions, _col] = scored[str(column)].to_numpy()
     return out, fallback
 
 
@@ -488,8 +493,8 @@ def sun_posture_guidance(elevation_deg: float, azimuth_deg: float) -> str:
 def add_sun_posture(frame: pd.DataFrame) -> pd.DataFrame:
     """Attach sun-position context columns. Values untouched by construction."""
     out = frame.copy()
-    elev = pd.to_numeric(frame.get("solar_elevation_deg"), errors="coerce")
-    azim = pd.to_numeric(frame.get("solar_azimuth_deg"), errors="coerce")
+    elev = pd.to_numeric(frame["solar_elevation_deg"] if "solar_elevation_deg" in frame else pd.Series(np.nan, index=frame.index), errors="coerce")
+    azim = pd.to_numeric(frame["solar_azimuth_deg"] if "solar_azimuth_deg" in frame else pd.Series(np.nan, index=frame.index), errors="coerce")
     out["sun_compass"] = [sun_compass(float(a)) if pd.notna(a) else "—" for a in azim]
     out["torso_lift_deg"] = [torso_lift_deg(float(e)) if pd.notna(e) else None for e in elev]
     out["sun_posture_guidance"] = [
@@ -712,11 +717,9 @@ def score_forecast(
     out["local_reference_stale"] = True
     _ref_usable = False
     try:
-        import json as _json
-
         _ver_path = calibration_dir / "local_reference_version.json"
         if _ver_path.exists():
-            _ver = _json.loads(_ver_path.read_text(encoding="utf-8"))
+            _ver = json.loads(_ver_path.read_text(encoding="utf-8"))
             out["local_reference_version"] = str(
                 _ver.get("tan_score_model_version", "unknown"))
             _model_ok = (_ver.get("tan_score_model_version")
@@ -746,7 +749,7 @@ def score_forecast(
     try:
         _lead_path = calibration_dir / "lead_reference_manifest.json"
         if _lead_path.exists():
-            _lead_manifest = _json.loads(_lead_path.read_text(encoding="utf-8"))
+            _lead_manifest = json.loads(_lead_path.read_text(encoding="utf-8"))
             _lead_version = str(_lead_manifest.get("tan_score_model_version", "unknown"))
             _lead_model_ok = (_lead_manifest.get("tan_score_model_version")
                               == config.TAN_SCORE_MODEL_VERSION)

@@ -177,7 +177,7 @@ def _metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
     }
 
 
-def train_uv_models(training: pd.DataFrame, calibration_dir: Path) -> dict:
+def train_uv_models(training: pd.DataFrame, calibration_dir: Path) -> dict[str, object]:
     calibration_dir.mkdir(parents=True, exist_ok=True)
     if training.empty:
         raise RuntimeError("NASA POWER calibration data is empty")
@@ -365,7 +365,7 @@ def build_serving_reference(
         solar = solar_features(scol(out, "time_utc"), altitude)
         for column in solar:
             if column != "time_utc":
-                out[column] = scol(solar, column).to_numpy()
+                out[column] = scol(solar, str(column)).to_numpy()
         out["ghi"] = num(out, "shortwave_radiation")
         out["dni"] = num(out, "direct_normal_irradiance")
         out["dhi"] = num(out, "diffuse_radiation")

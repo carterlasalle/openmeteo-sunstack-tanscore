@@ -39,7 +39,7 @@ def _bin(s: pd.Series, edges: list[float], labels: list[str]) -> pd.Series:
 
 
 def _stratified_table(df: pd.DataFrame, truth: str, pred: str,
-                      strata: dict[str, pd.Series]) -> list[str]:
+                      strata: dict[str, dict[object, np.ndarray]]) -> list[str]:
     out = ["| stratum | n | MAE | RMSE | bias |",
            "|---|---|---|---|---|"]
     for name, groups in strata.items():
@@ -103,7 +103,7 @@ def main() -> None:
                       else ("JJA" if x in (6, 7, 8) else "SON")))
             aod_med = pd.to_numeric(test["aod340"], errors="coerce").median()
             ozo_med = pd.to_numeric(test["ozone_du"], errors="coerce").median()
-            strata = {
+            strata: dict[str, dict[object, np.ndarray]] = {
                 "SZA": {lab: (sza_b == lab).to_numpy()
                         for lab in sza_b.cat.categories},
                 "cloud": {lab: (cloud_b == lab).to_numpy()
@@ -164,13 +164,18 @@ def main() -> None:
                 # merged closure rows with a second merge_asof carrying extras.
                 ctx = pd.DataFrame({
                     "t": ht,
-                    "sza": pd.to_numeric(hourly.get("sza"), errors="coerce"),
+                    "sza": pd.to_numeric(
+                        hourly["sza"] if "sza" in hourly else pd.Series(index=hourly.index, dtype=float),
+                        errors="coerce"),
                     "cloud": pd.to_numeric(
-                        hourly.get("cloud_cover"), errors="coerce"),
+                        hourly["cloud_cover"] if "cloud_cover" in hourly else pd.Series(index=hourly.index, dtype=float),
+                        errors="coerce"),
                     "aod340": pd.to_numeric(
-                        hourly.get("aod340"), errors="coerce"),
+                        hourly["aod340"] if "aod340" in hourly else pd.Series(index=hourly.index, dtype=float),
+                        errors="coerce"),
                     "ozone": pd.to_numeric(
-                        hourly.get("ozone_du"), errors="coerce"),
+                        hourly["ozone_du"] if "ozone_du" in hourly else pd.Series(index=hourly.index, dtype=float),
+                        errors="coerce"),
                     "month": ht.dt.month,
                 }).sort_values("t")
                 m2 = pd.merge_asof(merged.sort_values("t"), ctx, on="t",
@@ -186,7 +191,7 @@ def main() -> None:
                           else ("JJA" if x in (6, 7, 8) else "SON")))
                 aod_med = m2["aod340"].median()
                 ozo_med = m2["ozone"].median()
-                strata = {
+                strata: dict[str, dict[object, np.ndarray]] = {
                     "SZA": {lab: (sza_b == lab).to_numpy()
                             for lab in sza_b.cat.categories},
                     "cloud": {lab: (cloud_b == lab).to_numpy()

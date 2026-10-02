@@ -183,9 +183,8 @@ def align_training_intervals(
     right = predictors.sort_values("interval_midpoint").reset_index(drop=True)
     lmid = pd.to_datetime(left["interval_midpoint"], utc=True)
     rmid = pd.to_datetime(right["interval_midpoint"], utc=True)
-    # Nearest-predictor index per target via searchsorted on sorted midpoints.
-    rsecs = rmid.map(lambda x: x.timestamp()).to_numpy(dtype=float)
-    lsecs = lmid.map(lambda x: x.timestamp()).to_numpy(dtype=float)
+    rsecs = rmid.map(lambda x: x.timestamp() if not pd.isna(x) else float("nan")).to_numpy(dtype=float)
+    lsecs = lmid.map(lambda x: x.timestamp() if not pd.isna(x) else float("nan")).to_numpy(dtype=float)
     pos = np.searchsorted(rsecs, lsecs)
     take = np.clip(pos, 0, len(right) - 1)
     # Also consider the neighbor below for true nearest.
@@ -282,8 +281,8 @@ def cams_accumulation_to_interval_means(
     _coerced = pd.to_numeric(accumulated_j_m2, errors="coerce")
     assert isinstance(_coerced, pd.Series)
     acc: np.ndarray = _coerced.to_numpy()
-    cyc: np.ndarray = pd.Series(np.asarray(cycle_ids)).astype(str).to_numpy()  # type: ignore[union-attr]
-    secs: np.ndarray = t.map(lambda x: x.timestamp()).to_numpy()  # type: ignore[union-attr]
+    cyc: np.ndarray = pd.Series(np.asarray(cycle_ids)).astype(str).to_numpy(dtype=object)  # type: ignore[union-attr]
+    secs: np.ndarray = t.map(lambda x: x.timestamp() if not pd.isna(x) else float("nan")).to_numpy(dtype=float)  # type: ignore[union-attr]
     order: np.ndarray = np.argsort(secs, kind="stable")
     out_rows: list[dict[str, object]] = []
     for pos in range(len(order)):
