@@ -14,6 +14,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 from . import config
+from .frame import num, scol
 
 
 def solar_features(times_utc: pd.Series, altitude_m: float = 220.0) -> pd.DataFrame:
@@ -89,30 +90,6 @@ def _angstroem(aod1: pd.Series, wave1: float, aod2: pd.Series, wave2: float) -> 
     out = pd.Series(np.nan, index=a.index, dtype="float64")
     out.loc[valid] = -np.log(a.loc[valid] / b.loc[valid]) / math.log(wave1 / wave2)
     return out.clip(-1, 4)
-
-
-def scol(frame: pd.DataFrame, name: str) -> pd.Series:
-    """Unique-column access with a verified Series contract.
-
-    Plain ``frame[name]`` types as Series | DataFrame and silently returns a
-    DataFrame on duplicated labels, which then fails far from the cause.
-    This fails loud at the access instead.
-    """
-    out = frame[name]
-    if not isinstance(out, pd.Series):
-        raise TypeError(f"expected unique Series column {name!r}, got {type(out).__name__}")
-    return out
-
-
-def num(frame: pd.DataFrame, name: str, default: float = float("nan")) -> pd.Series:
-    """Numeric-column read with a quiet default (missing → NaN column)."""
-    if name not in frame:
-        return pd.Series(default, index=frame.index, dtype="float64")
-    out = pd.to_numeric(scol(frame, name), errors="coerce")
-    if not isinstance(out, pd.Series):
-        raise TypeError(f"expected numeric Series for column {name!r}")
-    return out
-
 
 def _utc_ns(frame: pd.DataFrame) -> pd.DataFrame:
     # Historical sources disagree on datetime unit (us vs ns). merge_asof/merge

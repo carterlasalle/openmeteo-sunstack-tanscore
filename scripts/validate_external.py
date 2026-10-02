@@ -25,7 +25,7 @@ def _metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
     ss_res = float((err ** 2).sum())
     ss_tot = float(((y_true - y_true.mean()) ** 2).sum())
     return {
-        "n": int(len(y_true)),
+        "n": len(y_true),
         "mae": round(float(np.abs(err).mean()), 4),
         "rmse": round(float(np.sqrt((err ** 2).mean())), 4),
         "bias": round(float(err.mean()), 4),
@@ -118,8 +118,8 @@ def main() -> None:
             for target in ("uva", "uvb"):
                 lines += [f"### Holdout {target.upper()} error by SZA / cloud / season / AOD / ozone",
                           "",
-                          f"(post-{split_year} holdout, n={len(test)}; "
-                          f"AOD340 median {aod_med:.3f}; ozone median {ozo_med:.0f} DU)",
+                          (f"(post-{split_year} holdout, n={len(test)}; "
+                          f"AOD340 median {aod_med:.3f}; ozone median {ozo_med:.0f} DU)"),
                           ""]
                 lines += _stratified_table(test, target, f"pred_{target}", strata)
                 lines += [""]
@@ -200,29 +200,29 @@ def main() -> None:
                 }
                 lines += ["### Closure error by SZA / cloud / season / AOD / ozone",
                           "",
-                          f"(AOD340 median split at {aod_med:.3f}; ozone median "
+                          (f"(AOD340 median split at {aod_med:.3f}; ozone median "
                           f"split at {ozo_med:.0f} DU; CAMS UVI predicted, "
                           f"Open-Meteo UVI as comparator — NOT truth: see the "
-                          f"forecast-UVI bias section below)",
+                          f"forecast-UVI bias section below)"),
                           ""]
                 lines += _stratified_table(m2, "om_uvi", "cams_uvi", strata)
                 lines += [""]
             except (KeyError, ValueError, TypeError) as exc:
                 lines += [f"Stratification skipped ({exc}).", ""]
-            lines += ["No training touched CAMS UVBED targets, so this comparison "
-                      "is independent.",
-                      "NOTE: the bias concentrates at high sun (SZA 30-50) with "
+            lines += [("No training touched CAMS UVBED targets, so this comparison "
+                      "is independent."),
+                      ("NOTE: the bias concentrates at high sun (SZA 30-50) with "
                       "near-zero CAMS values while Open-Meteo peaks — consistent "
                       "with a ~4-5 h diurnal phase offset in the decoded CAMS "
                       "valid times (under investigation in history._dataset_time_column), "
                       "not with a radiometric scale error. This attribution is "
                       "unconfirmed until a measured phase analysis supports it; "
                       "meanwhile the UVI-disagreement confidence penalty is the "
-                      "correct architectural response.",
+                      "correct architectural response."),
                       ""]
         else:
-            lines += ["CAMS UVBED, hourly UVI, or hourly time_utc columns missing; "
-                      "closure skipped (naive local times are never parsed as UTC).", ""]
+            lines += [("CAMS UVBED, hourly UVI, or hourly time_utc columns missing; "
+                      "closure skipped (naive local times are never parsed as UTC)."), ""]
     else:
         lines += ["## CAMS/Open-Meteo", "",
                   f"Latest tables not found under {latest}; run a live forecast first.", ""]
@@ -252,32 +252,32 @@ def main() -> None:
                     _rows.append(f"| SZA {_lab} | {len(_sub)} | {_sub.mean():+.3f} |")
             lines += ["## Forecast UVI bias vs POWER truth by SZA",
                       "",
-                      "Archived Open-Meteo UVI minus NASA POWER UVI, relative, "
+                      ("Archived Open-Meteo UVI minus NASA POWER UVI, relative, "
                       "on overlapping hours (POWER truth is itself modeled, so "
-                      "corroborating rather than definitive):",
+                      "corroborating rather than definitive):"),
                       "",
                       "| stratum | n | mean relative bias |",
                       "|---|---|---|\n" + "\n".join(_rows) if _rows else
                       "| (insufficient overlap) | 0 | — |",
                       "",
-                      "Reading: the comparator in the closure section runs hot "
+                      ("Reading: the comparator in the closure section runs hot "
                       "at low sun, which depresses live E_mel/E_ery with SZA "
-                      "independent of any Tier-C shape error.",
+                      "independent of any Tier-C shape error."),
                       ""]
         except (KeyError, ValueError, TypeError, OSError) as exc:
             lines += [f"Forecast-UVI bias section skipped ({exc}).", ""]
     else:
         lines += ["## Forecast UVI bias vs POWER truth by SZA",
                   "",
-                  "Skipped: calibration_sources archive tables not present "
-                  "for this site.",
+                  ("Skipped: calibration_sources archive tables not present "
+                  "for this site."),
                   ""]
     lines += ["## Open-Meteo UVI self-consistency",
               "",
-              "Modeled UVI in the hourly table IS Open-Meteo UVI (plus bounded HRRR/kt "
+              ("Modeled UVI in the hourly table IS Open-Meteo UVI (plus bounded HRRR/kt "
               "geometry corrections); an independent Open-Meteo check is therefore the "
               "CAMS-closure comparison above, not a self-comparison. Year-holdout "
-              "discipline applies to the UVA/UVB estimators (see model_metrics.json).",
+              "discipline applies to the UVA/UVB estimators (see model_metrics.json)."),
               ""]
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

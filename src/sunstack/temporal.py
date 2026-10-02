@@ -23,7 +23,7 @@ from typing import Any, Literal
 import numpy as np
 import pandas as pd
 
-from .calibrate import scol as _scol
+from .frame import scol as _scol
 
 SupportType = Literal["instant", "interval_mean", "interval_sum", "cumulative_since_cycle"]
 AnchorType = Literal["interval_start", "interval_end", "interval_midpoint", "valid_time"]

@@ -10,7 +10,7 @@ import pandas as pd
 import pvlib.location
 
 from . import config
-from .calibrate import num, scol
+from .frame import num, scol
 from .temporal import TEMPORAL_SEMANTICS_VERSION
 
 LOG = logging.getLogger("sunstack")
@@ -562,6 +562,7 @@ def build_30min_forecast(
 
                 sub = _recompute(out.loc[changed].copy())
                 for col in ("melanogenic_effective_irradiance_wm2",
+                            "delayed_pigmentation_effective_irradiance_horizontal_wm2",
                             "tan_score_absolute_0_100", "erythemal_irradiance_wm2",
                             "pigment_darkening_effective_irradiance",
                             "uvi_consensus", "uvi_consensus_sources",
@@ -710,6 +711,7 @@ def build_30min_forecast(
 
                 sub = _recompute_native(out.loc[is_native].copy())
                 for col in ("melanogenic_effective_irradiance_wm2",
+                            "delayed_pigmentation_effective_irradiance_horizontal_wm2",
                             "tan_score_absolute_0_100", "erythemal_irradiance_wm2",
                             "pigment_darkening_effective_irradiance",
                             "uvi_consensus", "uvi_consensus_sources",
@@ -772,6 +774,7 @@ def build_30min_forecast(
 
         _final = _recompute_final(out.copy())
         for _col in ("melanogenic_effective_irradiance_wm2",
+                     "delayed_pigmentation_effective_irradiance_horizontal_wm2",
                      "tan_score_absolute_0_100", "erythemal_irradiance_wm2",
                      "pigment_darkening_effective_irradiance",
                      "uvi_consensus", "uvi_consensus_sources",

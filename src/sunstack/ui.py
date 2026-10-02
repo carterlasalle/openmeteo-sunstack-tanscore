@@ -13,7 +13,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, Response
 
 from . import config
-from .calibrate import scol
+from .frame import scol
 from .opportunity import (
     apply_outdoor_feasibility,
     attach_fitzpatrick,

@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 from . import config
-from .calibrate import num
+from .frame import num
 from .photobiology import (
     TAN_DOSE_MODEL_VERSION,
     integrate_band_dose,

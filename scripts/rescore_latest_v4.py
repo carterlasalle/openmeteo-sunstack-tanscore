@@ -13,23 +13,25 @@ import argparse
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 sys.path.insert(0, "src")
 
-from sunstack import config  # noqa: E402
-from sunstack.doses import add_interval_doses  # noqa: E402
-from sunstack.opportunity import (  # noqa: E402
+from sunstack import config
+from sunstack.doses import add_interval_doses
+from sunstack.opportunity import (
     apply_outdoor_feasibility,
     attach_fitzpatrick,
     attach_personalization,
     build_30min_forecast,
     build_daily_summary,
 )
-from sunstack.tanscore import best_tan_windows, score_forecast  # noqa: E402
-from sunstack.ui import build_calendar_ics, build_interval_ics  # noqa: E402
-from sunstack.validation import validate_action_spectra, validate_scored_hourly  # noqa: E402
+from sunstack.tanscore import best_tan_windows, score_forecast
+from sunstack.ui import build_calendar_ics, build_interval_ics
+from sunstack.validation import (
+    validate_action_spectra,
+    validate_scored_hourly,
+)
 
 
 def main() -> None:
@@ -97,40 +99,40 @@ def main() -> None:
         lines = [
             "# v4 offline re-score verification (real forecast data, no network)",
             "",
-            f"Site: {site.slug}; input rows: hourly={len(scored)}, "
-            f"half-hour={len(half)}, days={len(daily)}. {cams_note}.",
+            (f"Site: {site.slug}; input rows: hourly={len(scored)}, "
+            f"half-hour={len(half)}, days={len(daily)}. {cams_note}."),
             f"Validators: photobiology + scored-hourly ERROR count = {len(errors)}.",
             "",
             "## Score migration on this run",
             "",
-            f"v4 Absolute mean/max: {v4.mean():.1f} / {v4.max():.1f}; "
+            (f"v4 Absolute mean/max: {v4.mean():.1f} / {v4.max():.1f}; "
             f"legacy mean/max: {leg.mean():.1f} / {leg.max():.1f}; "
-            f"Spearman: {v4.corr(leg, method='spearman'):.3f}.",
-            f"E_mel max: {emel.max():.3f} W/m^2 "
-            f"(global ref {config.GLOBAL_MELANOGENIC_REFERENCE_WM2}).",
+            f"Spearman: {v4.corr(leg, method='spearman'):.3f}."),
+            (f"E_mel max: {emel.max():.3f} W/m^2 "
+            f"(global ref {config.GLOBAL_MELANOGENIC_REFERENCE_WM2})."),
             "",
             "## Doses",
             "",
-            f"Daily TanDose range: {day_dose.min():.0f}-{day_dose.max():.0f} J/m^2 mel; "
-            f"daily SED range: {day_sed.min():.2f}-{day_sed.max():.2f}.",
-            f"tan_dose_complete all: {bool(daily['tan_dose_complete'].all())}; "
-            f"coverage min: {daily['tan_dose_coverage_fraction'].min():.3f}.",
+            (f"Daily TanDose range: {day_dose.min():.0f}-{day_dose.max():.0f} J/m^2 mel; "
+            f"daily SED range: {day_sed.min():.2f}-{day_sed.max():.2f}."),
+            (f"tan_dose_complete all: {bool(daily['tan_dose_complete'].all())}; "
+            f"coverage min: {daily['tan_dose_coverage_fraction'].min():.3f}."),
             "",
             "## Windows (intensity-ranked, dose-reported)",
             "",
-            f"Top hourly window overall: "
+            (f"Top hourly window overall: "
             f"{windows.iloc[0]['overall_tan_opportunity_0_100']:.1f}; "
             f"best-window TanDose example (day 1): "
             f"{daily.iloc[0]['tan_dose_best_window_j_m2']:.0f} J/m^2, "
-            f"SED {daily.iloc[0]['sed_best_window']:.2f}.",
-            f"Daily ICS events: {daily_ics.count('BEGIN:VEVENT')}; "
-            f"30-min ICS events: {ics30.count('BEGIN:VEVENT')}.",
+            f"SED {daily.iloc[0]['sed_best_window']:.2f}."),
+            (f"Daily ICS events: {daily_ics.count('BEGIN:VEVENT')}; "
+            f"30-min ICS events: {ics30.count('BEGIN:VEVENT')}."),
             "",
             f"Artifacts (scratch, not committed): {out_dir}",
             "",
             "## Coverage (pre-existing data-availability behavior, unchanged by v4)",
             "",
-            f"Local scores non-null: "
+            (f"Local scores non-null: "
             f"{pd.to_numeric(scored['local_tan_score_0_100'], errors='coerce').notna().mean():.3f} "
             f"(rebuilt v4 reference); atmosphere: "
             f"{pd.to_numeric(scored['atmospheric_quality_percentile_0_100'], errors='coerce').notna().mean():.3f}; "
@@ -138,7 +140,7 @@ def main() -> None:
             f"{pd.to_numeric(scored['tan_forecast_confidence_0_100'], errors='coerce').notna().mean():.3f}; "
             f"CAMS UVI present: "
             f"{pd.to_numeric(scored['uvi_cams'], errors='coerce').notna().mean():.3f} "
-            f"(5-day CAMS horizon vs 14-day forecast).",
+            f"(5-day CAMS horizon vs 14-day forecast)."),
         ]
         Path(args.report).parent.mkdir(parents=True, exist_ok=True)
         Path(args.report).write_text("\n".join(lines) + "\n", encoding="utf-8")

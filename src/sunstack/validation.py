@@ -4,8 +4,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from .calibrate import num
 from .config import TAN_SCORE_MODEL_VERSION
+from .frame import num
 
 
 class SunStackError(RuntimeError):

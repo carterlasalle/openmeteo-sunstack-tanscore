@@ -178,7 +178,7 @@ def apply_skin_plane(
     explicit and separate; the local surface NEVER mutates horizontal
     environmental fields; CAMS forecast_albedo stays regional input.
     """
-    from .calibrate import num as _num
+    from .frame import num as _num
     from .surface import (
         SURFACE_MODEL_VERSION as _SURFACE_VERSION,
     )

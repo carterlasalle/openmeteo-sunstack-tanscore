@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .calibrate import num, scol
+from .frame import num, scol
 
 
 def _num(frame: pd.DataFrame, name: str) -> pd.Series:

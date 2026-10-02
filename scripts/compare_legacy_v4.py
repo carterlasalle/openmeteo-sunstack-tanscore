@@ -25,7 +25,9 @@ def _ensure_dual_scores(df: pd.DataFrame, src: Path, lines: list[str]) -> pd.Dat
         sys.path.insert(0, "src")
         from sunstack import config as _cfg
         from sunstack.calibrate import absolute_tan_score as _legacy
-        from sunstack.photobiology import absolute_tan_score_from_melanogenic_irradiance as _v4
+        from sunstack.photobiology import (
+            absolute_tan_score_from_melanogenic_irradiance as _v4,
+        )
         from sunstack.spectral import melanogenic_from_broadband as _em
 
         uva = pd.to_numeric(df["uva"], errors="coerce").fillna(0).to_numpy()
@@ -44,9 +46,9 @@ def _ensure_dual_scores(df: pd.DataFrame, src: Path, lines: list[str]) -> pd.Dat
     if not has_both:
         lines += [
             "",
-            "Input predates v4 dual scoring (no legacy diagnostic column). "
+            ("Input predates v4 dual scoring (no legacy diagnostic column). "
             "Rerun scoring to populate both `tan_score_absolute_0_100` and "
-            "`legacy_absolute_tan_score_55_30_15`, then rerun this report.",
+            "`legacy_absolute_tan_score_55_30_15`, then rerun this report."),
         ]
     return df
 
@@ -59,10 +61,10 @@ def _section(df: pd.DataFrame) -> tuple[list[str], pd.DataFrame]:
     diff = (new - leg).dropna()
     lines += [
         "",
-        f"Mean legacy: {leg.mean():.1f}; mean v4: {new.mean():.1f}; "
-        f"mean delta (v4-legacy): {diff.mean():+.1f}.",
-        f"Median delta: {diff.median():+.1f}; p10 {diff.quantile(0.1):+.1f}; "
-        f"p90 {diff.quantile(0.9):+.1f}.",
+        (f"Mean legacy: {leg.mean():.1f}; mean v4: {new.mean():.1f}; "
+        f"mean delta (v4-legacy): {diff.mean():+.1f}."),
+        (f"Median delta: {diff.median():+.1f}; p10 {diff.quantile(0.1):+.1f}; "
+        f"p90 {diff.quantile(0.9):+.1f}."),
         f"Rank correlation (Spearman): {leg.corr(new, method='spearman'):.3f}.",
         "",
         "### UVA-rich vs UVB-rich divergence",
@@ -92,13 +94,13 @@ def _section(df: pd.DataFrame) -> tuple[list[str], pd.DataFrame]:
                 f"| {lab} | {len(sub)} | {sub['leg'].mean():.1f} | "
                 f"{sub['new'].mean():.1f} | {d.mean():+.1f} |")
         lines += ["",
-                  "Reading: UVA-rich hours (cloudy/high-SZA, relatively more "
+                  ("Reading: UVA-rich hours (cloudy/high-SZA, relatively more "
                   "UVA per UVB joule) score lower under v4 than under legacy "
                   "at the same legacy level, because delayed-melanogenesis "
                   "effectiveness per joule near 360-365 nm is ~3 orders "
                   "below 290-295 nm while legacy weights UVA at 30%. "
                   "UVB-rich clear midday hours move the opposite way. "
-                  "This is the intended science-driven reordering.",
+                  "This is the intended science-driven reordering."),
                   ""]
     else:
         lines += ["(Too few daylight rows with UVA+UVB bands for divergence bins.)",
@@ -192,22 +194,22 @@ def main() -> None:
             lines += sec2
             lines += _answered_questions(df2)
         else:
-            lines += ["(Live input predates v4 dual scoring; "
-                      "no comparison section generated.)", ""]
+            lines += [("(Live input predates v4 dual scoring; "
+                      "no comparison section generated.)"), ""]
     lines += [
         "## What to inspect",
-        "- September-11-like excellent-local hours should remain excellent "
+        ("- September-11-like excellent-local hours should remain excellent "
         "locally without becoming globally near-100 (Absolute stays anchored "
-        "to the fixed melanogenic reference).",
-        "- Cloudy/high-UVA cases move down relative to UVB-rich clear cases "
+        "to the fixed melanogenic reference)."),
+        ("- Cloudy/high-UVA cases move down relative to UVB-rich clear cases "
         "because delayed-melanogenesis effectiveness per joule is orders of "
-        "magnitude higher near 290-295 nm than near 360-365 nm.",
-        "- UVA-rich vs UVB-rich spectra separate for delayed melanogenesis "
-        "while IPD (pigment-darkening channel) moves the opposite way.",
+        "magnitude higher near 290-295 nm than near 360-365 nm."),
+        ("- UVA-rich vs UVB-rich spectra separate for delayed melanogenesis "
+        "while IPD (pigment-darkening channel) moves the opposite way."),
         "- Distant-forecast confidence stays separate from physical intensity.",
         "",
-        "Ordering changes are science-driven (photoaddition per Keong 1990, "
-        "no sqrt interaction) and are not preserved for compatibility.",
+        ("Ordering changes are science-driven (photoaddition per Keong 1990, "
+        "no sqrt interaction) and are not preserved for compatibility."),
     ]
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

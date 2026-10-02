@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 
 from . import config
-from .calibrate import num as _num
+from .frame import num as _num
 
 
 def _col_arr(frame: pd.DataFrame, name: str, default: float = math.nan) -> np.ndarray:
@@ -136,6 +136,10 @@ def recompute_derived_state(frame: pd.DataFrame) -> pd.DataFrame:
             e_mel = np.array(e_mel, dtype=float, copy=True)
             e_mel[night] = 0.0
         out["melanogenic_effective_irradiance_wm2"] = np.round(e_mel, 5)
+        # v5 canonical twin (§2.1.A): exact copy of the horizontal environmental
+        # value, so frames that stop at this stage still carry both names.
+        out["delayed_pigmentation_effective_irradiance_horizontal_wm2"] = out[
+            "melanogenic_effective_irradiance_wm2"]
         out["tan_score_absolute_0_100"] = np.round(
             absolute_tan_score_from_melanogenic_irradiance(
                 e_mel, float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2)), 1)

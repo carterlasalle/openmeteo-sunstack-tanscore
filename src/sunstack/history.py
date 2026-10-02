@@ -105,7 +105,7 @@ def fetch_nasa_power_history(
     force: bool = False,
 ) -> pd.DataFrame:
     start = start or config.NASA_POWER_START
-    end = min(end or config.NASA_POWER_END, date.today())
+    end = min(end or config.NASA_POWER_END, datetime.now(UTC).date())
     raw_dir = out_dir / "raw" / "nasa_power"
     table_dir = out_dir / "tables" / "nasa_power"
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -519,7 +519,7 @@ def normalize_cams_netcdf_zip(path: Path, extract_dir: Path, source: str) -> pd.
             frame["source"] = source
             frames.append(frame)
             ds.close()
-        except Exception as exc:
+        except (OSError, ValueError, KeyError) as exc:  # corrupt/partial netCDF member: skip, keep others
             print(f"WARN CAMS netCDF parse {nc.name}: {exc}")
     if not frames:
         return pd.DataFrame()
@@ -737,7 +737,7 @@ def _fetch_cams_cycle(
                 _retrieve_cams(client, CAMS_FORECAST_DATASET, request_for(variables), target)
                 group_ok = True
                 entries.append({"group": group, "variables": variables, "ok": True, "mode": "group"})
-            except Exception as exc:
+            except (OSError, RuntimeError, ValueError) as exc:  # ADS/network/provider failure: record entry, try singles or next cycle
                 entries.append({"group": group, "variables": variables, "ok": False, "mode": "group", "error": str(exc)})
                 if _is_unpublished_cycle_error(exc):
                     print(f"WARN direct CAMS group {group} hit unpublished cycle; skipping single-variable retries.")
@@ -763,7 +763,7 @@ def _fetch_cams_cycle(
                 frames.append(frame)
                 entries.append({"group": group, "variable": variable, "ok": True, "mode": "single-variable"})
                 yielded = True
-            except Exception as exc:
+            except (OSError, RuntimeError, ValueError) as exc:  # per-variable CAMS failure: record entry, continue with other variables
                 entries.append({"group": group, "variable": variable, "ok": False, "mode": "single-variable", "error": str(exc)})
                 print(f"ERROR direct CAMS variable {variable}: {exc}")
         complete = complete and yielded
@@ -807,12 +807,12 @@ def fetch_cams_eac4_history(out_dir: Path, force: bool = False) -> pd.DataFrame:
             print(f"CAMS EAC4 {year}: requesting...", flush=True)
             try:
                 _retrieve_cams(_cds_client(), CAMS_EAC4_DATASET, request, target)
-            except Exception as exc:
+            except (OSError, RuntimeError, ValueError) as exc:  # EAC4 download failure: warn, treat year as missing
                 print(f"WARN CAMS EAC4 {year}: {exc}", flush=True)
                 return pd.DataFrame()
         try:
             frame = normalize_cams_netcdf_zip(target, extract, "cams_eac4")
-        except Exception as exc:
+        except (OSError, ValueError, KeyError) as exc:  # EAC4 normalize failure: warn, treat year as missing
             print(f"WARN CAMS EAC4 {year}: normalize failed: {exc}", flush=True)
             return pd.DataFrame()
         if frame.empty:
