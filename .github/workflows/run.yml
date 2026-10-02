@@ -59,10 +59,11 @@ jobs:
       - name: Tests
         run: uv run pytest tests/ -q
       - name: Type check
-        # Errors only: warnings are pandas-stub noise (reportAny/Unknown*).
-        # `--level error` still fails on any real error; bare basedpyright
-        # would fail on warnings too and could never go green on this stack.
-        run: uv run basedpyright --level error
+        # Pinned checker: unpinned `basedpyright>=` drifts the warning/error
+        # line (CI saw exit 1 on `--level error` with 0 errors on 1.40.1).
+        # `--level error` still fails on any real error; warnings are
+        # pandas-stub noise the stack can never fully silence.
+        run: uv run --with basedpyright==1.40.1 basedpyright --level error
       - name: Literature-informed regression invariants
         run: uv run python scripts/check_literature.py
       - name: Validate committed published artifacts
