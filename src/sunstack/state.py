@@ -85,6 +85,13 @@ def fuse_uvi_unique_count(frame: pd.DataFrame) -> pd.DataFrame:
         corrected = stacked - np.asarray(_SOURCE_BIAS)[:, None]
         consensus = np.nansum(corrected * weights, axis=0)
         finite = np.isfinite(stacked)
+        # Bias correction is a daytime debias: at night (raw sources ~0)
+        # value-minus-bias invents 0.22 out of a [0,0] range, which the
+        # range gate correctly refuses to publish. Clamp into the raw
+        # finite-source range so consensus never leaves what was observed.
+        lo = np.nanmin(stacked, axis=0)
+        hi = np.nanmax(stacked, axis=0)
+        consensus = np.where(finite.any(axis=0), np.clip(consensus, lo, hi), np.nan)
         # Source-free rows emit NaN consensus, never a zero masquerading as
         # clean air; downstream SED integrates them as gaps, not zeros.
         out["uvi_consensus"] = np.round(np.where(finite.any(axis=0), consensus, np.nan), 3)

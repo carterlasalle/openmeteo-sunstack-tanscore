@@ -77,8 +77,9 @@ def test_source_weight_contributions_sum_to_one() -> None:
     _lone = out["uvi_source_weights"].tolist()[1]
     assert _lone[0] == 1.0 and all(math.isnan(v) for v in _lone[1:])
     assert out["uvi_source_values"].tolist()[0] == (5.0, 5.5, 4.5)
-    # Weighted consensus: [5.199, 6.11] (bias-corrected, OM-dominant).
-    assert out["uvi_consensus"].tolist() == [5.199, 6.11]
+    # Weighted consensus: [5.199, 6.0]. Row 0 fuses inside range; row 1 is
+    # lone OM 6.0, clamped (convex fusion never leaves finite sources).
+    assert out["uvi_consensus"].tolist() == [5.199, 6.0]
 
 
 def test_common_case_uvi_evaluator_uses_identical_rows() -> None:

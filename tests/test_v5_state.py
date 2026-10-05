@@ -44,6 +44,30 @@ def test_final_sed_reintegrates_from_final_consensus() -> None:
     assert abs(float(out["sed_30m"].iloc[1]) - (0.5 * (e0 + e1) * 1800.0 / 100.0)) < 1e-9
 
 
+def test_consensus_never_leaves_observed_source_range() -> None:
+    # Live audit 2026-10-05: bias correction fused night [0,0,0] to 0.22,
+    # outside every finite source; the range gate correctly refused to
+    # publish. Consensus is convex: clamped into [min,max] of finite
+    # sources on every row, day or night.
+    from sunstack.state import fuse_uvi_unique_count
+
+    night = pd.DataFrame({
+        "uvi_openmeteo": [0.0, 0.0],
+        "uvi_cams": [0.0, 0.1],
+        "uvi_epa": [0.0, np.nan],
+    })
+    out = fuse_uvi_unique_count(night)
+    assert out["uvi_consensus"].tolist() == [0.0, 0.1]
+    day = pd.DataFrame({
+        "uvi_openmeteo": [5.0],
+        "uvi_cams": [4.0],
+        "uvi_epa": [np.nan],
+    })
+    dout = fuse_uvi_unique_count(day)
+    cons = float(dout["uvi_consensus"].iloc[0])
+    assert 4.0 <= cons <= 5.0
+
+
 def test_unique_uvi_source_count_not_vote_count() -> None:
     from sunstack.state import fuse_uvi_unique_count
 
@@ -53,9 +77,13 @@ def test_unique_uvi_source_count_not_vote_count() -> None:
         "uvi_epa": [6.0, np.nan],
     })
     out = fuse_uvi_unique_count(frame)
-    # Weighted fusion: [1.607, 5.11] (bias-corrected, OM-dominant). Unique
-    # count still separates provider presence from the legacy vote count.
-    assert out["uvi_consensus"].tolist() == [1.607, 5.11]
+    # Weighted fusion: [1.607, 5.0]. Row 0 fuses inside its range; row 1 is
+    # a lone OM 5.0 whose bias correction (+0.11) would overshoot to 5.11 —
+    # clamped into the observed range (convex fusion: consensus never leaves
+    # finite source values; audit: night 0.22 out of [0,0] failed the live
+    # range gate). Unique count still separates provider presence from the
+    # legacy vote count.
+    assert out["uvi_consensus"].tolist() == [1.607, 5.0]
     assert out["uvi_consensus_sources"].tolist() == [3, 1]
     assert out["uvi_consensus_vote_count"].tolist() == [4, 2]
 

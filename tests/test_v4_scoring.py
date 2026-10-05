@@ -2127,8 +2127,10 @@ def test_consensus_degrades_with_missing_sources(tmp_path):
     assert (out["uvi_consensus_sources"].to_numpy() == 2).all()
     one = _best_air().iloc[:1].copy()
     solo = score_forecast(one, Path(tmp_path), None, _confidence())
-    # Lone OM row: bias-corrected OM input (OM bias -0.11 reads low, +0.11).
-    assert np.allclose(solo["uvi_consensus"].to_numpy(), solo["uvi_openmeteo"].to_numpy() + 0.11)
+    # Lone OM row: consensus equals the lone source (convex fusion clamps
+    # the +0.11 bias correction into the observed range; audit 2026-10-05:
+    # unclamped night fusion invented 0.22 out of [0,0]).
+    assert np.allclose(solo["uvi_consensus"].to_numpy(), solo["uvi_openmeteo"].to_numpy())
 
 
 def test_daily_peak_uv_uses_consensus(tmp_path):
