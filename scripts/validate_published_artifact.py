@@ -317,9 +317,32 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
                 failures["no_deprecated_ranking_key"].append(
                     f"{date}: {key} names unemitted column {value}")
 
-    # SED recompute: consecutive 30-min rows with finite erythemal must match
-    # the emitted trailing sed_30m within tolerance (pure-python trapezoid,
-    # no pandas: the validator must not share the pipeline's frame logic).
+    def _row_interval_seconds(r: dict[str, object] | None) -> float | None:
+        # Explicit interval support wins: the row's own [start, end] bounds
+        # give the exact rectangular duration. None = legacy point sample.
+        if not isinstance(r, dict):
+            return None
+        if r.get("radiation_support_type") != "interval_mean":
+            return None
+        try:
+            s = datetime.fromisoformat(str(r.get("interval_start_utc")))
+            e = datetime.fromisoformat(str(r.get("interval_end_utc")))
+        except (ValueError, TypeError):
+            return None
+        dt = (e - s).total_seconds()
+        return dt if dt > 0 else None
+
+    def _rect_or_trap(r1: dict[str, object] | None, e1: float, e0: float, dt: float) -> float:
+        dur = _row_interval_seconds(r1)
+        if dur is not None:
+            return e1 * dur
+        return 0.5 * (e0 + e1) * dt
+
+    # SED recompute: support-aware. Interval-mean rows (with explicit
+    # [interval_start_utc, interval_end_utc]) integrate rectangularly
+    # (E_bar × duration, contract §5.4); legacy point-sample rows fall back
+    # to trapezoid legs. Pure python, no pandas: the validator must not
+    # share the pipeline's frame logic.
     try:
         stamps: list[str] = []
         ervals: list[float] = []
@@ -341,7 +364,8 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
             dt = (t1 - t0).total_seconds()
             if abs(dt - 1800.0) > 60.0:
                 continue
-            expected = 0.5 * (e0 + e1) * dt / 100.0
+            r1 = next((r for r in rows if r.get("time") == s1), None)
+            expected = _rect_or_trap(r1, e1, e0, dt) / 100.0
             # Trailing doses END at their row stamp: the [t0, t1] leg lives on
             # the row at t1 (the t0 row's value covers [t0-30m, t0]).
             emitted = next((r.get("sed_30m") for r in rows if r.get("time") == s1), None)
@@ -356,11 +380,12 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
     except (ValueError, TypeError) as exc:
         failures["sed_recomputes"].append(str(exc))
 
-    # §22.8 delayed-pigmentation dose independently recomputes: trapezoid over
-    # the published irradiance series (trailing 30-min legs), plus the day and
-    # window totals that must fall out of those same rows. Canonical twins are
-    # verified whenever a build emits them (legacy-only artifacts are accepted
-    # during the migration window).
+    # §22.8 delayed-pigmentation dose independently recomputes: rectangular
+    # interval doses where rows carry explicit support (contract §5.4),
+    # trapezoid legs for legacy point samples — plus the day and window
+    # totals that must fall out of those same rows. Canonical twins are
+    # verified whenever a build emits them (legacy-only artifacts are
+    # accepted during the migration window).
     try:
         dp_rows = half_rows or rows
         dp_pts: list[tuple[datetime, float, dict[str, object]]] = []
@@ -379,20 +404,20 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
 
         def _window_integral(start: datetime, end: datetime) -> float:
             total = 0.0
-            for (t0, leg0, _), (t1, leg1, _) in pairwise(dp_pts):
+            for (t0, leg0, _), (t1, leg1, r1) in pairwise(dp_pts):
                 dt = (t1 - t0).total_seconds()
                 # Same gap rule as the pipeline; published window stamps bound
                 # real samples, so legs are always fully inside or outside.
                 if dt > 3600.0 or t0 < start or t1 > end:
                     continue
-                total += 0.5 * (leg0 + leg1) * dt
+                total += _rect_or_trap(r1, leg1, leg0, dt)
             return total
 
         for (t0, leg0, _), (t1, leg1, r1) in pairwise(dp_pts):
             dt = (t1 - t0).total_seconds()
             if abs(dt - 1800.0) > 60.0:
                 continue
-            expected = 0.5 * (leg0 + leg1) * dt
+            expected = _rect_or_trap(r1, leg1, leg0, dt)
             emitted = r1.get("delayed_pigmentation_dose_30m_j_m2",
                              r1.get("tan_dose_30m_j_m2"))
             if _is_finite(emitted) and abs(_num(emitted) - expected) > max(0.05, 0.05 * abs(expected)):
