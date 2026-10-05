@@ -99,7 +99,7 @@ def write_input(row: dict[str, float], idx: int, path: Path, workdir: Path | Non
         "aerosol_haze 6",
         "aerosol_vulcan 1",
         "aerosol_season 1",
-        f"aerosol_angstrom {ang:.3f} {aod340 * (340.0) ** ang:.5f}",
+        f"aerosol_angstrom {ang:.3f} {aod340 * (0.34) ** ang:.5f}",
         f"aerosol_modify ssa set {ssa:.4f}",
         f"aerosol_modify gg set {gg:.4f}",
     ]
