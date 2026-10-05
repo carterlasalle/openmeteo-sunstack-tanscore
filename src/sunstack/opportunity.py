@@ -932,10 +932,13 @@ def best_fixed_dose_window(
     best: tuple[pd.Timestamp, pd.Timestamp, float] | None = None
     best_err = float("inf")
     for i in range(len(d) - n_slots + 1):
-        # Candidate [start, start+duration): n_slots stamps bound n_legs
-        # trapezoid legs. A 30-min window on the 30-min grid integrates ONE
-        # leg: 0.5*(e0+e1)*1800 — the honest interval energy, never e0*1800
-        # as if the stamp were a backward mean.
+        # Candidate [start, start+duration): stamps label interval ENDS, so
+        # the window covers the n_legs intervals ending at stamps[i+1..].
+        # Rectangular interval dose (contract §5.4): E_bar × 1800 per
+        # interval — never the trapezoid across adjacent means, which mixes
+        # the previous interval's energy into this window (live audit
+        # 2026-10-05: trapezoid-ranked usable dose failed the rectangular
+        # artifact gate on a shoulder day).
         window_idx = np.asarray(list(range(i, i + n_slots)), dtype=int)
         ok_grid = all(
             stamps.iloc[window_idx[k + 1]] - stamps.iloc[window_idx[k]] == step
@@ -952,8 +955,11 @@ def best_fixed_dose_window(
         if comfort_rank is not None and bool((comfort_rank.iloc[window_idx] < comfort_min).any()):
             continue
         vals = [float(seg.iloc[j]) for j in range(len(seg))]
-        legs = sum(0.5 * (vals[k] + vals[k + 1]) * 1800.0 for k in range(n_slots - 1)) if n_slots > 1 else 0.0
-        dose = float(legs)
+        # Rectangular: the window [start, start+duration) covers the
+        # n_legs intervals ending at stamps[i+1..]; each contributes
+        # E_bar × 1800. The stamp at i bounds the window but its own
+        # interval lies outside it — it must not enter the dose.
+        dose = float(sum(vals[1:]) * 1800.0) if n_slots > 1 else 0.0
         err = float(100.0 - c_vals.iloc[window_idx].mean()) if bool(c_vals.iloc[window_idx].notna().any()) else 50.0
         if best is None or dose > best[2] * (1.0 + dose_tolerance_frac) or (
             abs(dose - best[2]) <= best[2] * dose_tolerance_frac and err < best_err

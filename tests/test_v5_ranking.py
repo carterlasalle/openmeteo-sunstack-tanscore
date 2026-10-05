@@ -39,11 +39,12 @@ def test_fixed_30m_rank_equals_independent_interval_integration() -> None:
 
     win = best_fixed_dose_window(_day(), 30, usable_only=True)
     assert win is not None
-    # Independent trapezoid integration over the 30-min grid: pairs score
-    # [10:00]=990, [10:30]=900, [11:00]=450 J/m². Point-sample semantics
-    # (stamps are instants), never e0*1800 backward-mean math.
+    # Independent rectangular integration over interval means (contract
+    # §5.4): stamps label interval ENDS, so window [t_i, t_i+30m) holds the
+    # single interval ending at t_{i+1}: [10:00]=0.6×1800=1080,
+    # [10:30]=0.4×1800=720, [11:00]=0.1×1800=180 J/m².
     assert str(win[0]) == "2026-06-21 10:00:00"
-    assert abs(win[2] - 990.0) < 1e-9
+    assert abs(win[2] - 1080.0) < 1e-9
 
 
 def test_lower_local_percentile_cannot_make_weaker_dose_win() -> None:
@@ -88,7 +89,7 @@ def test_comfortable_window_excludes_hard_blocked_and_warm_slots() -> None:
     row = build_daily_summary(day).iloc[0]
     assert str(row["best_comfortable_usable_30m_start"]) == "2026-06-21T11:00:00"
     assert str(row["best_comfortable_usable_30m_end"]) == "2026-06-21T11:30:00"
-    assert row["best_comfortable_usable_30m_dose_j_m2"] == 900.0
+    assert row["best_comfortable_usable_30m_dose_j_m2"] == 720.0
 
 
 def test_comfort_min_breaks_equal_dose_ties() -> None:
@@ -112,10 +113,10 @@ def test_confidence_only_breaks_defined_ties() -> None:
     day["tan_forecast_confidence_0_100"] = [50.0, 90.0, 50.0, 50.0]
     day["outdoor_blocked"] = [False, False, False, False]
     win = best_fixed_dose_window(day, 30, usable_only=True, dose_tolerance_frac=0.01)
-    # [10:00]=810 vs [10:30]=900: different doses, stronger wins outright.
-    # Tie-break path (equal doses) is covered by the tolerance branch in code.
+    # Rectangular: [10:00]=[10:30]=900 tie within tolerance; error tiebreak
+    # ties too (30 vs 30), so earliest start wins outright.
     assert win is not None
-    assert str(win[0]) == "2026-06-21 10:30:00"
+    assert str(win[0]) == "2026-06-21 10:00:00"
 
 
 def test_confidence_breaks_exact_ties() -> None:
