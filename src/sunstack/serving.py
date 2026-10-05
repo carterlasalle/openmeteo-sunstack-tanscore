@@ -71,7 +71,12 @@ def _read_table(run: Path, name: str) -> pd.DataFrame:
 def _records(df: pd.DataFrame, limit: int | None = None):
     if limit is not None:
         df = df.head(limit)
-    clean = df.replace([np.inf, -np.inf], np.nan).copy()
+    clean = df.copy()
+    # Numeric-only: tuple columns (uvi_source_values/weights) hold
+    # array-likes that frame-wide replace() chokes on (live audit
+    # 2026-10-05: ambiguous-truth ValueError killed the export).
+    num_cols = clean.select_dtypes(include=[np.number]).columns
+    clean[num_cols] = clean[num_cols].replace([np.inf, -np.inf], np.nan)
     text = clean.to_json(orient="records", date_format="iso")
     if not isinstance(text, str):
         raise TypeError("records JSON serialization must produce text")
