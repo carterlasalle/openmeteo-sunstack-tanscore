@@ -147,11 +147,10 @@ def site_lock() -> threading.RLock:
     around run_one_site / refresh handlers.
     """
     global _site_lock
-    if _site_lock is None:
-        _site_lock = threading.RLock()
     lock = _site_lock
-    if lock is None:  # pragma: no cover - threading.RLock() never returns None
-        raise RuntimeError("site lock unavailable")
+    if lock is None:
+        lock = threading.RLock()
+        _site_lock = lock
     return lock
 
 
@@ -426,6 +425,7 @@ HOURLY_VARIABLES = [
     "precipitation_probability", "precipitation", "rain", "showers", "snowfall",
     "snow_depth",
     "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m",
+    "uv_index", "uv_index_clear_sky", "sunshine_duration", "is_day",
     "cape", "lifted_index", "convective_inhibition", "freezing_level_height",
     "boundary_layer_height", "total_column_integrated_water_vapour",
     "evapotranspiration", "et0_fao_evapotranspiration", "vapour_pressure_deficit",
