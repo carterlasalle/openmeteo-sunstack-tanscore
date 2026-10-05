@@ -797,3 +797,27 @@ its blocker.
 Open blockers (need external inputs, not code): Tier-B emulator/corpus
 (no uvspec), WOUDC independent sets, multi-year global-v2 corpus,
 per-component plane convolution (D21 residue).
+
+## 2026-10-05 - live-fire addendum (4 strict failures, all closed)
+
+Scheduled strict runs failed 4× after the Oct-1 matrix; each gate caught
+the next real defect. All fixes behavior-preserving, all gates green
+(283 passed / 5 skipped, ruff clean, 0 type errors, validator true),
+verification run `37271179289` green end-to-end (science-gate + forecast
+publish with `validation_issues=[]`).
+
+| # | live failure | root cause | fix | status |
+|---|---|---|---|---|
+| A | `required column missing: uv_index` (every run since Oct 1) | `80516c1` dropped the whole UV line from `HOURLY_VARIABLES` adding `snow_depth` | restored all four vars, dup-free (`c86a748`) | FIXED |
+| B | `consensus 0.22 outside sources` at night | bias correction fused `[0,0,0]` to 0.22 | convex clamp into observed range; `test_consensus_never_leaves_observed_source_range`; 3 overshoot expectations updated | FIXED |
+| C | ambiguous-truth `ValueError` in export | frame-wide `replace([inf])` vs tuple cells | numeric-only replace in `serving._records` | FIXED |
+| D1 | `dp_dose_recomputes: 249` | validator trapezoided interval means (§5.4 violation) | support-aware rectangular recompute in validator, proven clean/caught/corrupt | FIXED |
+| D2 | `best_usable_30m_dose` mismatch ×1 | selector ranked trapezoid, pipeline emits rectangular | rectangular window dose; 3 ranking expectations updated | FIXED |
+
+DoD impact: items 4 (coherent state), 5 (convex fusion now tested,
+`test_consensus_never_leaves_observed_source_range`), 7 (SED/DP
+recompute with interval semantics), 11 (dose ranking), 20 (artifact
+validator), 23 (gates), 24 (CI refuses: 4 live aborts prove it) all
+strengthened. Items 2 (Tier-B strict), 17 (global-v2) unchanged:
+still STRICTLY DISABLED-equivalent (degraded Tier-C labeled, provisional
+reference labeled), blocked on uvspec/WOUDC/multi-year corpus.
