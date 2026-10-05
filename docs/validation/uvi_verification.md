@@ -1,6 +1,6 @@
 # UVI verification (retrospective reference, not truth)
 
-Snapshots: 143 | 1-day-lead rows: 333
+Snapshots: 144 | 1-day-lead rows: 333
 
 | source | n | MAE | bias | RMSE |
 |---|---|---|---|---|
