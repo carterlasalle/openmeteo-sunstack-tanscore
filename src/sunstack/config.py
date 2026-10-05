@@ -221,9 +221,9 @@ ACTION_SPECTRUM_VERSION = "parrish-fda-3630-v1"
 ACTION_SPECTRUM_STEM = "parrish_fda_3630"
 # v4 photobiology: fixed versioned global melanogenic reference (W/m^2).
 # Recalibration creates a new score model version; never silently change.
-GLOBAL_MELANOGENIC_REFERENCE_WM2 = float(os.getenv("SUNSTACK_GLOBAL_MEL_REF_WM2", "1.6"))
+GLOBAL_MELANOGENIC_REFERENCE_WM2 = float(os.getenv("SUNSTACK_GLOBAL_MEL_REF_WM2", "1.793"))
 GLOBAL_MELANOGENIC_REFERENCE_VERSION = os.getenv(
-    "SUNSTACK_GLOBAL_MEL_REF_VERSION", "global-mel-ref-v1-provisional"
+    "SUNSTACK_GLOBAL_MEL_REF_VERSION", "global-mel-ref-v2"
 )
 TAN_SCORE_MODEL_VERSION = "action-spectrum-v2"
 SPECTRAL_BACKEND_VERSION_V5 = "tierB-libradtran-emulator-v1"

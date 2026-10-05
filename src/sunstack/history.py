@@ -381,7 +381,7 @@ def fetch_epa_uv_forecast(out_dir: Path, zip_code: str, timeout: int = 30) -> tu
     raw_dir = out_dir / "raw" / "epa_uv"
     table_dir = out_dir / "tables"
     try:
-        resp = requests.get(EPA_UV_HOURLY_URL.format(zip=zip_code), timeout=timeout)
+        resp = requests.get(EPA_UV_HOURLY_URL.format(zip=zip_code), timeout=timeout, allow_redirects=True)
         resp.raise_for_status()
         raw_dir.mkdir(parents=True, exist_ok=True)
         raw_dir.joinpath(f"epa_hourly_{zip_code}.json").write_text(resp.text, encoding="utf-8")
@@ -389,7 +389,7 @@ def fetch_epa_uv_forecast(out_dir: Path, zip_code: str, timeout: int = 30) -> tu
     except (requests.RequestException, ValueError) as exc:
         print(f"WARN EPA hourly UVI {zip_code}: {exc}")
     try:
-        resp = requests.get(EPA_UV_DAILY_URL.format(zip=zip_code), timeout=timeout)
+        resp = requests.get(EPA_UV_DAILY_URL.format(zip=zip_code), timeout=timeout, allow_redirects=True)
         resp.raise_for_status()
         raw_dir.mkdir(parents=True, exist_ok=True)
         raw_dir.joinpath(f"epa_daily_{zip_code}.json").write_text(resp.text, encoding="utf-8")

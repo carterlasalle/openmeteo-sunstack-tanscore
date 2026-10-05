@@ -128,6 +128,34 @@ def test_band_boundary_energy_conservation() -> None:
     assert float(np.sum(e)) == uva + uvb
 
 
+
+
+def test_dynamic_band_weights_track_true_spectral_shape() -> None:
+    # §7.2: on a uniform intra-band spectrum the dynamic weights reduce to
+    # the cell-mean effectiveness; on a real (blue-heavy) spectrum they move
+    # with the shape instead of staying fixed.
+    from sunstack.spectral import (
+        band_effective_weights,
+        dynamic_band_weights,
+        reconstruct_spectrum_tierC,
+    )
+
+    e = reconstruct_spectrum_tierC(60.0, 1.5)
+    wu, wa = dynamic_band_weights(e)
+    fu, fa = band_effective_weights()
+    assert abs(wu - fu) < 0.01  # half-cell endpoint weighting only
+    assert abs(wa - fa) / fa < 0.1
+    # Blue-heavy spectrum (all energy at 315-320): UVA weight must rise
+    # toward the local effectiveness, far above the band mean.
+    import numpy as np
+
+    from sunstack.spectral import SPECTRAL_WAVES_NM
+
+    blue = np.zeros_like(SPECTRAL_WAVES_NM, dtype=float)
+    blue[(SPECTRAL_WAVES_NM >= 315) & (SPECTRAL_WAVES_NM < 320)] = 1.0
+    _, wa_blue = dynamic_band_weights(blue)
+    assert wa_blue > 5 * fa
+
 def test_trainer_refuses_without_corpus(tmp_path: Path) -> None:
     import pytest
 

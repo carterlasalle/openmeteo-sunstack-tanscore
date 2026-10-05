@@ -405,8 +405,8 @@ def test_local_reference_staleness_is_loud(tmp_path):
          "action_spectrum_version": "parrish-fda-3630-v1",
          "spectral_backend_version": "tierC-broadband-proxy-v2",
          "temporal_semantics_version": "interval-contract-v1",
-         "global_reference_version": "global-mel-ref-v1-provisional",
-         "global_reference_e_mel_wm2": 1.6}))
+         "global_reference_version": "global-mel-ref-v2",
+         "global_reference_e_mel_wm2": 1.793}))
     out2 = score_forecast(_best_air(), caldir, None, _confidence())
     assert not out2["local_reference_stale"].any()
 
@@ -478,7 +478,7 @@ def test_doctor_checks_photobiology_resources(tmp_path, capsys):
     from sunstack.cli import _global_reference_status, doctor
 
     ok, detail = _global_reference_status()
-    assert ok and "1.6" in detail  # real repo resources resolve
+    assert ok and "1.793" in detail  # real repo resources resolve
     # Empty root: missing models fail loud, spectra still resolve from repo.
     assert doctor(Path(tmp_path)) is False
     out = capsys.readouterr().out

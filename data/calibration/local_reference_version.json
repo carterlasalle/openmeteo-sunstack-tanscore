@@ -3,7 +3,7 @@
   "action_spectrum_version": "parrish-fda-3630-v1",
   "spectral_backend_version": "tierC-broadband-proxy-v2",
   "temporal_semantics_version": "interval-contract-v1",
-  "global_reference_version": "global-mel-ref-v1-provisional",
-  "global_reference_e_mel_wm2": 1.6,
+  "global_reference_version": "global-mel-ref-v2",
+  "global_reference_e_mel_wm2": 1.793,
   "rows": 108744
 }

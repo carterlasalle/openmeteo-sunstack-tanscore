@@ -62,6 +62,40 @@ def band_effective_weights(spectrum_stem: str | None = None) -> tuple[float, flo
     _band_cache[stem] = (w_uvb, w_uva)
     return w_uvb, w_uva
 
+def dynamic_band_weights(
+    e_lambda: np.ndarray,
+    wavelengths_nm: np.ndarray | None = None,
+) -> tuple[float, float]:
+    """Effective band weights for one TRUE spectrum (§7.2 diagnostic).
+
+    w_band = sum(E_lambda * S) / sum(E_lambda) per band: how far
+    the fixed-band approximation moves across regimes. Computed against the
+    shipped delayed-pigmentation spectrum; never used as a production proxy.
+    On a uniform intra-band spectrum this reduces to the cell-mean
+    effectiveness (within half-cell endpoint weighting of the trapezoidal
+    band_effective_weights); on real spectra it tracks the true shape.
+    """
+    from .photobiology import effectiveness_at as _eff_at
+    from .photobiology import load_action_spectrum as _load
+
+    waves = SPECTRAL_WAVES_NM if wavelengths_nm is None else np.asarray(
+        wavelengths_nm, dtype=float
+    )
+    e = np.clip(np.asarray(e_lambda, dtype=float), 0, None)
+    spec = _load()
+    s = _eff_at(spec, waves)
+    uvb_m = (waves >= 280) & (waves < 315)
+    uva_m = (waves >= 315) & (waves <= 400)
+    # Cell-sum energy convention (§6.4/test_band_boundary_energy_conservation):
+    # the production grid is 1-nm cells, so band energy is the cell sum, not
+    # the trapezoidal integral (which spans 34 nm over the 35 UVB cells).
+    e_uvb = float(np.sum(e[uvb_m]))
+    e_uva = float(np.sum(e[uva_m]))
+    w_uvb = float(np.sum(e[uvb_m] * s[uvb_m]) / e_uvb) if e_uvb > 0 else float("nan")
+    w_uva = float(np.sum(e[uva_m] * s[uva_m]) / e_uva) if e_uva > 0 else float("nan")
+    return w_uvb, w_uva
+
+
 
 def reconstruct_spectrum_tierC(
     uva_wm2: float, uvb_wm2: float

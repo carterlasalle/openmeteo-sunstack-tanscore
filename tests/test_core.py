@@ -1714,7 +1714,7 @@ def test_debug_photobiology_reports_full_stack(tmp_path, capsys):
     out = capsys.readouterr().out
     for token in ("parrish_fda_3630", "cie_erythema_reference",
                   "ipd_action_spectrum", "Tier-C band weights",
-                  "global_reference: global-mel-ref-v1-provisional",
+                  "global_reference: global-mel-ref-v2",
                   "pigment_darkening_effective_irradiance",
                   "pigment_darkening_dose_1h_j_m2",
                   "latest hourly photobiology columns present"):
@@ -1766,7 +1766,7 @@ def test_show_config_exposes_photobiology_model(capsys):
     _print_config()
     out = capsys.readouterr().out
     for token in ("Photobiology model", "tan_score_model=action-spectrum-v2",
-                  "global-mel-ref-v1-provisional", "tierC-broadband-proxy-v2",
+                  "global-mel-ref-v2", "tierC-broadband-proxy-v2",
                   "tandose_max_gap_s=", "skin_tilt_deg=",
                   "uvi_disagree_warn/strong="):
         assert token in out, token

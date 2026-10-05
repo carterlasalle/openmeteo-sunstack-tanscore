@@ -1,45 +1,117 @@
 {
-  "action_spectrum_name": "parrish_delayed_melanogenesis",
-  "action_spectrum_tier": "provisional",
-  "atmosphere_source": "provisional Tier-C broadband mapping anchored to NASA POWER UVA/UVB climatology; full libRadtran LUT corpus pending",
-  "build_date": "2026-10-01",
-  "code_git_sha": "46318f1",
-  "definition": "99.9th percentile of modeled naturally occurring daylight melanogenic-effective irradiance in the reference corpus",
-  "global_reference_e_mel_wm2": 1.6,
-  "global_reference_version": "global-mel-ref-v1-provisional",
-  "percentile": 99.9,
-  "percentile_distribution": {
-    "p50": 0.18,
-    "p90": 0.62,
-    "p99": 1.18,
-    "p99.9": 1.6,
-    "p100max": 2.05
-  },
-  "site_list": [
-    "equatorial: Quito EC (0.2S, 2850m, high altitude)",
-    "tropical: Singapore (1.3N, humid/cloudy)",
-    "subtropical: Casa de Campo DO (18.4N, humid)",
-    "temperate: South Bend IN (41.7N, 220m)",
-    "high latitude: Tromso NO (69.6N, low sun)",
-    "arid high sun: Alice Springs AU (23.7S, high aerosol variability)",
-    "high altitude: La Paz BO (16.5S, 3640m)",
-    "high albedo: Davos CH winter snow (46.8N, albedo 0.8)",
-    "low ozone: Sydney AU summer",
-    "high ozone: Helsinki FI spring"
-  ],
-  "spectral_model_version": "tierC-broadband-v1",
-  "status": "PROVISIONAL - stratified estimate, not the final multi-year libRadtran corpus. Any recalibration creates a new score model version; never silently change.",
-  "temporal_sampling": "solstice/equinox midday + diurnal sweep per site across clear/cloudy/aerosol/ozone states (analytical provisional); full multi-year corpus pending libRadtran training/LUT build",
-  "empirical_two_site_grounding": {
-    "method": "Tier-C E_mel over pooled daylight training climatology (NASA POWER UVA/UVB, south-bend + pacific-palisades, ghi>10 & sza<90)",
-    "distribution": {
-      "p50": 0.222,
-      "p90": 0.871,
-      "p99": 1.242,
-      "p99.9": 1.355,
-      "p100max": 1.429,
-      "n": 220717
+  "global_reference_version": "global-mel-ref-v2",
+  "global_reference_e_mel_wm2": 1.793,
+  "policy": "empirical p99.9 of multi-site POWER daylight E_DP,h (Tier-C band-weight proxy) plus 10% fixed headroom",
+  "empirical_p999": 1.63,
+  "headroom_factor": 1.1,
+  "n_daylight_hours": 52033,
+  "sites": [
+    {
+      "site": "buenosaires",
+      "lat": -34.6,
+      "lon": -58.38,
+      "regime": "midlatitude",
+      "daylight_hours": 4356,
+      "sha256": "bb2b656b1383689b5ab13f4ed5a292eab2679d5be55390bed0301725be135334"
     },
-    "note": "Temperate/subtropical sites only (max UVI ~11-12 in tables); unsampled equatorial/high-altitude extremes justify headroom above the pooled p99.9."
+    {
+      "site": "dubai",
+      "lat": 25.2,
+      "lon": 55.27,
+      "regime": "subtropical desert",
+      "daylight_hours": 4360,
+      "sha256": "fea23363bc7e24e16fef69e4ee7a0dd56c5fa765eeab791c4a735307e634556c"
+    },
+    {
+      "site": "london",
+      "lat": 51.5,
+      "lon": -0.13,
+      "regime": "midlatitude maritime",
+      "daylight_hours": 4340,
+      "sha256": "6777fec46fce724183177326b341075019afad9cc5cc9588ab55b819a9c8802d"
+    },
+    {
+      "site": "mexicocity",
+      "lat": 19.43,
+      "lon": -99.13,
+      "regime": "tropical highland 2240m",
+      "daylight_hours": 4411,
+      "sha256": "8490ba0db296cd7011951d5758e7129155ae347f4a79081819a24d38f24ba0b8"
+    },
+    {
+      "site": "moscow",
+      "lat": 55.75,
+      "lon": 37.62,
+      "regime": "high-midlatitude continental",
+      "daylight_hours": 4297,
+      "sha256": "0e1107672fc9b03bb16a2e49320dbeca680a69b407cb86bb1460c06350a3f8a0"
+    },
+    {
+      "site": "nairobi",
+      "lat": -1.29,
+      "lon": 36.82,
+      "regime": "equatorial highland 1795m",
+      "daylight_hours": 4363,
+      "sha256": "636b743b72bf81bc210c02ab90f1f5aa3ca0051900796f4eeaad59f3d59e93c7"
+    },
+    {
+      "site": "newyork",
+      "lat": 40.71,
+      "lon": -74.0,
+      "regime": "midlatitude coastal",
+      "daylight_hours": 4311,
+      "sha256": "4a500b80fe7439c10b6b41a90e84bf3b0cb6b5f8b9ee52e56c2cb64e6f96800f"
+    },
+    {
+      "site": "reykjavik",
+      "lat": 64.15,
+      "lon": -21.94,
+      "regime": "high latitude maritime",
+      "daylight_hours": 4186,
+      "sha256": "0731fa4939aa9d6d4edc4a3f10b90b5e14f271df3ae9e19f63c3239989b5a5c2"
+    },
+    {
+      "site": "saopaulo",
+      "lat": -23.55,
+      "lon": -46.63,
+      "regime": "subtropical urban",
+      "daylight_hours": 4361,
+      "sha256": "11585b7d09c6165d1b27dedde30e1958b502e03e39595396b8664c2a88d6a7a6"
+    },
+    {
+      "site": "singapore",
+      "lat": 1.35,
+      "lon": 103.82,
+      "regime": "equatorial maritime",
+      "daylight_hours": 4388,
+      "sha256": "fa793b67fc51bbc8940b3029446b5af778b08b83a836c8d67abbb5c6f5765c75"
+    },
+    {
+      "site": "sydney",
+      "lat": -33.87,
+      "lon": 151.21,
+      "regime": "subtropical coastal",
+      "daylight_hours": 4344,
+      "sha256": "8edde82363386625ea052e43948b75e48094bfaf0a7d0e17fe8361c0e52ccb95"
+    },
+    {
+      "site": "tokyo",
+      "lat": 35.69,
+      "lon": 139.69,
+      "regime": "midlatitude coastal",
+      "daylight_hours": 4316,
+      "sha256": "bf904bc5554f72ce541fb519c0ac98fee0e8774e24b8ebf83bd8577f5e1157a6"
+    }
+  ],
+  "band_weights": {
+    "w_uvb": 0.5623222785714285,
+    "w_uva": 0.0027737632705882352
+  },
+  "backend_note": "Tier-C broadband proxy values; replaced by Tier-B emulator convolution when the uvspec corpus lands",
+  "promoted_from": "data/calibration/global_melanogenic_reference_v2/reference.json",
+  "promotion_note": "12-site POWER 2024 daylight climatology (52033h, equatorial/highland/desert/high-latitude regimes) replaces 2-site temperate estimate; Tier-C band-weight proxy until uvspec emulator lands",
+  "supersedes": {
+    "version": "global-mel-ref-v1-provisional",
+    "value": 1.6
   }
 }

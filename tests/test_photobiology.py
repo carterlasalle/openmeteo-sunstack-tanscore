@@ -520,8 +520,8 @@ def test_provenance_metadata_covers_dashboard_keys():
     from sunstack.spectral import emulator_manifest
 
     meta = model_metadata({
-        "global_reference_version": "global-mel-ref-v1-provisional",
-        "global_reference_e_mel_wm2": 1.6,
+        "global_reference_version": "global-mel-ref-v2",
+        "global_reference_e_mel_wm2": 1.793,
     })
     meta.update(emulator_manifest())
     for key in ("photobiology_model_version", "tan_score_model_version",
