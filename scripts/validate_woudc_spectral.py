@@ -19,15 +19,26 @@ from __future__ import annotations
 
 import argparse
 import json
+import ssl
 import sys
 import urllib.parse
 import urllib.request
+from itertools import pairwise
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 WOUDC_API = "https://api.woudc.org/collections/data_records/items"
+
+
+def _tls_ctx() -> ssl.SSLContext:
+    """Verifying TLS context. certifi's bundle comes first because some hosts
+    lack the intermediate that api.woudc.org serves; the locked uv env ships
+    certifi, so this stays deterministic."""
+    import certifi
+
+    return ssl.create_default_context(cafile=certifi.where())
 
 
 def parse_brewer_csv(text: str) -> list[dict[str, object]]:
@@ -105,95 +116,269 @@ def integrate_channels(waves: list[float], irr: list[float]) -> dict[str, float]
     return out
 
 
-def find_scans(station: str, date_from: str, date_to: str, limit: int = 20) -> list[str]:
-    """Query the WOUDC API for Brewer spectral file URLs."""
+def find_scans(
+    station: str, date_from: str, date_to: str, limit: int = 20, page: int = 400,
+) -> list[tuple[str, str]]:
+    """Query the WOUDC API for Brewer spectral scans in a date window.
+
+    The API 500s on `timestamp_date` range filters, so results are fetched
+    newest-first (`sortby=-timestamp_date`) and the window is applied
+    client-side. Because the newest scans of a window cluster in one season,
+    the qualifying page is then subsampled with an even stride so the returned
+    set spans the window instead of one month. Returns ``(station, url)`` pairs
+    so a multi-station report can attribute each scan.
+    """
     import urllib.parse
     import urllib.request
 
-
-    params = urllib.parse.urlencode({
-        "dataset_id": "Spectral_1.0",
-        "instrument_name": "Brewer",
-        "platform_name": station,
-        "timestamp_date": f"{date_from}/{date_to}",
-        "limit": limit,
-    })
-    with urllib.request.urlopen(f"{WOUDC_API}?{params}", timeout=60) as r:
-        d = json.loads(r.read().decode())
-    urls = []
-    for f in d.get("features", []):
-        u = f.get("properties", {}).get("url")
-        if u:
-            urls.append(u)
-    return urls
+    matches: list[tuple[str, str]] = []
+    offset = 0
+    while offset < 4000:
+        params: dict[str, object] = {
+            "dataset_id": "Spectral_1.0",
+            "instrument_name": "Brewer",
+            "limit": page,
+            "offset": offset,
+            "sortby": "-timestamp_date",
+        }
+        if station:
+            params["platform_name"] = station
+        q = urllib.parse.urlencode(params)
+        with urllib.request.urlopen(f"{WOUDC_API}?{q}", timeout=90, context=_tls_ctx()) as r:
+            d = json.loads(r.read().decode())
+        feats = d.get("features", [])
+        if not feats:
+            break
+        past = False
+        for f in feats:
+            pr = f.get("properties", {})
+            u = pr.get("url")
+            day = str(pr.get("timestamp_date") or "")[:10]
+            name = str(pr.get("platform_name") or station or "?")
+            if not u:
+                continue
+            if day > date_to:
+                continue
+            if day < date_from:
+                past = True
+                continue
+            matches.append((name, u))
+        if past or len(feats) < page:
+            break
+        offset += page
+    if not matches or limit <= 0:
+        return []
+    if len(matches) <= limit:
+        return matches
+    stride = len(matches) / limit
+    return [matches[int(i * stride)] for i in range(limit)]
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Independent measured-spectrum validation report (§8.5).
+
+    Computes per-scan UVA/UVB/erythemal/E_DP from WOUDC Brewer files, then
+    reports overall and stratified statistics, plus the only offline model
+    comparison available here: the Tier-C fixed-band proxy driven by the same
+    measured UVA/UVB, scored against the §8.5 release targets.
+    """
     import numpy as np
+    import pandas as pd
+
+    from sunstack.spectral import band_effective_weights
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("--station", default="Saskatoon")
-    ap.add_argument("--dates", default="")
+    ap.add_argument("--stations", default="Toronto,Hohenpeissenberg,Sodankyla,Uccle,Saskatoon")
+    ap.add_argument("--window", default="2022-01-01,2024-12-31")
+    ap.add_argument("--per-station", type=int, default=12)
     ap.add_argument("--fixture", default="")
     ap.add_argument("--urls", default="")
     ap.add_argument("--out", default="docs/validation/woudc_spectral_validation.md")
     ns = ap.parse_args(argv)
-    scans: list[dict[str, object]] = []
-    sources: list[str] = []
+
+    parts = [p.strip() for p in str(ns.window).split(",")]
+    d0 = parts[0]
+    d1 = parts[1] if len(parts) > 1 else parts[0]
+
+    pairs: list[tuple[str, str]] = []
     if ns.fixture:
-        text = Path(ns.fixture).read_text(encoding="utf-8")
-        scans = parse_brewer_csv(text)
-        sources = [ns.fixture]
+        pairs = [("fixture", str(ns.fixture))]
+    elif ns.urls:
+        pairs = [("url", u.strip()) for u in str(ns.urls).split(",") if u.strip()]
     else:
-        url_list = [u.strip() for u in ns.urls.split(",") if u.strip()]
-        if not url_list and ns.dates:
-            parts = [p.strip() for p in ns.dates.split(",")]
-            d0 = parts[0]
-            d1 = parts[1] if len(parts) > 1 else parts[0]
-            url_list = find_scans(ns.station, d0, d1)
-        for u in url_list[:20]:
-            with urllib.request.urlopen(u, timeout=120) as r:
-                text = r.read().decode(errors="replace")
-            scans.extend(parse_brewer_csv(text))
-            sources.append(u)
-    rows = []
-    for s in scans:
-        wv = s["wavelength_nm"]
-        assert isinstance(wv, list)
-        ir = s["irradiance"]
-        assert isinstance(ir, list)
-        ch = integrate_channels([float(x) for x in wv], [float(x) for x in ir])
-        summ = s["summary"]
-        assert isinstance(summ, dict)
+        for st in [x.strip() for x in str(ns.stations).split(",") if x.strip()]:
+            try:
+                got = find_scans(st, d0, d1, limit=int(ns.per_station))
+            except (OSError, ValueError) as exc:
+                print(f"WARN {st}: {exc}")
+                continue
+            print(f"{st}: {len(got)} scans")
+            pairs.extend(got)
+
+    rows: list[dict[str, object]] = []
+    for station, src in pairs:
         try:
-            sza = float(summ.get("ZenAngle", "nan"))
-        except ValueError:
-            sza = float("nan")
-        rows.append({"sza": sza, **ch,
-                     "int_cie": summ.get("IntCIE", ""),
-                     "o3": summ.get("O3", "")})
+            if ns.fixture:
+                text = Path(src).read_text(encoding="utf-8")
+            else:
+                with urllib.request.urlopen(src, timeout=120, context=_tls_ctx()) as r:
+                    text = r.read().decode(errors="replace")
+        except (OSError, ValueError) as exc:
+            print(f"WARN {src}: {exc}")
+            continue
+        for scan in parse_brewer_csv(text):
+            wv = scan["wavelength_nm"]
+            ir = scan["irradiance"]
+            if not isinstance(wv, list) or not isinstance(ir, list) or len(wv) < 50:
+                continue
+            ch = integrate_channels([float(x) for x in wv], [float(x) for x in ir])
+            summ = scan["summary"]
+            if not isinstance(summ, dict):
+                continue
+            try:
+                sza = float(summ.get("ZenAngle", "nan"))
+            except ValueError:
+                sza = float("nan")
+            if not np.isfinite(sza) or sza >= 90:
+                continue
+            import re as _re
+
+            _m = _re.search(r"/(\d{8})[._]", src)
+            day = f"{_m.group(1)[:4]}-{_m.group(1)[4:6]}-{_m.group(1)[6:]}" if _m else ""
+            rows.append({
+                "station": station,
+                "day": day,
+                "sza": sza,
+                "int_cie": summ.get("IntCIE", ""),
+                "o3": summ.get("O3", ""),
+                **ch,
+            })
+
     out = Path(ns.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    lines = ["# WOUDC Brewer spectral validation (independent, §8.5)",
-             "",
-             f"Scans: {len(rows)} from {len(sources)} file(s).",
-             "",
-             "| # | SZA | UVA | UVB | E_ery (UVI) | E_DP | O3 | IntCIE |",
-             "|---|---|---|---|---|---|---|---|"]
-    for i, r in enumerate(rows[:40]):
-        lines.append(
-            f"| {i} | {r['sza']:.1f} | {r['uva']:.2f} | {r['uvb']:.4f} | "
-            f"{r['e_ery']:.5f} ({r['uvi']:.2f}) | {r['e_dp']:.4f} | "
-            f"{r['o3']} | {r['int_cie']} |")
-    arr = np.array([r["e_dp"] for r in rows], dtype=float)
-    lines += ["",
-              f"Median measured E_DP,h: {float(np.median(arr)):.4f} W/m2 (n={len(arr)}).",
-              ("Measurement context: Brewer MKII/MKIII scans, WOUDC QC flags "
-               "preserved in source files; solar-time stamps converted per-file. "
-               "Tier-C proxy comparison lands with the uvspec corpus emulator "
-               "evaluation (scripts/train_spectral_emulator.py).")]
+    if not rows:
+        out.write_text(
+            "# WOUDC Brewer spectral validation (independent, §8.5)\n\n"
+            "No qualified scans retrieved in the requested window; the API was "
+            "reachable but returned nothing for these stations/dates.\n",
+            encoding="utf-8")
+        print("woudc: no rows")
+        return
+
+    df = pd.DataFrame(rows)
+
+    def _cie(v: object) -> float:
+        try:
+            return float(str(v))
+        except ValueError:
+            return float("nan")
+    df["int_cie"] = df["int_cie"].map(_cie)
+    # Brewer IntCIE is the CIE-weighted scan integral; a cloudless scan sits
+    # near the clear-sky expectation for its SZA. Split sunny/cloudy at the
+    # median of the retrieved set rather than inventing an absolute threshold.
+    cie_med = df["int_cie"].median()
+    df["sky"] = np.where(df["int_cie"] >= cie_med, "summer-clear", "cloudy")
+
+    def _season(day: object) -> str:
+        m = int(str(day)[5:7]) if len(str(day)) >= 7 and str(day)[5:7].isdigit() else 0
+        return {12: "DJF", 1: "DJF", 2: "DJF", 3: "MAM", 4: "MAM", 5: "MAM",
+                6: "JJA", 7: "JJA", 8: "JJA", 9: "SON", 10: "SON", 11: "SON"}.get(m, "?")
+    df["season"] = df["day"].map(_season)
+
+    # Tier-C proxy from the SAME measured UVA/UVB -> proxy E_DP relative error.
+    w_uvb, w_uva = band_effective_weights()
+    df["proxy_e_dp"] = df["uvb"] * w_uvb + df["uva"] * w_uva
+    df["proxy_rel_err"] = (df["proxy_e_dp"] - df["e_dp"]) / df["e_dp"]
+
+    def _stats(x: pd.Series) -> str:
+        if len(x) == 0:
+            return "| 0 | — | — | — |"
+        return (f"| {len(x)} | {x.median():+.3f} | {x.abs().median():.3f} | "
+                f"{x.abs().quantile(0.95):.3f} |")
+
+    lines: list[str] = [
+        "# WOUDC Brewer spectral validation (independent, §8.5)",
+        "",
+        f"Scans: **{len(df)}** from {df['station'].nunique()} station(s), window {d0}..{d1}.",
+        "Stations: " + ", ".join(sorted(df["station"].unique())) + ".",
+        "",
+        (
+            "Each scan is a measured 280-400 nm Brewer spectrum (WOUDC Spectral_1.0, "
+            "QC flags preserved in the source files). UVA/UVB/erythemal/E_DP are "
+            "integrated from the measured spectrum against the shipped action spectra; "
+            "`proxy_rel_err` is the Tier-C fixed-band proxy error on the same row."
+        ),
+        "",
+        "## Overall",
+        "",
+        "| n | median rel-err | median abs rel-err | p95 abs rel-err |",
+        "|---|---|---|---|",
+        _stats(df["proxy_rel_err"]),
+        "",
+        (
+            f"Measured E_DP,h median **{df['e_dp'].median():.4f} W/m²** "
+            f"(p05 {df['e_dp'].quantile(0.05):.4f}, p95 {df['e_dp'].quantile(0.95):.4f})."
+        ),
+        "",
+        f"## Sky split (IntCIE median {cie_med:.3f})",
+        "",
+        "| sky | n | median rel-err | median abs rel-err | p95 abs rel-err |",
+        "|---|---|---|---|---|",
+    ]
+    for sky in ("summer-clear", "cloudy"):
+        lines.append(f"| {sky} " + _stats(df.loc[df['sky'] == sky, "proxy_rel_err"]))
+    lines += ["", "## SZA bins", "",
+              "| bin | n | median rel-err | median abs rel-err | p95 abs rel-err |",
+              "|---|---|---|---|---|"]
+    sza_edges = [0, 30, 45, 60, 70, 80, 90]
+    for lo, hi in pairwise(sza_edges):
+        sub = df[(df["sza"] >= lo) & (df["sza"] < hi)]
+        lines.append(f"| {lo}-{hi} " + _stats(sub["proxy_rel_err"]))
+    lines += ["", "## Per station (station-held-out analogue: each station's own scans)",
+              "",
+              "| station | n | median rel-err | median abs rel-err | p95 abs rel-err |",
+              "|---|---|---|---|---|"]
+    for st in sorted(df["station"].unique()):
+        lines.append(f"| {st} " + _stats(df.loc[df["station"] == st, "proxy_rel_err"]))
+    lines += ["", "## Seasonal subsets", "",
+              "| season | n | median rel-err | median abs rel-err | p95 abs rel-err |",
+              "|---|---|---|---|---|"]
+    for season in ("DJF", "MAM", "JJA", "SON"):
+        lines.append(f"| {season} " + _stats(df.loc[df["season"] == season, "proxy_rel_err"]))
+    lines += ["", "## Measurement context", "",
+              (
+                  "- Brewer MKII/MKIII spectral scans; WOUDC QC flags live in the source "
+                  "files and are not re-derived here."
+              ),
+              (
+                  "- Instrument uncertainty is of order several percent in UVB and grows "
+                  "at high SZA; these thresholds are product release gates, not claims "
+                  "that the instruments are exact."
+              ),
+              "",
+              "## Release targets (§8.5)",
+              "",
+              "| target | value | verdict |",
+              "|---|---|---|",
+              (
+                  f"| median abs rel-err, all qualified | <= 0.15 | "
+                  f"{'PASS' if df['proxy_rel_err'].abs().median() <= 0.15 else 'FAIL'} |"
+              ),
+              (
+                  f"| median abs rel-err, clear-sky | <= 0.10 | "
+                  f"{'PASS' if df.loc[df['sky'] == 'summer-clear', 'proxy_rel_err'].abs().median() <= 0.10 else 'FAIL'} |"
+              ),
+              "",
+              (
+                  "**Note.** This scores the Tier-C fixed-band proxy, the only spectral "
+                  "model available offline; it is the same proxy the contract requires "
+                  "to stay labelled degraded. A gate-passing Tier-B emulator replaces "
+                  "this comparison when it exists."
+              ),
+              "",
+              ]
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"woudc: {len(rows)} scans -> {out}")
+    print(f"woudc: {len(df)} scans -> {out}")
 
 
 if __name__ == "__main__":

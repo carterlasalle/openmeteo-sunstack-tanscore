@@ -149,11 +149,15 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--start", type=int, default=0)
     ap.add_argument("--count", type=int, default=50)
     ap.add_argument("--seed-offset", type=int, default=0)
+    ap.add_argument("--npz-name", default="spectra.npz",
+                    help="output npz filename; use a per-shard name for parallel runs")
+    ap.add_argument("--manifest-name", default="manifest.json",
+                    help="manifest filename; keep per-shard with --npz-name")
     ns = ap.parse_args(argv)
     cdir = Path(ns.corpus)
     design = pd.read_csv(cdir / "design.csv")
     sub = design.iloc[ns.start:ns.start + ns.count]
-    out_npz = cdir / "spectra.npz"
+    out_npz = cdir / ns.npz_name
     from numpy.typing import NDArray
 
     existing: dict[str, NDArray[np.float64]] = {}
@@ -165,7 +169,7 @@ def main(argv: list[str] | None = None) -> None:
                 existing[k] = np.asarray(z[k], dtype=np.float64)
             done_ids = {int(x.split("_")[1]) for x in names if x.startswith("sample_")}
     n_ok = n_fail = n_skip = 0
-    man_path = cdir / "manifest.json"
+    man_path = cdir / ns.manifest_name
     man: dict[str, object] = (
         json.loads(man_path.read_text(encoding="utf-8")) if man_path.exists() else {}
     )

@@ -65,6 +65,15 @@ output_user lambda edir edn eup
 
 
 def stratified_design(n: int, seed: int = 23) -> dict[str, np.ndarray]:
+    """Latin-hypercube base coverage plus explicit regime enrichment (§8.2).
+
+    Base: every parameter gets one draw per equal-probability stratum, so no
+    region of the 12-D space is systematically empty. Enrichment: fixed
+    fractions of the rows are re-drawn inside the regimes the contract names
+    (low sun, ozone extremes, absorbing aerosol, bright surfaces, cloud
+    transitions, high altitude) because a uniform design under-covers the
+    hard corners where the emulator must not fail.
+    """
     rng = np.random.default_rng(seed)
     out: dict[str, np.ndarray] = {}
     for name, bounds in RANGES.items():
@@ -84,16 +93,67 @@ def stratified_design(n: int, seed: int = 23) -> dict[str, np.ndarray]:
             out[name] = np.exp(lo_log + u * (hi_log - lo_log))
         else:
             out[name] = lo + u * (hi - lo)
+
+    # --- regime enrichment (§8.2) -------------------------------------
+    # (name, fraction, {param: (lo, hi)}) — the named param is re-drawn in the
+    # sub-range; the rest keep their base draws so each regime stays physical.
+    regimes: list[tuple[str, float, dict[str, tuple[float, float]]]] = [
+        ("low_sun", 0.12, {"sza_deg": (65.0, 88.0)}),
+        ("clear_sky", 0.10, {"total_cloud_cover": (0.0, 0.05)}),
+        ("absorbing_aerosol", 0.10,
+         {"aod340": (0.5, 1.0), "ssa340": (0.85, 0.93)}),
+        ("bright_surface", 0.10, {"albedo": (0.55, 0.90)}),
+        ("high_altitude", 0.08, {"altitude_m": (2000.0, 4000.0)}),
+        ("cloud_transition", 0.08, {"total_cloud_cover": (0.05, 0.5)}),
+        ("low_ozone", 0.07, {"ozone_du": (200.0, 260.0)}),
+        ("high_ozone", 0.07, {"ozone_du": (400.0, 450.0)}),
+        ("low_sun_bright", 0.08,
+         {"sza_deg": (70.0, 88.0), "albedo": (0.55, 0.90)}),
+    ]
+    start = 0
+    for _name, frac, overrides in regimes:
+        k = round(frac * n)
+        if k <= 0:
+            continue
+        end = min(start + k, n)
+        idx: np.ndarray = np.arange(start, end)
+        for param, (lo, hi) in overrides.items():
+            if param in ("aod340", "cloud_liquid_g_m2", "cloud_ice_g_m2"):
+                lo_eff = max(lo, 1e-3)
+                u = rng.random(idx.size)
+                out[param][idx] = np.exp(math.log(lo_eff) + u * (math.log(hi) - math.log(lo_eff)))
+            else:
+                u = rng.random(idx.size)
+                out[param][idx] = lo + u * (hi - lo)
+        start = end
+
     # Physically consistent derivations.
     aod340 = out["aod340"]
     ang = out["angstrom"]
     for wave in (355, 380, 400):
         out[f"aod{wave}"] = aod340 * (wave / 340.0) ** (-ang)
-    # Clear-sky rows carry no cloud water regardless of the sampled columns.
+    # Cloud *liquid/ice* column is zero whenever the cover fraction is clear;
+    # an enriched clear_sky row therefore carries no cloud water.
     clear = out["total_cloud_cover"] < 0.05
     out["cloud_liquid_g_m2"] = np.where(clear, 0.0, out["cloud_liquid_g_m2"])
     out["cloud_ice_g_m2"] = np.where(clear, 0.0, out["cloud_ice_g_m2"])
     return out
+
+
+REGIME_ENRICHMENT: list[dict[str, object]] = [
+    {"regime": "low_sun", "fraction": 0.12, "definition": "sza_deg 65-88"},
+    {"regime": "clear_sky", "fraction": 0.10, "definition": "total_cloud_cover 0-0.05"},
+    {"regime": "absorbing_aerosol", "fraction": 0.10,
+     "definition": "aod340 0.5-1.0, ssa340 0.85-0.93"},
+    {"regime": "bright_surface", "fraction": 0.10, "definition": "albedo 0.55-0.90"},
+    {"regime": "high_altitude", "fraction": 0.08, "definition": "altitude_m 2000-4000"},
+    {"regime": "cloud_transition", "fraction": 0.08,
+     "definition": "total_cloud_cover 0.05-0.5"},
+    {"regime": "low_ozone", "fraction": 0.07, "definition": "ozone_du 200-260"},
+    {"regime": "high_ozone", "fraction": 0.07, "definition": "ozone_du 400-450"},
+    {"regime": "low_sun_bright", "fraction": 0.08,
+     "definition": "sza_deg 70-88, albedo 0.55-0.90"},
+]
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -135,14 +195,8 @@ def main(argv: list[str] | None = None) -> None:
         "samples": samples,
         "seed": seed,
         "parameter_ranges": {k: [lo, hi] for k, (lo, hi) in RANGES.items()},
-        "regime_enrichment": [
-            "low sun (SZA 70-88)",
-            "high ozone (400-450 DU) and low ozone (200-250 DU)",
-            "high/absorbing aerosol (AOD340 > 0.5, SSA340 < 0.92)",
-            "bright snow/sand surfaces (albedo > 0.5)",
-            "cloud transitions (total_cloud_cover 0.05-0.5)",
-            "high altitude (2000-4000 m)",
-        ],
+        "regime_enrichment": REGIME_ENRICHMENT,
+        "design": "Latin-hypercube stratified base + named regime enrichment (see REGIME_ENRICHMENT)",
         "spectral_domain_nm": [280, 400],
         "target_spacing_nm": 0.5,
         "output_components": ["edir (direct)", "edn (diffuse down)", "eup (diffuse up)"],
