@@ -171,7 +171,7 @@ def test_validator_passes_clean_fixture(tmp_path: Path) -> None:
     assert out["passed"] is True, out["failures"]
     checks = out["checks"]
     assert isinstance(checks, list)
-    assert len(cast(list[object], checks)) == 20
+    assert len(cast(list[object], checks)) == 21
 
 def test_validator_fails_diverged_fixture(tmp_path: Path) -> None:
     module = _load_validator()
@@ -257,6 +257,51 @@ def test_validator_fails_manifest_disagreement(tmp_path: Path) -> None:
     out = _validate(module, tmp_path, bad)
     assert out["passed"] is False
     assert "manifests_compatible" in _failures(out)
+
+
+def test_validator_accepts_consistent_clear_sky_ratio(tmp_path: Path) -> None:
+    """§2.2/§28: the clear-sky counterpart and its transmission ratio are
+    allowed, and a self-consistent pair passes."""
+    module = _load_validator()
+    doc = _good_artifact()
+    for i in range(3):
+        row = _row(doc, i)
+        e = float(cast(float, row["delayed_pigmentation_effective_irradiance_horizontal_wm2"]))
+        row["delayed_pigmentation_clear_sky_horizontal_wm2"] = round(e * 2.0, 5)
+        row["delayed_pigmentation_transmission_ratio"] = 0.5
+        row["delayed_pigmentation_clear_sky_source"] = "degraded_clear_sky_parametric_v1"
+    out = _validate(module, tmp_path, doc)
+    assert out["passed"] is True, _failures(out)
+
+
+def test_validator_fails_inconsistent_clear_sky_ratio(tmp_path: Path) -> None:
+    """A ratio that is not E_DP / clear-sky, or that claims the atmosphere
+    amplified the sun, is a fatal artifact defect."""
+    module = _load_validator()
+    doc = _good_artifact()
+    row = _row(doc, 1)
+    e = float(cast(float, row["delayed_pigmentation_effective_irradiance_horizontal_wm2"]))
+    row["delayed_pigmentation_clear_sky_horizontal_wm2"] = round(e, 5)
+    row["delayed_pigmentation_transmission_ratio"] = 2.0  # both wrong and > 1
+    row["delayed_pigmentation_clear_sky_source"] = "degraded_clear_sky_parametric_v1"
+    out = _validate(module, tmp_path, doc)
+    assert out["passed"] is False
+    assert "clear_sky_transmission_consistent" in _failures(out)
+
+
+def test_validator_fails_undeclared_clear_sky_source(tmp_path: Path) -> None:
+    """The counterpart must name how it was derived; an invented provenance
+    string is a fatal artifact defect."""
+    module = _load_validator()
+    doc = _good_artifact()
+    row = _row(doc, 1)
+    e = float(cast(float, row["delayed_pigmentation_effective_irradiance_horizontal_wm2"]))
+    row["delayed_pigmentation_clear_sky_horizontal_wm2"] = round(e * 2.0, 5)
+    row["delayed_pigmentation_transmission_ratio"] = 0.5
+    row["delayed_pigmentation_clear_sky_source"] = "measured_libradtran"
+    out = _validate(module, tmp_path, doc)
+    assert out["passed"] is False
+    assert "clear_sky_transmission_consistent" in _failures(out)
 
 
 def _reference_forecast(rows: int) -> pd.DataFrame:
