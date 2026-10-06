@@ -4,3 +4,7 @@ data/
 __pycache__/
 *.pyc
 .DS_Store
+.scc/*
+!.scc/intent.yaml
+!.scc/plugins.toml
+!.scc/plugins.lock
