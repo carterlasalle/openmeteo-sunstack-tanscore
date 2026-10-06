@@ -343,6 +343,120 @@ def emulator_manifest(spectral_backend: str = SPECTRAL_BACKEND_VERSION) -> dict[
             "cams_uv_index": "validation target (held-out)",
         },
     }
+_EMULATOR_CACHE: dict[str, object] = {}
+
+
+def load_tierB_emulator(
+    manifest_path: str | None = None,
+) -> dict[str, object] | None:
+    """Load the validated Tier-B emulator bundle, or None when unwired.
+
+    Returns None (Tier-C production continues, labeled) when no manifest is
+    configured or the bundle is absent. Raises loudly on a present-but-
+    invalid manifest: a corrupt Tier-B claim must never silently degrade.
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    from . import config as _config
+
+    path = manifest_path or _config.TIERB_MANIFEST_PATH
+    if not path:
+        return None
+    key = str(path)
+    if key in _EMULATOR_CACHE:
+        cached = _EMULATOR_CACHE[key]
+        assert isinstance(cached, dict)
+        return cached
+    man = _json.loads(_Path(path).read_text(encoding="utf-8"))
+    validate_tierB_manifest(man)
+    bundle_path = _Path(path).parent / "emulator.joblib"
+    if not bundle_path.exists():
+        raise FileNotFoundError(
+            f"ERROR spectral: Tier-B manifest {path} has no emulator.joblib beside it")
+    import joblib as _joblib
+
+    bundle = _joblib.load(bundle_path)
+    if not isinstance(bundle, dict):
+        raise TypeError("ERROR spectral: Tier-B bundle must be a mapping")
+    _EMULATOR_CACHE[key] = bundle
+    return bundle
+
+
+def predict_tierB_channels(
+    features: object,
+    bundle: dict[str, object] | None = None,
+) -> tuple[object, object, object, object] | None:
+    """Predict UVA/UVB/E_DP/E_ery via the Tier-B emulator, or None when unwired.
+
+    Returns None when no validated bundle is available (caller keeps the
+    Tier-C path and its degraded label). Never raises on missing wiring;
+    raises loudly on a structurally invalid bundle.
+    """
+    import numpy as _np
+    import pandas as _pd
+
+    b = bundle if bundle is not None else load_tierB_emulator()
+    if b is None:
+        return None
+    if not isinstance(features, _pd.DataFrame):
+        raise TypeError("ERROR spectral: Tier-B features must be a DataFrame")
+    feats = b.get("features")
+    if not isinstance(feats, list) or not feats:
+        raise ValueError("ERROR spectral: Tier-B bundle has no feature list")
+    x = features.reindex(columns=[str(c) for c in feats])
+    mu = _np.asarray(b.get("x_mu"), dtype=float)
+    sd = _np.asarray(b.get("x_sd"), dtype=float)
+    xa = (_np.asarray(x.to_numpy(dtype=float)) - mu) / sd
+    kind = b.get("emulator")
+    grid = _np.asarray(b.get("grid_nm"), dtype=float)
+    dp_s = _np.asarray(b.get("dp_s"), dtype=float)
+    ery_s = _np.asarray(b.get("ery_s"), dtype=float)
+    if kind == "A_pca":
+        from typing import Protocol as _Protocol
+        from typing import runtime_checkable as _rc
+
+        @_rc
+        class _Predictor(_Protocol):
+            def predict(self, x: object) -> object: ...
+
+        @_rc
+        class _Inverse(_Protocol):
+            def inverse_transform(self, x: object) -> object: ...
+
+        ridge = b["ridge_coef"]
+        pca = b["pca"]
+        if not (isinstance(ridge, _Predictor) and isinstance(pca, _Inverse)):
+            raise TypeError("ERROR spectral: Tier-B PCA bundle missing predict/inverse_transform")
+        coef = _np.asarray(ridge.predict(xa))
+        e = _np.expm1(_np.asarray(pca.inverse_transform(coef)))
+    elif kind == "B_direct":
+        from typing import Protocol as _Protocol2
+        from typing import runtime_checkable as _rc2
+
+        @_rc2
+        class _Direct(_Protocol2):
+            def predict(self, x: object) -> object: ...
+
+        direct = b["ridge_direct"]
+        if not isinstance(direct, _Direct):
+            raise TypeError("ERROR spectral: Tier-B direct bundle missing predict")
+        ch = _np.asarray(direct.predict(xa))
+        uva = _np.clip(_np.asarray(ch)[:, 0], 0, None)
+        uvb = _np.clip(_np.asarray(ch)[:, 1], 0, None)
+        emel = _np.clip(_np.asarray(ch)[:, 2], 0, None)
+        ery = _np.clip(_np.asarray(ch)[:, 3], 0, None)
+        return uva, uvb, emel, ery
+    else:
+        raise ValueError(f"ERROR spectral: unknown Tier-B emulator kind {kind!r}")
+    e = _np.clip(_np.asarray(e), 0, None)
+    uva_m = (grid >= 315) & (grid <= 400)
+    uvb_m = (grid >= 280) & (grid < 315)
+    uva = e[:, uva_m].sum(axis=1)
+    uvb = e[:, uvb_m].sum(axis=1)
+    emel = (e * dp_s).sum(axis=1)
+    ery = (e * ery_s).sum(axis=1)
+    return uva, uvb, emel, ery
 
 
 TIERB_CLEAR_SKY_VERSION = "degraded_clear_sky_parametric_v1"

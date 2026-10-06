@@ -162,3 +162,31 @@ def test_trainer_refuses_without_corpus(tmp_path: Path) -> None:
     module = _load_trainer()
     with pytest.raises(FileNotFoundError, match="spectra.npz"):
         _ = module.train_emulator(tmp_path, tmp_path / "out")
+
+
+def test_tierB_loader_returns_none_when_unwired(monkeypatch) -> None:
+    from sunstack import config as _config
+    from sunstack.spectral import predict_tierB_channels
+
+    monkeypatch.setattr(_config, "TIERB_MANIFEST_PATH", None)
+    import pandas as pd
+
+    assert predict_tierB_channels(pd.DataFrame({"a": [1.0]})) is None
+
+
+def test_tierB_loader_rejects_unknown_kind() -> None:
+    import pytest
+
+    from sunstack.spectral import predict_tierB_channels
+
+    with pytest.raises(ValueError, match="unknown Tier-B emulator kind"):
+        predict_tierB_channels(
+            __import__("pandas").DataFrame(
+                {c: [0.0] for c in
+                 ["sza_deg", "ozone_du", "altitude_m", "aod340", "angstrom",
+                  "ssa340", "asymmetry", "albedo", "total_cloud_cover",
+                  "cloud_liquid_g_m2", "cloud_ice_g_m2", "water_vapor_kg_m2"]}),
+            {"emulator": "Z_nope", "features": ["sza_deg"],
+             "x_mu": [0.0], "x_sd": [1.0],
+             "grid_nm": [300.0], "dp_s": [0.0], "ery_s": [0.0]})
+

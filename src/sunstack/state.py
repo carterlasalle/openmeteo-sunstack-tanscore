@@ -135,7 +135,15 @@ def recompute_derived_state(frame: pd.DataFrame) -> pd.DataFrame:
     if {"predicted_uva_wm2", "predicted_uvb_wm2"}.issubset(out.columns):
         uva = _col_arr(out, "predicted_uva_wm2")
         uvb = _col_arr(out, "predicted_uvb_wm2")
-        e_mel = melanogenic_from_broadband(uva, uvb)
+        from .spectral import load_tierB_emulator as _loadB
+        from .spectral import predict_tierB_channels as _predB
+
+        _b = _loadB()
+        _bp = None
+        _need = ("sza_deg", "ozone_du", "aod340", "albedo")
+        if _b is not None and all(c in out.columns for c in _need):
+            _bp = _predB(out, _b)
+        e_mel = np.asarray(_bp[2], dtype=float) if _bp is not None else melanogenic_from_broadband(uva, uvb)
         if "is_day" in out:
             isday = _col_arr(out, "is_day")
             isday = np.where(np.isfinite(isday), isday, 1.0)

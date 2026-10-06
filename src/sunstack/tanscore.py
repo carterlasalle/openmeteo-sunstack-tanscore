@@ -591,10 +591,24 @@ def score_forecast(
     out["predicted_uvb_wm2"] = np.round(uvb, 4)
     out["tan_calibration_tier"] = tier
 
-    # v4 physical core: wavelength-additive Tier-C E_mel, no hand weights.
-    e_mel = melanogenic_from_broadband(
-        np.asarray(uva, dtype=float), np.asarray(uvb, dtype=float)
-    )
+    # v5 physical core: Tier-B emulator E_mel when a validated bundle is
+    # wired (SUNSTACK_TIERB_MANIFEST); otherwise the wavelength-additive
+    # Tier-C proxy with its degraded label. Tier-B never silently degrades:
+    # a corrupt bundle raises, an absent one keeps Tier-C stamps.
+    from .spectral import load_tierB_emulator, predict_tierB_channels
+
+    _tierB_bundle = load_tierB_emulator()
+    _tierB_out = (predict_tierB_channels(features, _tierB_bundle)
+                  if _tierB_bundle is not None else None)
+    e_mel: object = None
+    _tierB_emel: object = None
+    if _tierB_out is not None:
+        _tierB_emel = np.asarray(_tierB_out[2], dtype=float)
+        e_mel = _tierB_emel
+    else:
+        e_mel = melanogenic_from_broadband(
+            np.asarray(uva, dtype=float), np.asarray(uvb, dtype=float)
+        )
     night = num(out, "is_day").fillna(1) == 0
     e_mel = np.where(night.to_numpy(), 0.0, e_mel)
     out["melanogenic_effective_irradiance_wm2"] = np.round(e_mel, 5)
@@ -605,8 +619,11 @@ def score_forecast(
     out["photobiology_action_spectrum_tier"] = spectrum_tier
     out["global_reference_version"] = config.GLOBAL_MELANOGENIC_REFERENCE_VERSION
     out["global_reference_e_mel_wm2"] = global_ref
-    out["spectral_backend"] = SPECTRAL_BACKEND_VERSION
-    out["spectral_tier"] = spectral_tier_for_row()
+    out["spectral_backend"] = (
+        config.SPECTRAL_BACKEND_VERSION_V5 if _tierB_bundle is not None
+        else SPECTRAL_BACKEND_VERSION)
+    out["spectral_tier"] = spectral_tier_for_row(
+        has_emulator=_tierB_bundle is not None)
     if str(out["spectral_tier"].iloc[0]) in ("A", "B"):
         # No silent tier inflation: reference/emulator quality may only be
         # claimed behind a validated manifest (SUNSTACK_TIERB_MANIFEST).
