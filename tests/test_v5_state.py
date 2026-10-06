@@ -131,3 +131,49 @@ def test_all_peak_fields_are_true_peaks() -> None:
     # Absolute value at the Overall peak (20.0 at 11:00).
     assert float(row["day_absolute_peak_0_100"]) == 40.0
     assert float(row["day_local_peak_0_100"]) == 99.0
+
+
+def test_rows_carry_action_spectrum_identity() -> None:
+    # §3/§28: a serialized row must be self-describing — not just the score
+    # model version, but the exact action spectrum it was convolved against.
+    from sunstack import config
+    from sunstack.photobiology import load_action_spectrum
+    from sunstack.state import recompute_derived_state
+
+    out = recompute_derived_state(_frame())
+    assert set(out["action_spectrum_version"]) == {config.ACTION_SPECTRUM_VERSION}
+    assert set(out["action_spectrum_sha256"]) == {
+        load_action_spectrum(config.ACTION_SPECTRUM_STEM).sha256
+    }
+
+
+def test_clear_sky_counterpart_and_transmission_ratio_are_labelled() -> None:
+    # §2.2: expose E_DP_clear_sky and the all-sky/clear-sky ratio where the
+    # backend can compute both, with the degraded clear-sky source named so
+    # the value is never mistaken for a measured/validated counterpart.
+    from sunstack.state import recompute_derived_state
+
+    base = _frame()
+    base["sza"] = [30.0, 60.0]
+    base["ozone_du"] = [300.0, 330.0]
+    base["aod340"] = [0.2, 0.3]
+    base["albedo"] = [0.2, 0.2]
+    out = recompute_derived_state(base)
+    assert (out["delayed_pigmentation_clear_sky_horizontal_wm2"] > 0).all()
+    assert set(out["delayed_pigmentation_clear_sky_source"]) == {
+        "degraded_clear_sky_parametric_v1"
+    }
+    ratio = out["delayed_pigmentation_transmission_ratio"].to_numpy(dtype=float)
+    allsky = out["delayed_pigmentation_effective_irradiance_horizontal_wm2"].to_numpy(dtype=float)
+    clear = out["delayed_pigmentation_clear_sky_horizontal_wm2"].to_numpy(dtype=float)
+    assert np.allclose(ratio, allsky / clear, rtol=1e-3)
+
+
+def test_clear_sky_counterpart_unavailable_without_physics_inputs() -> None:
+    # No sza/ozone/aod columns -> the counterpart is NaN and says so, rather
+    # than silently defaulting to the all-sky value.
+    from sunstack.state import recompute_derived_state
+
+    out = recompute_derived_state(_frame())
+    assert out["delayed_pigmentation_clear_sky_horizontal_wm2"].isna().all()
+    assert set(out["delayed_pigmentation_clear_sky_source"]) == {"unavailable"}

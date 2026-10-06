@@ -124,6 +124,19 @@ def apply_outdoor_feasibility(
         ",".join([n for n, s in (("temperature_2m", temp.isna().loc[i]),
                                  ("weather_code", code.eq(-1).loc[i])) if bool(s)])
         for i in out.index]
+    # §14.1: name which rule fired, so a blocked/unknown row is explainable
+    # without re-deriving it from the weather columns.
+    out["outdoor_feasibility_reason_codes"] = [
+        ",".join([n for n, s in (
+            ("missing_weather", missing_hard.loc[i]),
+            ("rain_interval", rain_now.loc[i]),
+            ("snow_interval", snow_now.loc[i]),
+            ("thunderstorm", thunder.loc[i]),
+            ("too_hot", too_hot.loc[i]),
+            ("too_cold", too_cold.loc[i]),
+            ("ground_snow", ground_snow.loc[i]),
+        ) if bool(s)]) or "ok"
+        for i in out.index]
 
     multiplier = pd.Series(1.0, index=out.index)
     # Cold/heat comfort penalties use sun-adjusted feels-like: 65F calm + high

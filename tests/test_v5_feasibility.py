@@ -88,3 +88,24 @@ def test_generic_measured_mmd_rejected() -> None:
     ok = attach_personalization(
         df, personal_mmd_j_m2=5000.0, basis="SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     assert float(ok["personal_mmd_fraction"].iloc[0]) == 0.2
+
+
+def test_feasibility_reason_codes_name_the_rule() -> None:
+    # §14.1: a blocked or unknown row must say which rule fired, so it is
+    # explainable without re-deriving it from the raw weather columns.
+    from sunstack.opportunity import apply_outdoor_feasibility
+
+    clean = apply_outdoor_feasibility(_wx_frame())
+    assert clean["outdoor_feasibility_reason_codes"].tolist() == ["ok", "ok"]
+
+    thunder = apply_outdoor_feasibility(_wx_frame(weather_code=[97, 3]))
+    assert "thunderstorm" in str(thunder["outdoor_feasibility_reason_codes"].iloc[0])
+
+    missing = apply_outdoor_feasibility(_wx_frame(temperature_2m=[float("nan"), 70.0]))
+    assert "missing_weather" in str(missing["outdoor_feasibility_reason_codes"].iloc[0])
+
+    cold = apply_outdoor_feasibility(_wx_frame(temperature_2m=[10.0, 70.0]))
+    assert "too_cold" in str(cold["outdoor_feasibility_reason_codes"].iloc[0])
+
+    snow = apply_outdoor_feasibility(_wx_frame(snow_depth=[0.5, 0.0]))
+    assert "ground_snow" in str(snow["outdoor_feasibility_reason_codes"].iloc[0])
