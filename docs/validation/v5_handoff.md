@@ -137,26 +137,38 @@ pinned by `tests/test_v5_confidence.py` (including
 
 | Check | Command | Result |
 |---|---|---|
-| Test suite | `uv run pytest tests/ -q` | **298 passed** (1 pre-existing live-runner test excluded; it fails identically on a clean tree) |
+| Test suite | `uv run pytest tests/ -q` | **294 passed** (1 pre-existing live-runner test excluded; it fails identically on a clean tree) |
 | Lint | `uv run ruff check src tests scripts` | All checks passed |
 | Types | `uv run basedpyright --level error` | 0 errors |
 | Artifact validator | `uv run python scripts/validate_published_artifact.py docs/data.json` | `"passed": true` |
 | Site artifact | `… docs/sites/pacific-palisades/data.json` | `"passed": true` |
-| §28 row schema | emitted by `state.recompute_derived_state`, carried by the 30-min frame into `half_hour` | `action_spectrum_version`, `action_spectrum_sha256`, `delayed_pigmentation_clear_sky_horizontal_wm2`, `delayed_pigmentation_transmission_ratio`, `delayed_pigmentation_clear_sky_source`, `outdoor_feasibility_reason_codes` |
+| §28 row schema | emitted by `state.recompute_derived_state`, carried by the 30-min frame into `half_hour` | `action_spectrum_version`, `action_spectrum_sha256`, `outdoor_feasibility_reason_codes` — verified to survive `_daylight_payload_rows` → `_records` → JSON round-trip |
 
 The published `docs/data.json` in the tree still carries `build_sha 43fa531`,
 which predates §28; those rows legitimately lack the fields, and the gate skips
 them. The scheduled/push forecast run on `main` regenerates the artifact from
-the current code, and the fields then appear and are checked.
+the current code, and the fields then appear. `action_spectrum_version` is
+enforced as a row/summary agreement (`row_summary_version_agreement`), so a row
+cannot claim a different action spectrum than the summary it ships under.
 
-The §28 fields are **enforced**, not merely emitted:
-`clear_sky_transmission_consistent` is a fatal artifact check requiring the
-published ratio to equal `E_DP / clear-sky-counterpart` on the same row, to be
-≤ 1 (clouds cannot amplify the sun), and to name a declared provenance. Rows
-without the fields are skipped, so pre-§28 artifacts stay valid
-(`tests/test_v5_artifact.py::test_validator_fails_inconsistent_clear_sky_ratio`,
-`…::test_validator_fails_undeclared_clear_sky_source`,
-`…::test_validator_accepts_consistent_clear_sky_ratio`).
+### `delayed_pigmentation_transmission_ratio` is deliberately not emitted
+
+§2.2 defines the ratio as `E_DP_all_sky / E_DP_clear_sky` and exposes it *where
+the backend can compute both*. No shipped backend can. The all-sky numerator is
+the broadband reconstruction (or the Tier-B emulator, which has no cloud-free
+mode), while the only available clear-sky UV model is the degraded analytic
+fallback `tierB_clear_sky_uv`, and that model's absolute scale disagrees with the
+production channels by **~2.2× on UVA and ~34× on UVB** at SZA 47° on the live
+2026-10-05/06 run (`predicted_uva_wm2` 39.4 vs `cs_uva` 18.0;
+`predicted_uvb_wm2` 0.906 vs `cs_uvb` 0.0266). Dividing the two yields a median
+factor of ≈11 — a model-disagreement number, not atmospheric transmission.
+
+Publishing that under a `transmission_ratio` name would be exactly the
+name-lies-about-behaviour defect this contract exists to remove, so the field and
+its clear-sky counterpart are not written at all (not even as `NaN` under a
+transmitting name). `tests/test_v5_state.py::test_no_cross_backend_clear_sky_transmission_ratio`
+pins the absence. The pair returns when a backend can evaluate one model with
+clouds present and absent.
 
 **UVI → E_ery → SED closure** (`docs/data.json`, half-hour row `2026-10-06T10:30`):
 `uvi_consensus = 2.236` → `erythemal_irradiance_wm2 = 0.0559` (= UVI/40, ratio

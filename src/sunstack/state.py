@@ -160,30 +160,17 @@ def recompute_derived_state(frame: pd.DataFrame) -> pd.DataFrame:
                 e_mel, float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2)), 1)
         out["pigment_darkening_effective_irradiance"] = np.round(
             pigment_darkening_from_broadband(uva, uvb), 5)
-        # §2.2/§28: the clear-sky counterpart and the transmission ratio it
-        # defines. Tier-C has no spectral clear-sky channel, so the counterpart
-        # comes from the explicitly degraded parametric clear-sky UV model and
-        # is labelled as such rather than silently reported as measured.
-        from .spectral import tierB_clear_sky_uv as _clear_uv
-
-        _need_cs = ("sza", "ozone_du", "aod340", "albedo")
-        if all(c in out.columns for c in _need_cs):
-            _sza = _col_arr(out, "sza")
-            _o3 = _col_arr(out, "ozone_du")
-            _aod = _col_arr(out, "aod340")
-            _alb = np.where(np.isfinite(_col_arr(out, "albedo")), _col_arr(out, "albedo"), 0.2)
-            _cuva, _cuvb = _clear_uv(_sza, _o3, _aod, _alb)
-            _cmel = np.asarray(melanogenic_from_broadband(_cuva, _cuvb), dtype=float)
-            _ok = np.isfinite(_cmel) & (_cmel > 0) & np.isfinite(e_mel)
-            out["delayed_pigmentation_clear_sky_horizontal_wm2"] = np.round(_cmel, 5)
-            out["delayed_pigmentation_transmission_ratio"] = np.round(
-                np.where(_ok, e_mel / np.where(_cmel > 0, _cmel, np.nan), np.nan), 4)
-            out["delayed_pigmentation_clear_sky_source"] = (
-                "degraded_clear_sky_parametric_v1")
-        else:
-            out["delayed_pigmentation_clear_sky_horizontal_wm2"] = np.nan
-            out["delayed_pigmentation_transmission_ratio"] = np.nan
-            out["delayed_pigmentation_clear_sky_source"] = "unavailable"
+        # §2.2 defines `delayed_pigmentation_transmission_ratio` as
+        # E_DP_all_sky / E_DP_clear_sky and exposes it only "where the backend
+        # can compute both". No shipped backend can: the all-sky numerator comes
+        # from the broadband reconstruction (or the Tier-B emulator, which has no
+        # cloud-free mode), while the only available clear-sky UV model is the
+        # degraded parametric fallback, whose absolute scale is wrong by ~2.2x on
+        # UVA and ~34x on UVB at SZA 47 deg (measured Oct 2026 against the
+        # production channels). Dividing the two would publish a ~10x
+        # model-disagreement factor under a name that claims atmospheric
+        # transmission, so the field is deliberately not emitted. It returns when
+        # a backend can evaluate one model with clouds present and absent.
     # §3/§28: rows carry the exact action-spectrum identity, not just the score
     # model version, so a serialized row is self-describing.
     from .photobiology import load_action_spectrum as _load_spec

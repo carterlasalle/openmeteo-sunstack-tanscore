@@ -39,7 +39,6 @@ FATAL_CHECKS = [
     "row_summary_version_agreement",
     "no_stale_local_reference",
     "no_premanifest_model",
-    "clear_sky_transmission_consistent",
 ]
 # Fields whose name says "value at the selected best window/time": each must
 # equal its source column on the row the daily row selects (best_30m_start),
@@ -212,30 +211,6 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
             failures["no_premanifest_model"].append(
                 f"{_tier_row.get('time')}: tan_calibration_tier missing")
             break
-    # §2.2/§28: rows may publish the clear-sky delay-pigmentation counterpart
-    # and the transmission ratio it defines. When both are present they must
-    # be the same number, and clouds may only attenuate (ratio > 1 would mean
-    # the atmosphere amplified the sun). Absent fields are skipped, so
-    # pre-§28 artifacts stay valid. Scoped to the 30-min frame, which is where
-    # recompute_derived_state emits them; hourly rows are coarser.
-    for _spec_row in _rows_of(half or hourly):
-        _cs = _spec_row.get("delayed_pigmentation_clear_sky_horizontal_wm2")
-        _dp = _spec_row.get("delayed_pigmentation_effective_irradiance_horizontal_wm2")
-        _ratio = _spec_row.get("delayed_pigmentation_transmission_ratio")
-        if not (_is_finite(_cs) and _num(_cs) > 0
-                and _is_finite(_dp) and _is_finite(_ratio)):
-            continue
-        _expect = _num(_dp) / _num(_cs)
-        if abs(_num(_ratio) - _expect) > max(1e-3, 5e-3 * abs(_expect)):
-            failures["clear_sky_transmission_consistent"].append(
-                f"{_spec_row.get('time')}: transmission ratio {_ratio} != E_DP/clear-sky {_expect:.4f}")
-        if _num(_ratio) > 1.05:
-            failures["clear_sky_transmission_consistent"].append(
-                f"{_spec_row.get('time')}: transmission ratio {_ratio} > 1 — clouds cannot amplify")
-        if (_spec_row.get("delayed_pigmentation_clear_sky_source")
-                not in ("degraded_clear_sky_parametric_v1", "unavailable")):
-            failures["clear_sky_transmission_consistent"].append(
-                f"{_spec_row.get('time')}: clear-sky counterpart source {_spec_row.get('delayed_pigmentation_clear_sky_source')} is not a declared provenance")
     for row in rows:
         stamp = row.get("time")
         # Same triple the fusion consumes (state._stack_sources): uvi_openmeteo
@@ -263,11 +238,13 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
         for key in ("tan_score_model_version", "spectral_backend", "action_spectrum_version"):
             if key in row and key in summary and row[key] != summary[key]:
                 failures["row_summary_version_agreement"].append(f"{stamp}: {key} {row[key]} != summary {summary[key]}")
-        # §2.2/§28: a row may publish the clear-sky delay-pigmentation
-        # counterpart and the transmission ratio it defines. When both are
-        # present they must be the same number, and clouds may only attenuate
-        # (ratio > 1 would mean the atmosphere amplified the sun). Absent
-        # fields are skipped, so pre-§28 artifacts stay valid.
+        # §22.13 confidence contract: confidence must be a calibrated function
+        # of expected error (100*exp(-err/1.2), never sunniness), possibly
+        # reduced by the published disagreement penalties (uv_input_disagree
+        # halves, uvi spread ×0.85 mild / ×0.65 strong; physics untouched).
+        # Recompute the mapping from the row's own uvi_expected_abs_error and
+        # require the published confidence to match one of the legal states.
+        # Rows without an error estimate are skipped (pre-contract artifacts).
         _err = row.get("uvi_expected_abs_error")
         _conf = row.get("tan_forecast_confidence_0_100")
         if _is_finite(_err) and _is_finite(_conf):

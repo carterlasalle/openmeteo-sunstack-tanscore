@@ -147,10 +147,15 @@ def test_rows_carry_action_spectrum_identity() -> None:
     }
 
 
-def test_clear_sky_counterpart_and_transmission_ratio_are_labelled() -> None:
-    # §2.2: expose E_DP_clear_sky and the all-sky/clear-sky ratio where the
-    # backend can compute both, with the degraded clear-sky source named so
-    # the value is never mistaken for a measured/validated counterpart.
+def test_no_cross_backend_clear_sky_transmission_ratio() -> None:
+    # §2.2 exposes `delayed_pigmentation_transmission_ratio` only "where the
+    # backend can compute both" all-sky and clear-sky. No shipped backend can:
+    # the all-sky numerator is the broadband reconstruction (or the Tier-B
+    # emulator, which has no cloud-free mode) while the only clear-sky UV model
+    # is the degraded parametric fallback, under-scaled ~2.2x on UVA and ~34x on
+    # UVB against the production channels. Publishing the quotient would label a
+    # ~10x model-disagreement factor as atmospheric transmission, so the field
+    # must not appear at all — not even as NaN under a "transmission" name.
     from sunstack.state import recompute_derived_state
 
     base = _frame()
@@ -159,21 +164,5 @@ def test_clear_sky_counterpart_and_transmission_ratio_are_labelled() -> None:
     base["aod340"] = [0.2, 0.3]
     base["albedo"] = [0.2, 0.2]
     out = recompute_derived_state(base)
-    assert (out["delayed_pigmentation_clear_sky_horizontal_wm2"] > 0).all()
-    assert set(out["delayed_pigmentation_clear_sky_source"]) == {
-        "degraded_clear_sky_parametric_v1"
-    }
-    ratio = out["delayed_pigmentation_transmission_ratio"].to_numpy(dtype=float)
-    allsky = out["delayed_pigmentation_effective_irradiance_horizontal_wm2"].to_numpy(dtype=float)
-    clear = out["delayed_pigmentation_clear_sky_horizontal_wm2"].to_numpy(dtype=float)
-    assert np.allclose(ratio, allsky / clear, rtol=1e-3)
-
-
-def test_clear_sky_counterpart_unavailable_without_physics_inputs() -> None:
-    # No sza/ozone/aod columns -> the counterpart is NaN and says so, rather
-    # than silently defaulting to the all-sky value.
-    from sunstack.state import recompute_derived_state
-
-    out = recompute_derived_state(_frame())
-    assert out["delayed_pigmentation_clear_sky_horizontal_wm2"].isna().all()
-    assert set(out["delayed_pigmentation_clear_sky_source"]) == {"unavailable"}
+    assert "delayed_pigmentation_transmission_ratio" not in out.columns
+    assert "delayed_pigmentation_clear_sky_horizontal_wm2" not in out.columns
