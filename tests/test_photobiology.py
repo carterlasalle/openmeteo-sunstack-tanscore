@@ -242,12 +242,15 @@ def test_tierB_manifest_validator_fails_loudly():
         "libradtran_version": "2.5.0",
         "parameter_ranges": {"sza_deg": [0, 88]},
         "validation_metrics": {"heldout_rmse": 0.01},
+        "gates_passed": True,
     }
     assert validate_tierB_manifest(good) is good
     with pytest.raises(ValueError, match="missing fields"):
         validate_tierB_manifest({"spectral_emulator_version": "em-v1"})
     with pytest.raises(ValueError, match="no held-out validation metrics"):
         validate_tierB_manifest({**good, "validation_metrics": {}})
+    with pytest.raises(ValueError, match="gates_passed"):
+        validate_tierB_manifest({**good, "gates_passed": False})
 
 
 def test_interval_ics_marks_native_vs_interpolated():

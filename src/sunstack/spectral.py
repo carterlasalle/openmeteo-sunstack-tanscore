@@ -442,10 +442,13 @@ def predict_tierB_channels(
         if not isinstance(direct, _Direct):
             raise TypeError("ERROR spectral: Tier-B direct bundle missing predict")
         ch = _np.asarray(direct.predict(xa))
-        uva = _np.clip(_np.asarray(ch)[:, 0], 0, None)
-        uvb = _np.clip(_np.asarray(ch)[:, 1], 0, None)
-        emel = _np.clip(_np.asarray(ch)[:, 2], 0, None)
-        ery = _np.clip(_np.asarray(ch)[:, 3], 0, None)
+        if b.get("direct_log10"):
+            ch = _np.power(10.0, ch)
+        ch = _np.clip(ch, 0, None)
+        uva = _np.asarray(ch)[:, 0]
+        uvb = _np.asarray(ch)[:, 1]
+        emel = _np.asarray(ch)[:, 2]
+        ery = _np.asarray(ch)[:, 3]
         return uva, uvb, emel, ery
     else:
         raise ValueError(f"ERROR spectral: unknown Tier-B emulator kind {kind!r}")
@@ -544,5 +547,14 @@ def validate_tierB_manifest(manifest: dict[str, object]) -> dict[str, object]:
     if not isinstance(metrics, dict) or not metrics:
         raise ValueError(
             "ERROR spectral: Tier-B manifest has no held-out validation metrics"
+        )
+    # §8.4: strict mode must never trust an emulator that failed the held-out
+    # gates. A present-but-failing manifest is a corrupt claim, not a degrade.
+    if manifest.get("gates_passed") is not True:
+        raise ValueError(
+            "ERROR spectral: Tier-B manifest reports gates_passed="
+            f"{manifest.get('gates_passed')!r}; a gate-failing emulator can "
+            "never back a Tier-B claim. Keep Tier-C labeled until the §8.4 "
+            "held-out gates pass."
         )
     return manifest

@@ -229,21 +229,35 @@ def train_emulator(corpus_dir: Path, out_dir: Path) -> Path:
     order = _np.argsort(_np.asarray(keep))
     n_tr = int(0.8 * len(order))
     tr, te = order[:n_tr], order[n_tr:]
-    # Candidate A: PCA(8) on log1p global spectra + ridge coefficient maps.
+    # Candidate A: PCA(20) on log1p global spectra + gradient-boosted
+    # coefficient maps (spectral shape is a smooth nonlinear function of the
+    # physics params; linear ridge systematically missed low-sun rows).
     from sklearn.decomposition import PCA
-    from sklearn.linear_model import Ridge
+    from sklearn.ensemble import HistGradientBoostingRegressor
+    from sklearn.multioutput import MultiOutputRegressor
 
     log_tr = _np.log1p(e_glob_a[tr])
-    pca = PCA(n_components=min(8, len(tr) - 1), random_state=23)
+    pca = PCA(n_components=min(20, len(tr) - 1), random_state=23)
     coef_tr = pca.fit_transform(log_tr)
-    ridge_a = Ridge(alpha=1.0).fit(xa[tr], coef_tr)
-    coef_te = ridge_a.predict(xa[te])
-    pred_a = _np.expm1(pca.inverse_transform(coef_te))
-    pred_a = _np.clip(pred_a, 0, None)
-    # Candidate B: direct ridge on the four channels.
-    ridge_b = Ridge(alpha=1.0).fit(xa[tr], _np.stack(
-        [true_uva[tr], true_uvb[tr], true_emel[tr], true_ery[tr]], axis=1))
-    pred_b = _np.clip(ridge_b.predict(xa[te]), 0, None)
+    gbm_a = MultiOutputRegressor(HistGradientBoostingRegressor(
+        max_iter=300, learning_rate=0.08, early_stopping="auto",
+        validation_fraction=0.15, random_state=23))
+    gbm_a.fit(xa[tr], coef_tr)
+    coef_te = gbm_a.predict(xa[te])
+    pred_a = _np.clip(_np.expm1(pca.inverse_transform(coef_te)), 0, None)
+    err_a = _np.abs(pred_a - _np.maximum(e_glob_a[te], 1e-9)) / _np.maximum(e_glob_a[te], 1e-9)
+    # Candidate B: direct GBM on log10 channels — optimizes relative error
+    # directly (channels span orders of magnitude; raw-target GBM minimized
+    # absolute error and blew up the relative error on low-signal rows).
+    gbm_b = MultiOutputRegressor(HistGradientBoostingRegressor(
+        max_iter=400, learning_rate=0.06, early_stopping="auto",
+        validation_fraction=0.15, l2_regularization=0.1, random_state=23))
+    ch_true = _np.stack(
+        [true_uva[tr], true_uvb[tr], true_emel[tr], true_ery[tr]], axis=1)
+    _FLOOR = 1e-5
+    gbm_b.fit(xa[tr], _np.log10(_np.maximum(ch_true, _FLOOR)))
+    pred_b = _np.clip(_np.power(10.0, gbm_b.predict(xa[te])), 0, None)
+    _ = err_a  # spectral-shape diagnostic retained for the manifest
     # Candidate C: Tier-C fixed-band proxy from true UVA/UVB.
     from sunstack.spectral import band_effective_weights
 
@@ -290,8 +304,9 @@ def train_emulator(corpus_dir: Path, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     import joblib
 
-    bundle = {"emulator": winner, "pca": pca, "ridge_coef": ridge_a,
-              "ridge_direct": ridge_b, "features": use,
+    bundle = {"emulator": winner, "pca": pca, "ridge_coef": gbm_a,
+              "ridge_direct": gbm_b, "direct_log10": True,
+              "features": use,
               "x_mu": _np.asarray(mu, dtype=float), "x_sd": _np.asarray(sd, dtype=float),
               "grid_nm": grid, "dp_s": _np.asarray(dp_s, dtype=float),
               "ery_s": _np.asarray(ery_s, dtype=float)}

@@ -109,6 +109,27 @@ def test_tier_b_manifest_required_for_tier_b_label() -> None:
         _ = validate_tierB_manifest({"spectral_emulator_version": "x"})
 
 
+def test_tier_b_manifest_rejects_gate_failing_emulator() -> None:
+    # §8.4: a structurally complete manifest whose held-out gates FAILED must
+    # never back a Tier-B claim — strict mode keeps Tier-C labeled instead.
+    import pytest
+
+    from sunstack.spectral import validate_tierB_manifest
+
+    complete: dict[str, object] = {
+        "spectral_emulator_version": "tierB-libradtran-emulator-v1",
+        "spectral_training_manifest_sha256": "abc",
+        "libradtran_version": "libRadtran-2.0.6",
+        "parameter_ranges": {"sza_deg": [0, 88]},
+        "validation_metrics": {"A_pca": {"passed": False}},
+        "gates_passed": False,
+    }
+    with pytest.raises(ValueError, match="gates_passed"):
+        _ = validate_tierB_manifest(complete)
+    complete["gates_passed"] = True
+    assert validate_tierB_manifest(complete) is complete
+
+
 def test_band_boundary_energy_conservation() -> None:
     # UVB integral over [280,315) plus UVA over [315,400] reconstructs the
     # 280-400 broadband energy without double-counting the boundary cell.
