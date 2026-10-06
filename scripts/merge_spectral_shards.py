@@ -15,6 +15,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import subprocess
 from pathlib import Path
 
 
@@ -69,10 +71,27 @@ def main(argv: list[str] | None = None) -> None:
     payload: dict[str, _Any] = dict(merged)
     np.savez_compressed(str(out_npz), **payload)  # type: ignore[arg-type]
 
+    # §8.2 provenance: the corpus must record which radiative-transfer binary
+    # produced it, not just that "some" uvspec ran.
+    uvspec = os.getenv("SUNSTACK_UVSPEC_BIN", "/tmp/libRadtran-2.0.6/bin/uvspec")
+    provenance: dict[str, object] = {"uvspec_binary": uvspec}
+    bin_path = Path(uvspec)
+    if bin_path.exists():
+        provenance["uvspec_sha256"] = hashlib.sha256(bin_path.read_bytes()).hexdigest()
+        try:
+            v = subprocess.run([uvspec, "-v"], capture_output=True, text=True,
+                               timeout=30, check=False)
+            provenance["uvspec_version"] = (v.stdout or v.stderr or "").strip().splitlines()[:1]
+        except (OSError, subprocess.SubprocessError):
+            provenance["uvspec_version"] = "unknown"
+    else:
+        provenance["uvspec_sha256"] = None
+
     man_path = cdir / str(ns.out_manifest)
     man: dict[str, object] = (
         json.loads(man_path.read_text(encoding="utf-8")) if man_path.exists() else {}
     )
+    man.update(provenance)
     man.update({
         "shards": shard_hashes,
         "samples_run": [runs[k] for k in sorted(runs)],
