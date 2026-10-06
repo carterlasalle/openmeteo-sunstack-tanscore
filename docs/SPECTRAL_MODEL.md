@@ -33,11 +33,14 @@ melanin-color prediction.
   a validated spectral emulator.
 - **D** unavailable (strict mode fails).
 
-Current status: no gate-passing Tier-B emulator is wired (`SUNSTACK_TIERB_MANIFEST`
-unset, no uvspec binary/corpus in this environment), so strict runs publish
-Tier-C by default with its tier on every output. A tier A/B claim without a
-validated manifest fails loudly instead of scoring silently as Tier C.
-`--allow-degraded` additionally permits pre-manifest/sklearn-drift bundles.
+Current status (Oct 6): the strict Tier-B path is WIRED (loader +
+scoring/state override + real PCA/direct trainer with §8.4 gates) but no
+gate-passing emulator exists yet — the libRadtran 2.0.6 corpus (2000
+stratified samples, disort 6-stream, 280-400 nm) is generating locally and
+the trainer runs when spectra land. Until `SUNSTACK_TIERB_MANIFEST` points
+at a gate-passing `emulator_manifest.json`, strict runs publish Tier-C with
+its tier on every output. A tier A/B claim without a validated manifest
+fails loudly instead of scoring silently as Tier C.
 The legacy 55/30/15 formula is never a silent fallback.
 
 ## Temporal and erythemal hierarchy

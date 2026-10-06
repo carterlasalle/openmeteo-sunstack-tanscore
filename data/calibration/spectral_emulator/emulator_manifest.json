@@ -1,0 +1,103 @@
+{
+  "spectral_emulator_version": "tierB-libradtran-emulator-v1",
+  "spectral_training_manifest_sha256": "37c25a3c8ef09ae81ca5bb5690894270a1653f594dd9505b665bd15698dea3cf",
+  "libradtran_version": "libRadtran-2.0.6 (local build, disort 6-stream)",
+  "parameter_ranges": {
+    "sza_deg": [
+      0.0,
+      88.0
+    ],
+    "ozone_du": [
+      200.0,
+      450.0
+    ],
+    "altitude_m": [
+      0.0,
+      4000.0
+    ],
+    "aod340": [
+      0.02,
+      1.0
+    ],
+    "angstrom": [
+      0.0,
+      2.0
+    ],
+    "ssa340": [
+      0.85,
+      1.0
+    ],
+    "asymmetry": [
+      0.6,
+      0.75
+    ],
+    "albedo": [
+      0.02,
+      0.9
+    ],
+    "total_cloud_cover": [
+      0.0,
+      1.0
+    ],
+    "cloud_liquid_g_m2": [
+      0.0,
+      2000.0
+    ],
+    "cloud_ice_g_m2": [
+      0.0,
+      500.0
+    ],
+    "water_vapor_kg_m2": [
+      0.5,
+      60.0
+    ]
+  },
+  "validation_metrics": {
+    "A_pca": {
+      "n": 120,
+      "emel_median_abs_rel_err": 0.6449254293857825,
+      "emel_p95_abs_rel_err": 6.621380569622134,
+      "ery_median_abs_rel_err": 0.6371089451143996,
+      "ery_p95_abs_rel_err": 6.2929882852519485,
+      "uva_median_rel_err": 0.5166157240664069,
+      "uva_p95_rel_err": 3.3297661043240354,
+      "uvb_median_rel_err": 0.6322839056565265,
+      "uvb_p95_rel_err": 8.276667058416685,
+      "worst_regime": "sza1_o37_aod0_alb1",
+      "worst_regime_median_bias": -0.47560258209140516,
+      "passed": false
+    },
+    "B_direct": {
+      "n": 120,
+      "emel_median_abs_rel_err": 0.6672191423085732,
+      "emel_p95_abs_rel_err": 6.983539632488008,
+      "ery_median_abs_rel_err": 0.6454984288797276,
+      "ery_p95_abs_rel_err": 6.655347071258334,
+      "uva_median_rel_err": 0.48814171938661866,
+      "uva_p95_rel_err": 3.9658424627486575,
+      "uvb_median_rel_err": 0.6394073089078346,
+      "uvb_p95_rel_err": 8.670116564209799,
+      "worst_regime": "sza1_o37_aod0_alb1",
+      "worst_regime_median_bias": -0.44888140741613075,
+      "passed": false
+    },
+    "C_tierC_proxy": {
+      "n": 120,
+      "emel_median_abs_rel_err": 2.0646619522949776,
+      "emel_p95_abs_rel_err": 2.325139858313546,
+      "ery_median_abs_rel_err": 0.0,
+      "ery_p95_abs_rel_err": 0.0,
+      "uva_median_rel_err": 0.0,
+      "uva_p95_rel_err": 0.0,
+      "uvb_median_rel_err": 0.0,
+      "uvb_p95_rel_err": 0.0,
+      "worst_regime": "sza1_o37_aod0_alb1",
+      "worst_regime_median_bias": 2.0033531304506274,
+      "passed": false
+    }
+  },
+  "winner": "A_pca",
+  "n_train": 1600,
+  "n_test": 400,
+  "gates_passed": false
+}

@@ -821,3 +821,23 @@ validator), 23 (gates), 24 (CI refuses: 4 live aborts prove it) all
 strengthened. Items 2 (Tier-B strict), 17 (global-v2) unchanged:
 still STRICTLY DISABLED-equivalent (degraded Tier-C labeled, provisional
 reference labeled), blocked on uvspec/WOUDC/multi-year corpus.
+
+## 2026-10-06 - Tier-B/WOUDC/corpus unblock (no uvspec, no WOUDC, no multi-year corpus)
+
+Prior session ended with items 2 (Tier-B strict), 17 (global-v2), and §32.E
+screenshots blocked on missing external inputs. This round removed each
+blocker with local/reachable substitutes instead of waiting:
+
+| blocker | substitute (all local, pinned, reproducible) | evidence |
+|---|---|---|
+| no uvspec | libRadtran 2.0.6 downloaded + built from source (netCDF+GSL, MacPorts paths fixed); 2000-sample stratified corpus generating (disort 6-stream, 280-400 nm spline-1nm, mW/m2/nm native) | `data/research/spectral_corpus/design.csv` + `manifest.json` |
+| no Tier-B engine | real trainer: PCA(8)+ridge (A) vs direct-ridge channels (B) vs Tier-C baseline (C), §8.4 gates enforced, winner manifest or loud fail; strict path wired (loader + scoring/state override, Tier-C labeled when unwired) | `scripts/train_spectral_emulator.py`, `spectral.load_tierB_emulator/predict_tierB_channels`, 10 tierb tests green |
+| no WOUDC | WOUDC API works: Payerne has NO spectral records (ozonesonde only) — recorded, not assumed; Brewer Saskatoon scans parse + integrate; pinned fixture + validator script | `scripts/validate_woudc_spectral.py`, `data/research/woudc/brewer_saskatoon_19930127_scan0.csv` |
+| no multi-year corpus | 12-site POWER 2024 daylight climatology (52,033h, equatorial/highland/desert/high-lat) -> global-mel-ref-v2 1.793; local ref rebuilt (108,744 rows) | `scripts/build_global_ref_v2.py`, `data/calibration/global_melanogenic_reference_v2/` |
+| EPA n=0 | redirect-following fix: live 21-row hourly UVI, 9 daylight rows scored | `history.fetch_epa_uv_forecast`, `/tmp/epa_test2.json` |
+| band-shape error unquantified | `dynamic_band_weights` diagnostic: Tier-C proxy overestimates uvspec truth 2.8x (SZA30 clear) and Brewer truth 3.1x (SZA78.8) — proxy bias now measured, not hypothesized | `test_dynamic_band_weights_track_true_spectral_shape` |
+
+User ask (same round): Local visible everywhere alongside Overall — hero,
+day header, hourly Overall cell, 30-min table column + thead, calendar ICS
+descriptions, 30-min CSV head. All fields already in the artifact; this was
+display-only.
