@@ -184,7 +184,7 @@ delayed-pigmentation action spectrum $S_{\mathrm{DP}}(\lambda)$:
 
 $$E_{\mathrm{DP},h}(t) = \int_{280}^{400} E_{\lambda,h}(t,\lambda)\, S_{\mathrm{DP}}(\lambda)\, d\lambda$$
 
-$$ \mathrm{Absolute}(t) = \mathrm{clip}\!\left(100\,\frac{E_{\mathrm{DP},h}(t)}{E_{\mathrm{ref}}},\, 0,\, 100\right), \qquad E_{\mathrm{ref}} = 1.6\ \mathrm{W\,m^{-2}} $$
+$$ \mathrm{Absolute}(t) = \mathrm{clip}\!\left(100\,\frac{E_{\mathrm{DP},h}(t)}{E_{\mathrm{ref}}},\, 0,\, 100\right), \qquad E_{\mathrm{ref}} = 1.793\ \mathrm{W\,m^{-2}}\ \text{(global-mel-ref-v2, 12-site POWER 2024)} $$
 
 The optional skin-plane counterpart applies the broadband geometric plane
 factor to the horizontal $E_{\mathrm{DP}}$ (Tier-C approximation: UV is not
@@ -410,7 +410,7 @@ as complete zeros. Every dose level carries `(complete, coverage_fraction)`.
 | **SED** (sunburn load, independent) | $\int E_{\mathrm{ery}}\,dt / 100$ | SED | same levels (`sed_{…}`), own complete/coverage pair |
 | UVA / UVB physical | $\int \mathrm{UVA{,}UVB}\,dt$ | $\mathrm{J\,m^{-2}}$ (+ $\mathrm{J\,cm^{-2}}$ = /10⁴) | same levels + day |
 | IPD pigment-darkening | $\int E_{\mathrm{pig}}\,dt$ | $\mathrm{J\,m^{-2}}$ | same levels |
-| **Reference minutes** (presentation only) | $\mathrm{TanDose} / 1.6 / 60$ | min | "equivalent minutes at fixed global reference" |
+| **Reference minutes** (presentation only) | $\mathrm{TanDose} / 1.793 / 60$ | min | "equivalent minutes at fixed global reference" |
 
 Windows are `[start, end]` **inclusive** (the end stamp bounds the final
 trapezoid leg — half-open ends silently dropped the last 30 min of every window
@@ -605,7 +605,7 @@ gates incl. spectra + reference + CAMS credentials).
 
 ## Appendix B — environment knobs (defaults)
 
-`SUNSTACK_GLOBAL_MEL_REF_WM2=1.6` · `SUNSTACK_TANDOSE_MAX_GAP_S=3600` ·
+`SUNSTACK_GLOBAL_MEL_REF_WM2=1.793` · `SUNSTACK_TANDOSE_MAX_GAP_S=3600` ·
 `SUNSTACK_UVI_DISAGREE_FRAC=0.35` / `STRONG=0.60` · `MIN_TAN_TEMP_F=50` ·
 `COMFORTABLE=68` · `HEAT_WARNING=100` · `MAX=110` · precip/snow 0.001″ ·
 `PRECIP_PROBABILITY_PENALTY_MAX=0.55` · wind 25/35 mph · `SKIN_TILT=0`/`AZIMUTH=180` ·

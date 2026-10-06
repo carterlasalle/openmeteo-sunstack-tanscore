@@ -22,7 +22,7 @@ score = clip(100 * E_DP,h / E_mel_global_reference, 0, 100)
 ```
 
 `parrish-fda-3630-v1` identifies the delayed-pigmentation action spectrum.
-`global-mel-ref-v1-provisional`, E_mel = 1.6 W/m^2, remains the fixed reference;
+`global-mel-ref-v2`, E_mel = 1.793 W/m^2 (12-site POWER 2024), remains the fixed reference;
 recalibration creates a new score model version rather than silently changing it.
 
 ## Why the interaction term was removed

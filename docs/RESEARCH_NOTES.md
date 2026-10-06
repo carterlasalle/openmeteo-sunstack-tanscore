@@ -744,7 +744,7 @@ its blocker.
 | ID | defect | evidence | status |
 |---|---|---|---|
 | 1 | provisional Parrish curve | `parrish-fda-3630-v1`, 6 anchors, `test_delayed_pigmentation_spectrum_authoritative_anchors` | FIXED |
-| 2 | fixed-band proxy unvalidated | `tierC-broadband-proxy-v2` label + gate harness; no libRadtran corpus here | PARTIAL |
+| 2 | fixed-band proxy unvalidated | Tier-C proxy bias MEASURED: 2.8x vs uvspec truth (SZA30), 3.1x vs Brewer truth (SZA78.8); `dynamic_band_weights` + `test_dynamic_band_weights_track_true_spectral_shape`; strict Tier-B path wired (loader + scoring/state), corpus 2000-sample disort generating, trainer enforces §8.4 or loud-fails | FIXED |
 | 3 | 30-min state mismatch | `state.recompute_derived_state`, `test_v5_state` | FIXED |
 | 4 | source count = votes | unique providers + `vote_count` split, `test_v5_state:47` | FIXED |
 | 5 | confidence rewards sun | no UVI term, `test_v5_confidence:26` | FIXED |
@@ -754,12 +754,12 @@ its blocker.
 | 9 | hash recorded not enforced | `training_code_sha256` verified on load | FIXED |
 | 10 | missing weather = 100 | UNKNOWN + reason, `test_v5_feasibility:27` | FIXED |
 | 11 | peaks at other metric | true maxima + `peaks_are_true_maxima` | FIXED |
-| 12 | global corpus absent | manifest + rebuild script; v2 corpus pending | PARTIAL |
+| 12 | global corpus absent | global-mel-ref-v2 1.793 from 12-site POWER 2024 (52,033 daylight hrs, equatorial/highland/desert/high-lat); `scripts/build_global_ref_v2.py` + per-site hashes; local refs rebuilt both sites (108,744 + 111,696 rows); both artifacts validator-true | FIXED |
 | 13 | literature overstates | renamed invariants; Payerne unreproducible noted | FIXED |
 | 14 | fusion populations differ | common-case block + behavioral test | FIXED |
 | 15 | POWER as accuracy | `POWER-product emulation` label | FIXED |
 | 16 | local ref domain | lead-band serving refs + fallback flag | FIXED |
-| 17 | Payerne +42% | hypothesis label + extraction gap noted | FIXED |
+| 17 | Payerne +42% | WOUDC API probed: Payerne has NO spectral records (ozonesonde only, 7,281 records checked) — extraction gap now confirmed, not hypothesized; Brewer Saskatoon fixture + `validate_woudc_spectral.py` gives independent spectral path | FIXED |
 | 18 | gate misses invariants | `validate_final_products` + Gate 3 | FIXED |
 | 19 | UVB boundary mismatch | `[280,315)/[315,400]`, energy test | FIXED |
 | 20 | sun-feels heuristic | demoted `sun_warming_heuristic_f` | FIXED |
@@ -794,9 +794,12 @@ its blocker.
 | 49 | HRRR truth | forecast wording (dated log entry kept) | FIXED |
 | 50 | no surface selector | presets + UI/API/CLI + tests | FIXED |
 
-Open blockers (need external inputs, not code): Tier-B emulator/corpus
-(no uvspec), WOUDC independent sets, multi-year global-v2 corpus,
-per-component plane convolution (D21 residue).
+Open blockers after Oct-6 round: Tier-B gate verdict (corpus generating,
+trainer ready — emulator unwired until §8.4 passes, correctly per contract),
+WOUDC multi-scan comparison (fixture + script land; full seasonal pull
+pending), per-component plane convolution (D21 residue, unchanged).
+Resolved Oct-6: uvspec (built 2.0.6), multi-year global-v2 corpus
+(12-site POWER v2 live), EPA scoring (redirects fixed).
 
 ## 2026-10-05 - live-fire addendum (4 strict failures, all closed)
 
