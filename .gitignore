@@ -8,3 +8,32 @@ __pycache__/
 !.scc/intent.yaml
 !.scc/plugins.toml
 !.scc/plugins.lock
+
+# Raw research inputs (multi-GB CAMS EAC4 / previous-run tables), the same
+# class of content as data/: ingested locally, never committed.
+calibration_sources/
+
+# Local agent/tooling state. None of this is repo content and none of it is
+# referenced by CI; it is regenerated per machine.
+.agents/
+.bugcorpus/
+.bughunt/
+.claude/
+.codex/
+.omp/
+.trace/
+.mcp.json
+.pyre_configuration
+skills-lock.json
+bughunt.toml
+.coverage
+.crash*
+crash-*
+randomseed
+node_modules/
+bun.lock
+
+# Generated per-machine agent-context stubs and local analyzer-stack config.
+/CLAUDE.md
+/CODEX.md
+/package.json
