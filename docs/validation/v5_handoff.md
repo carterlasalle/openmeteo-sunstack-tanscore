@@ -58,6 +58,22 @@ with median bias >7 %.
 | 2 000 samples (PCA(8) + ridge, raw channels) | A_pca | 0.645 | 6.62 | 0.517 | −0.476 | FAIL |
 | 2 000 samples (PCA(20) + GBM, log10 channels) | B_direct | 0.0545 | 0.239 | 0.0288 | −0.122 | FAIL |
 | 6 000 samples (same architecture) | B_direct | 0.0419 | 0.235 | 0.0221 | −0.226 | FAIL |
+| 16 000 samples (same architecture, corrected split) | B_direct | **0.0286** | 0.135 | 0.0158 | **0.0756** | FAIL |
+
+The E_DP median gate (≤3 %) and the erythemal median gate (≤3 %) now **pass**;
+the tails do not (E_DP p95 0.135 vs ≤0.10; UVA p95 0.095 vs ≤0.05; UVB median
+0.031 vs ≤0.02) and the worst-regime bias is marginally over (0.076 vs ≤0.07).
+Overall the gates still fail, so strict Tier-B stays unavailable.
+
+Evaluation note: the first version of the trainer sliced the held-out set
+contiguously by sample id, while the stratified design lays its regime-enriched
+blocks out in contiguous id ranges — so the test set was entirely composed of
+regimes the model had never trained on and the reported error measured
+extrapolation, not held-out accuracy. The split is now a fixed-seed shuffle, so
+every regime appears in both halves and the numbers above are honest held-out
+metrics. That is an evaluation fix, not a model improvement, and it is why the
+2 000/6 000 rows above look worse than the artefacts an earlier revision
+reported.
 
 Reproduce: `uv run python scripts/build_spectral_corpus.py --samples 16000 --out data/research/spectral_corpus_v2`
 → `scripts/run_uvspec_corpus.py` (per-shard) → `scripts/merge_spectral_shards.py`

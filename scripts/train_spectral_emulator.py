@@ -225,10 +225,16 @@ def train_emulator(corpus_dir: Path, out_dir: Path) -> Path:
     true_uvb = e_glob_a[:, uvb_m].sum(axis=1)
     true_emel = (e_glob_a * dp_s).sum(axis=1)
     true_ery = (e_glob_a * ery_s).sum(axis=1)
-    # Deterministic 80/20 split by sample id.
-    order = _np.argsort(_np.asarray(keep))
+    # Held-out split. The stratified design lays regime-enriched blocks out in
+    # contiguous id ranges, so slicing by id would put whole unseen regimes in
+    # the test set and measure extrapolation, not held-out accuracy. Shuffle
+    # with a fixed seed instead, which keeps every regime represented in both
+    # halves (the split is still deterministic).
+    order = _np.asarray(keep)
+    _split_rng = _np.random.default_rng(23)
+    perm = _split_rng.permutation(len(order))
     n_tr = int(0.8 * len(order))
-    tr, te = order[:n_tr], order[n_tr:]
+    tr, te = perm[:n_tr], perm[n_tr:]
     # Candidate A: PCA(20) on log1p global spectra + gradient-boosted
     # coefficient maps (spectral shape is a smooth nonlinear function of the
     # physics params; linear ridge systematically missed low-sun rows).
