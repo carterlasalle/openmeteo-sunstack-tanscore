@@ -137,7 +137,7 @@ pinned by `tests/test_v5_confidence.py` (including
 
 | Check | Command | Result |
 |---|---|---|
-| Test suite | `uv run pytest tests/ -q` | **294 passed** (1 pre-existing live-runner test excluded; it fails identically on a clean tree) |
+| Test suite | `uv run pytest tests/ -q` | **295 passed** (1 pre-existing live-runner test excluded; it fails identically on a clean tree) |
 | Lint | `uv run ruff check src tests scripts` | All checks passed |
 | Types | `uv run basedpyright --level error` | 0 errors |
 | Artifact validator | `uv run python scripts/validate_published_artifact.py docs/data.json` | `"passed": true` |
@@ -145,11 +145,17 @@ pinned by `tests/test_v5_confidence.py` (including
 | §28 row schema | emitted by `state.recompute_derived_state`, carried by the 30-min frame into `half_hour` | `action_spectrum_version`, `action_spectrum_sha256`, `outdoor_feasibility_reason_codes` — verified to survive `_daylight_payload_rows` → `_records` → JSON round-trip |
 
 The published `docs/data.json` in the tree still carries `build_sha 43fa531`,
-which predates §28; those rows legitimately lack the fields, and the gate skips
-them. The scheduled/push forecast run on `main` regenerates the artifact from
-the current code, and the fields then appear. `action_spectrum_version` is
-enforced as a row/summary agreement (`row_summary_version_agreement`), so a row
-cannot claim a different action spectrum than the summary it ships under.
+which predates §28. The first §28 publish exposed the real defect: the final
+recompute in `build_30min_forecast` copies its results back through a
+hand-maintained **carry-out whitelist**, and the action-spectrum identity was not
+named there, so the fields were recomputed and then dropped — every other
+recomputed child shipped, which is why nothing else noticed.
+
+`tests/test_core.py::test_30min_frame_carries_action_spectrum_row_identity` pins
+it (fails before, passes after) and the whitelist now says in situ that it is a
+carry-out list, not a merge. `action_spectrum_version` is additionally enforced
+as a row/summary agreement (`row_summary_version_agreement`), so a row cannot
+claim a different action spectrum than the summary it ships under.
 
 ### `delayed_pigmentation_transmission_ratio` is deliberately not emitted
 

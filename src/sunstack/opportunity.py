@@ -797,7 +797,14 @@ def build_30min_forecast(
                      "uvi_difference_absolute", "uvi_difference_percent",
                      "fusion_version",
                      "legacy_absolute_tan_score_55_30_15",
-                     "tan_score_model_version"):
+                     "tan_score_model_version",
+                     # §3/§28 row identity. This is a carry-out whitelist, not
+                     # a merge: anything recompute produces but does not name
+                     # here is dropped from the published frame, so every new
+                     # identity/version column must be added or it will ship
+                     # missing (that is exactly what happened to the two
+                     # action-spectrum fields).
+                     "action_spectrum_version", "action_spectrum_sha256"):
             if _col in _final:
                 out[_col] = _final[_col].to_numpy()
     # The interpolated half-hour grid is a backward-mean grid: ``dt`` labels

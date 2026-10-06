@@ -264,6 +264,37 @@ def test_30min_interpolation_forward_fills_boolean_flags():
     assert out["outdoor_blocked"].tolist() == [True] * 5
 
 
+def test_30min_frame_carries_action_spectrum_row_identity():
+    # Carry-out whitelist regression (§3/§28). The final recompute re-derives
+    # every row's identity, but build_30min_forecast copies back only the
+    # columns it names. The action-spectrum fields were absent from that list,
+    # so the published frame could not name the spectrum its scores were
+    # convolved against — every other recomputed child shipped, so nothing
+    # else noticed.
+    from sunstack import config
+    from sunstack.opportunity import build_30min_forecast
+    from sunstack.photobiology import load_action_spectrum
+
+    hourly = pd.DataFrame(
+        {
+            "time": ["2026-09-29T12:00", "2026-09-29T13:00"],
+            "shortwave_radiation_instant": [700.0, 800.0],
+            "uv_index": [6.0, 7.0],
+            "temperature_2m": [70.0, 72.0],
+            "predicted_uva_wm2": [40.0, 45.0],
+            "predicted_uvb_wm2": [1.1, 1.3],
+            "tan_score_absolute_0_100": [50.0, 60.0],
+        }
+    )
+    out = build_30min_forecast(hourly, None)
+    assert "action_spectrum_version" in out.columns
+    assert "action_spectrum_sha256" in out.columns
+    assert set(out["action_spectrum_version"]) == {config.ACTION_SPECTRUM_VERSION}
+    assert set(out["action_spectrum_sha256"]) == {
+        load_action_spectrum(config.ACTION_SPECTRUM_STEM).sha256
+    }
+
+
 def test_30min_keeps_object_typed_weather_and_feasibility_agrees():
     # P0 regression: production feeds deliver temperature/wind/precip as
     # object/string dtype. The transformer must coerce (not drop) them, and
