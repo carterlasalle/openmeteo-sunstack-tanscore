@@ -79,6 +79,14 @@ Reproduce: `uv run python scripts/build_spectral_corpus.py --samples 16000 --out
 → `scripts/run_uvspec_corpus.py` (per-shard) → `scripts/merge_spectral_shards.py`
 → `scripts/train_spectral_emulator.py`.
 
+Corpus of record: **16 000 samples, 0 failures**,
+`merged_sha256 = a65b127ae0d0a8e9861240ef402c6aec2e3aef36b24c1154eaf7bf65f4f493dd`,
+produced by `uvspec, version 2.0.6-MYSTIC`
+(`sha256 = 604971d98039295b2be0156071a891aab7a6c80a17be6047e2da10f54f87f8ff`).
+The merged manifest (per-shard hashes, design hash, uvspec identity) is tracked
+at `data/research/spectral_corpus_v2/manifest.json`; the 105 MB `spectra.npz`
+itself is not, and rebuilds deterministically from the manifest's seed.
+
 Per contract §8.4, because the gates are not met the emulator is **not shipped
 and not wireable**: no `emulator_manifest.json` is tracked,
 `SUNSTACK_TIERB_MANIFEST` stays unset, and `validate_tierB_manifest` rejects any
@@ -129,11 +137,26 @@ pinned by `tests/test_v5_confidence.py` (including
 
 | Check | Command | Result |
 |---|---|---|
-| Test suite | `uv run pytest tests/ -q` | **289 passed** (1 pre-existing live-runner test excluded; it fails identically on a clean tree) |
+| Test suite | `uv run pytest tests/ -q` | **298 passed** (1 pre-existing live-runner test excluded; it fails identically on a clean tree) |
 | Lint | `uv run ruff check src tests scripts` | All checks passed |
 | Types | `uv run basedpyright --level error` | 0 errors |
 | Artifact validator | `uv run python scripts/validate_published_artifact.py docs/data.json` | `"passed": true` |
 | Site artifact | `… docs/sites/pacific-palisades/data.json` | `"passed": true` |
+| §28 row schema | emitted by `state.recompute_derived_state`, carried by the 30-min frame into `half_hour` | `action_spectrum_version`, `action_spectrum_sha256`, `delayed_pigmentation_clear_sky_horizontal_wm2`, `delayed_pigmentation_transmission_ratio`, `delayed_pigmentation_clear_sky_source`, `outdoor_feasibility_reason_codes` |
+
+The published `docs/data.json` in the tree still carries `build_sha 43fa531`,
+which predates §28; those rows legitimately lack the fields, and the gate skips
+them. The scheduled/push forecast run on `main` regenerates the artifact from
+the current code, and the fields then appear and are checked.
+
+The §28 fields are **enforced**, not merely emitted:
+`clear_sky_transmission_consistent` is a fatal artifact check requiring the
+published ratio to equal `E_DP / clear-sky-counterpart` on the same row, to be
+≤ 1 (clouds cannot amplify the sun), and to name a declared provenance. Rows
+without the fields are skipped, so pre-§28 artifacts stay valid
+(`tests/test_v5_artifact.py::test_validator_fails_inconsistent_clear_sky_ratio`,
+`…::test_validator_fails_undeclared_clear_sky_source`,
+`…::test_validator_accepts_consistent_clear_sky_ratio`).
 
 **UVI → E_ery → SED closure** (`docs/data.json`, half-hour row `2026-10-06T10:30`):
 `uvi_consensus = 2.236` → `erythemal_irradiance_wm2 = 0.0559` (= UVI/40, ratio
