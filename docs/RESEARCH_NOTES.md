@@ -844,3 +844,28 @@ User ask (same round): Local visible everywhere alongside Overall — hero,
 day header, hourly Overall cell, 30-min table column + thead, calendar ICS
 descriptions, 30-min CSV head. All fields already in the artifact; this was
 display-only.
+
+## 2026-10-06 (late) - §28 row identity, and a publishing bug the first §28 publish exposed
+
+Adding the §28 per-row identity fields surfaced two real defects that the
+existing suites could not see, because both are "the field was computed and then
+thrown away" rather than "the field was wrong".
+
+| # | live symptom | root cause | fix | status |
+|---|---|---|---|---|
+| E | `action_spectrum_version` absent from every published half-hour row | `build_30min_forecast`'s final recompute copies its results back through a hand-maintained carry-out whitelist; the two identity columns were not named there, so they were recomputed and then dropped while every other recomputed child shipped | added to the whitelist; whitelist now says in situ that it is a carry-out list, not a merge; `test_30min_frame_carries_action_spectrum_row_identity` (fails before, passes after) | FIXED |
+| F | the default site's `docs/data.json` stopped receiving forecasts after 16:32 while `docs/index.html` and the calendars kept updating | `data.json` has two writers: the site-refresh job re-stamps `renderer_code_sha` into it and `_publish_site` pushes its own export. It is a single-line JSON document, so a concurrent reskin edit conflicts with the payload, and `git pull --rebase -X ours` resolves toward the *upstream* side - git reports "patch contents already upstream" and drops the payload from the publish commit (reproduced in a scratch repo) | the publish keeps the bytes it exported and re-asserts them into the commit after the rebase, before pushing | FIXED |
+| G | `delayed_pigmentation_transmission_ratio` published as ~11x on a clear midday row | §2.2 conditions the ratio on a backend that can compute *both* all-sky and clear-sky. None can: the numerator is the broadband reconstruction (Tier-B has no cloud-free mode) and the only clear-sky UV model is the degraded analytic fallback, whose absolute scale disagrees with the production channels by ~2.2x on UVA and ~34x on UVB at SZA 47 (predicted_uva 39.4 vs cs_uva 18.0; predicted_uvb 0.906 vs cs_uvb 0.0266) | the field and its counterpart are not emitted at all rather than published under a name claiming atmospheric transmission; `test_no_cross_backend_clear_sky_transmission_ratio` pins the absence | REPLACED BY NEW MODEL (field withheld until a backend can compute both) |
+
+DoD impact: item 3 (coherent state - a row can now name the exact spectrum its
+scores came from) and item 20 (artifact validator) strengthened; item 24
+(scheduled CI refuses to publish on a science-contract failure) unaffected but
+now actually reachable, because the gate reads the artifact the run just wrote.
+Items 2 (Tier-B strict) and 17 (global-v2) unchanged.
+
+Corpus provenance for the Tier-B record (§8.2): 16 000 samples, 0 failures,
+`merged_sha256 a65b127a...493dd`, produced by `uvspec 2.0.6-MYSTIC`
+(`sha256 604971d9...f87f8ff`). Held-out §8.4 gates fail (E_DP median 0.0286
+passes 3 %, p95 0.135 vs 0.10; UVA p95 0.095 vs 0.05; UVB median 0.031 vs 0.02;
+regime bias 0.0756 vs 0.07), so strict Tier-B remains unavailable and the
+degraded Tier-C backend stays labelled on every row.

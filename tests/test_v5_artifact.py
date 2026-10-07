@@ -65,6 +65,7 @@ def _good_artifact() -> dict[str, object]:
             "precipitation_probability": float(i),
             "tan_score_model_version": "action-spectrum-v2",
             "spectral_backend": "tierC-broadband-proxy-v2",
+            "action_spectrum_version": "parrish-fda-3630-v1",
             "tan_calibration_tier": "nasa_power_ml_plus_cams_spectral",
             "local_reference_stale": False,
             "is_day": 1,
@@ -171,7 +172,30 @@ def test_validator_passes_clean_fixture(tmp_path: Path) -> None:
     assert out["passed"] is True, out["failures"]
     checks = out["checks"]
     assert isinstance(checks, list)
-    assert len(cast(list[object], checks)) == 20
+    assert len(cast(list[object], checks)) == 21
+
+
+def test_validator_fails_row_without_action_spectrum_identity(tmp_path: Path) -> None:
+    """§3/§28: a row that cannot name the spectrum its scores were convolved
+    against is not publishable. Absence is fatal, not merely a mismatch - the
+    carry-out whitelist dropped these columns once without any other check
+    noticing (RESEARCH_NOTES defect E)."""
+    module = _load_validator()
+    bad = _good_artifact()
+    _ = _row(bad, 1).pop("action_spectrum_version")
+    out = _validate(module, tmp_path, bad)
+    assert out["passed"] is False
+    assert "row_action_spectrum_identity" in _failures(out)
+
+
+def test_validator_fails_row_with_divergent_action_spectrum(tmp_path: Path) -> None:
+    """A row must not claim a different spectrum than the summary it ships under."""
+    module = _load_validator()
+    bad = _good_artifact()
+    _row(bad, 2)["action_spectrum_version"] = "some-other-spectrum-v9"
+    out = _validate(module, tmp_path, bad)
+    assert out["passed"] is False
+    assert "row_action_spectrum_identity" in _failures(out)
 
 def test_validator_fails_diverged_fixture(tmp_path: Path) -> None:
     module = _load_validator()

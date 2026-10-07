@@ -39,6 +39,7 @@ FATAL_CHECKS = [
     "row_summary_version_agreement",
     "no_stale_local_reference",
     "no_premanifest_model",
+    "row_action_spectrum_identity",
 ]
 # Fields whose name says "value at the selected best window/time": each must
 # equal its source column on the row the daily row selects (best_30m_start),
@@ -211,6 +212,16 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
             failures["no_premanifest_model"].append(
                 f"{_tier_row.get('time')}: tan_calibration_tier missing")
             break
+    # §3/§28: every published row must name the action spectrum its scores were
+    # convolved against. The carry-out whitelist in build_30min_forecast dropped
+    # these columns once, silently, because every other recomputed child still
+    # shipped (RESEARCH_NOTES defect E). A row that cannot name its spectrum is
+    # not publishable, so absence is fatal, not merely a mismatch.
+    _sum_spec = summary.get("action_spectrum_version")
+    for _id_row in _rows_of(half or hourly):
+        if _id_row.get("action_spectrum_version") != _sum_spec:
+            failures["row_action_spectrum_identity"].append(
+                f"{_id_row.get('time')}: row action_spectrum_version {_id_row.get('action_spectrum_version')!r} != summary {_sum_spec!r}")
     for row in rows:
         stamp = row.get("time")
         # Same triple the fusion consumes (state._stack_sources): uvi_openmeteo

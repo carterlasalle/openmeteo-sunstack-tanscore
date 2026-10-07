@@ -137,7 +137,7 @@ pinned by `tests/test_v5_confidence.py` (including
 
 | Check | Command | Result |
 |---|---|---|
-| Test suite | `uv run pytest tests/ -q` | **295 passed** (1 pre-existing live-runner test excluded; it fails identically on a clean tree) |
+| Test suite | `uv run pytest tests/ -q` | **297 passed** (1 pre-existing live-runner test excluded; it fails identically on a clean tree) |
 | Lint | `uv run ruff check src tests scripts` | All checks passed |
 | Types | `uv run basedpyright --level error` | 0 errors |
 | Artifact validator | `uv run python scripts/validate_published_artifact.py docs/data.json` | `"passed": true` |
@@ -153,9 +153,11 @@ recomputed child shipped, which is why nothing else noticed.
 
 `tests/test_core.py::test_30min_frame_carries_action_spectrum_row_identity` pins
 it (fails before, passes after) and the whitelist now says in situ that it is a
-carry-out list, not a merge. `action_spectrum_version` is additionally enforced
-as a row/summary agreement (`row_summary_version_agreement`), so a row cannot
-claim a different action spectrum than the summary it ships under.
+carry-out list, not a merge. `row_action_spectrum_identity` is now a fatal
+artifact check: every published row must name the spectrum its scores were
+convolved against and must not diverge from the summary it ships under, so
+absence can never be silent again. Both published artifacts now carry it on
+every row (326/326 and 328/328).
 
 ### `delayed_pigmentation_transmission_ratio` is deliberately not emitted
 
