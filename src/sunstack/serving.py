@@ -422,10 +422,10 @@ def build_calendar_ics(
         parts.append(f"Overall {peak_s}/100")
         locp = _fmt_opt(row.get("day_local_peak_0_100"), ".0f", "/100")
         if locp:
-            parts.append(f"Local {locp}")
+            parts.append(f"Local {locp} (within this location)")
         locb = _fmt_opt(row.get("day_local_at_best_usable_30m_0_100"), ".0f", "/100")
         if locb:
-            parts.append(f"Local@best {locb}")
+            parts.append(f"Local@best {locb} (within this location)")
         absp = _fmt_opt(row.get("day_absolute_peak_0_100"), ".0f", "/100")
         if absp:
             parts.append(f"Abs {absp}")
