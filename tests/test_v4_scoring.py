@@ -1817,7 +1817,7 @@ def test_calendar_marks_partial_doses_and_leaves_legacy_clean():
     }])
     ics30 = build_interval_ics(half)
     flat = ics30.replace("\r\n ", "")
-    assert "TanDose30 900 J/m2 mel (partial)" in flat
+    assert "TanDose30 900 J/m² mel (partial)" in flat  # F-18/F-04: one unit form, J/m², in the ICS too
     assert "SED30 2.5" in flat and "SED30 2.5 (partial)" not in flat
 
 
