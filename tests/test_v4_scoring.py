@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol, TypedDict, cast
 
+import httpx
 import numpy as np
 import pandas as pd
 import pytest
@@ -132,7 +133,7 @@ def test_all_direct_cams_fields_propagate(tmp_path: Path):
     # Accumulated downward UV differentiates back to a physical irradiance;
     # the first interval has no backward difference (contract §5.7) and stays
     # unknown — never back-filled.
-    dw = num(out, "cams_downward_surface_uv_wm2").to_numpy(dtype=float)
+    dw = num(out, "cams_downward_surface_uv_wm2").tolist()
     assert bool(np.isnan(dw[0]))
     assert np.allclose(dw[1:], 0.25, atol=0.01)
 
@@ -393,8 +394,9 @@ def test_pigment_channel_never_enters_opportunity():
 def test_tierB_contract_covers_every_carried_cams_field(tmp_path: Path):
     from sunstack.spectral import emulator_manifest
 
-    contract = emulator_manifest()["tierB_reserved_inputs"]
-    assert isinstance(contract, dict)
+    raw_contract = emulator_manifest()["tierB_reserved_inputs"]
+    assert isinstance(raw_contract, dict), "reserved inputs must be a mapping"
+    contract = cast("dict[str, object]", raw_contract)
     for key in ("cams_aod_355", "cams_aod_400", "cams_abs_aod_380",
                 "cams_ssa_355", "cams_asymmetry_400", "cams_water_vapor",
                 "cams_cloud_liquid_water", "cams_cloud_ice_water",
@@ -856,7 +858,9 @@ def _load_script(name: str) -> _ScriptModule:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     _ = spec.loader.exec_module(module)
-    return cast(_ScriptModule, module)
+    # Two-step cast: a freshly exec'd ModuleType does not structurally overlap
+    # the declared script surface, though at runtime it is exactly that.
+    return cast("_ScriptModule", cast(object, module))
 
 
 def test_rebuild_adopt_orders_manifest_before_references(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -1037,7 +1041,7 @@ def test_committed_estimator_holdout_skill_floors(tmp_path: Path, monkeypatch: p
                          "--out", str(out)])
     rb.main()
     text = out.read_text(encoding="utf-8")
-    r2 = [float(v) for v in re.findall(r'"r2": ([0-9.]+)', text)[:2]]
+    r2 = [float(v) for v in cast("list[str]", re.findall(r'"r2": ([0-9.]+)', text))[:2]]
     assert len(r2) == 2, text[:500]
     assert r2[0] > 0.99, r2  # UVA estimator holdout floor
     assert r2[1] > 0.98, r2  # UVB estimator holdout floor
@@ -1085,11 +1089,11 @@ def test_all_days_csv_head_matches_daily_row_keys():
     }))
     half = add_interval_doses(_half_hour_frame(1.0))
     daily = build_daily_summary(half)
-    frames = {"dHead": set(daily.iloc[0].index)}
+    frames: dict[str, set[str]] = {"dHead": set(map(str, daily.columns))}
     for head_name, row_keys in frames.items():
         match = re.search(r"const " + head_name + r"=\[(.*?)\]", HTML)
         assert match is not None
-        head = re.findall(r"'([^']+)'", match.group(1))
+        head = cast("list[str]", re.findall(r"'([^']+)'", match.group(1)))
         assert len(head) > 10, (head_name, head)
         missing = [k for k in head if k not in row_keys]
         assert not missing, (head_name, missing)
@@ -1104,11 +1108,11 @@ def test_all_days_csv_head_matches_daily_row_keys():
                      "sed_30m_complete", "sed_30m_coverage_fraction")
     for key in interval_keys:
         assert key in hourly.columns and key in half.columns, key
-    heads = {}
+    heads: dict[str, list[str]] = {}
     for name in ("hHead", "qHead"):
         match = re.search(r"const " + name + r"=\[(.*?)\]", HTML)
         assert match is not None
-        heads[name] = re.findall(r"'([^']+)'", match.group(1))
+        heads[name] = cast("list[str]", re.findall(r"'([^']+)'", match.group(1)))
     assert set(interval_keys[:6]) <= set(heads["hHead"])
     assert set(interval_keys[6:]) <= set(heads["qHead"])
 
@@ -1123,12 +1127,15 @@ def test_cli_personal_mmd_flags_and_threading():
         params = inspect.signature(fn).parameters
         assert "personal_mmd_j_m2" in params, fn.__name__
         assert "personal_mmd_basis" in params, fn.__name__
-    ns = _cli.build_parser().parse_args(
-        ["run", "--personal-mmd", "2500", "--personal-mmd-basis", "SUNSTACK_EFFECTIVE_DOSE_MEASURED"])
-    assert ns.personal_mmd == 2500.0
-    assert ns.personal_mmd_basis == "SUNSTACK_EFFECTIVE_DOSE_MEASURED"
-    plain = _cli.build_parser().parse_args(["run"])
-    assert plain.personal_mmd is None and plain.personal_mmd_basis is None
+    parsed = cast(
+        "dict[str, object]",
+        vars(_cli.build_parser().parse_args(
+            ["run", "--personal-mmd", "2500", "--personal-mmd-basis",
+             "SUNSTACK_EFFECTIVE_DOSE_MEASURED"])))
+    assert parsed["personal_mmd"] == 2500.0
+    assert parsed["personal_mmd_basis"] == "SUNSTACK_EFFECTIVE_DOSE_MEASURED"
+    plain = cast("dict[str, object]", vars(_cli.build_parser().parse_args(["run"])))
+    assert plain["personal_mmd"] is None and plain["personal_mmd_basis"] is None
     import pytest
 
     with pytest.raises(SystemExit):
@@ -1151,9 +1158,9 @@ def test_personal_mmd_fraction_on_live_shaped_frame():
     assert float(frac.notna().mean()) > 0.9
     for col in ("tan_score_absolute_0_100", "tan_dose_1h_j_m2",
                 "melanogenic_effective_irradiance_wm2"):
-        a = out[col].to_numpy()
-        b = h[col].to_numpy()
-        assert bool(((a == b) | (pd.isna(a) & pd.isna(b))).all()), col
+        a = num(out, col).to_numpy(dtype=float)
+        b = num(h, col).to_numpy(dtype=float)
+        assert np.array_equal(a, b, equal_nan=True), col
 
 
 def test_parse_personal_mmd_is_loud():
@@ -1288,7 +1295,7 @@ def test_api_data_personal_mmd(tmp_path: Path):
         "location": "south-bend", "personal_mmd": "2000",
         "personal_mmd_basis": "SUNSTACK_EFFECTIVE_DOSE_MEASURED"})
     assert mmd.status_code == 200, mmd.text
-    rows = mmd.json()["hourly"]
+    rows = cast("dict[str, list[dict[str, object]]]", mmd.json())["hourly"]
     assert [r["personal_mmd_fraction"] for r in rows] == [0.5, 1.0, 0.75]
     assert {r["personalization_basis"] for r in rows} == {"SUNSTACK_EFFECTIVE_DOSE_MEASURED"}
     bad = client.get("/api/data", params={
@@ -1313,12 +1320,12 @@ def test_api_refresh_rejects_bad_mmd_without_running(tmp_path: Path):
 
     from sunstack.ui import create_app
 
-    client = TestClient(create_app(_api_fixture(tmp_path)))
+    client = cast("httpx.Client", TestClient(create_app(_api_fixture(tmp_path))))
     bad = client.post("/api/refresh", params={
         "location": "south-bend", "personal_mmd": "2000",
         "personal_mmd_basis": "FOLKLORE"})
     assert bad.status_code == 400
-    assert "one of" in bad.json()["detail"]
+    assert "one of" in str(cast("dict[str, object]", bad.json())["detail"])
 
 
 def test_export_bakes_personal_mmd_when_asked(tmp_path: Path):
@@ -1328,11 +1335,17 @@ def test_export_bakes_personal_mmd_when_asked(tmp_path: Path):
     _ = export_static_site(root, tmp_path / "plain")
     import json as _json
 
-    payload = _json.loads((tmp_path / "plain" / "data.json").read_text())
+    payload = cast(
+        "dict[str, list[dict[str, object]]]",
+        _json.loads((tmp_path / "plain" / "data.json").read_text()),
+    )
     assert payload["hourly"][0]["personal_mmd_fraction"] is None
     _ = export_static_site(root, tmp_path / "pers", personal_mmd_j_m2=2000.0,
                        personal_mmd_basis="SUNSTACK_EFFECTIVE_DOSE_MEASURED")
-    payload = _json.loads((tmp_path / "pers" / "data.json").read_text())
+    payload = cast(
+        "dict[str, list[dict[str, object]]]",
+        _json.loads((tmp_path / "pers" / "data.json").read_text()),
+    )
     assert [r["personal_mmd_fraction"] for r in payload["hourly"]] == [0.5, 1.0, 0.75]
     assert payload["half_hour"][0]["personalization_basis"] == "SUNSTACK_EFFECTIVE_DOSE_MEASURED"
 
@@ -1454,9 +1467,9 @@ def test_cli_requires_basis_with_personal_mmd(tmp_path: Path, monkeypatch: pytes
 
     from sunstack import cli as _cli
 
-    calls = {}
+    calls: dict[str, object] = {}
 
-    def _fake_run_all_sites(root, **kwargs):
+    def _fake_run_all_sites(_root: Path, **kwargs: object) -> None:
         calls.update(kwargs)
 
     monkeypatch.setattr(_cli, "run_all_sites", _fake_run_all_sites)
@@ -1510,12 +1523,18 @@ def test_export_preserves_run_attached_fractions(tmp_path: Path):
     half["personalization_basis"] = "SUNSTACK_EFFECTIVE_DOSE_MEASURED"
     half.to_parquet(half_path, index=False)
     _ = export_static_site(root, tmp_path / "kept")
-    payload = _json.loads((tmp_path / "kept" / "data.json").read_text())
+    payload = cast(
+        "dict[str, list[dict[str, object]]]",
+        _json.loads((tmp_path / "kept" / "data.json").read_text()),
+    )
     assert {r["personal_mmd_fraction"] for r in payload["half_hour"]} == {None}, (
         "stale run-attached fractions must not leak into exports")
     _ = export_static_site(root, tmp_path / "pers", personal_mmd_j_m2=2000.0,
                        personal_mmd_basis="SUNSTACK_EFFECTIVE_DOSE_MEASURED")
-    payload = _json.loads((tmp_path / "pers" / "data.json").read_text())
+    payload = cast(
+        "dict[str, list[dict[str, object]]]",
+        _json.loads((tmp_path / "pers" / "data.json").read_text()),
+    )
     assert {r["personal_mmd_fraction"] for r in payload["half_hour"]} != {None}
     with pytest.raises(ValueError, match="explicit basis"):
         _ = export_static_site(root, tmp_path / "bad", personal_mmd_j_m2=2000.0)
@@ -1554,8 +1573,8 @@ def test_rolling_integration_is_order_invariant():
         frame.sample(frac=1.0, random_state=7)).set_index("time")
     for col in ("tan_dose_30m_j_m2", "tan_dose_1h_j_m2", "sed_1h",
                 "tan_dose_30m_coverage_fraction"):
-        a = straight[col].to_numpy(dtype=float)
-        b = shuffled.loc[straight.index, col].to_numpy(dtype=float)
+        a = num(straight, col).to_numpy(dtype=float)
+        b = num(shuffled.loc[straight.index], col).to_numpy(dtype=float)
         assert np.allclose(a, b, equal_nan=True), col
 
 
@@ -1571,11 +1590,11 @@ def test_garbage_timestamp_isolates_to_its_row():
         "predicted_uvb_wm2": [1.0] * 4,
     })
     out = add_interval_doses(frame)
-    bad = out.loc[out["time"] == "not-a-time"].iloc[0]
-    assert pd.isna(bad["tan_dose_1h_j_m2"])
-    assert not bool(bad["tan_dose_1h_complete"])
-    good = out.loc[out["time"] == "2026-06-21T14:00"].iloc[0]
-    assert good["tan_dose_1h_j_m2"] > 0
+    bad = out.loc[_text(out, "time") == "not-a-time"]
+    assert pd.isna(num(bad, "tan_dose_1h_j_m2").iloc[0])
+    assert not bool(num(bad, "tan_dose_1h_complete").iloc[0])
+    good = out.loc[_text(out, "time") == "2026-06-21T14:00"]
+    assert num(good, "tan_dose_1h_j_m2").iloc[0] > 0
 
 
 def test_all_missing_bands_score_nan_loudly(tmp_path: Path):
@@ -1626,7 +1645,7 @@ def test_training_drops_constant_features_loudly(tmp_path: Path, caplog: pytest.
         report = train_uv_models(training, tmp_path)
     dropped_features = report["dropped_constant_features"]
     assert isinstance(dropped_features, list)
-    assert set(dropped_features) >= {"aod340", "ozone_du"}
+    assert {str(f) for f in cast("list[object]", dropped_features)} >= {"aod340", "ozone_du"}
     import joblib
 
     loaded = joblib.load(tmp_path / "uva_uvb_models.joblib")
@@ -1696,8 +1715,8 @@ def test_records_never_emit_browser_hostile_tokens():
     assert rows[1]["tan_score_absolute_0_100"] is None
 
 
-def _valid_scored_frame(**overrides):
-    base = {
+def _valid_scored_frame(**overrides: object) -> pd.DataFrame:
+    base: dict[str, object] = {
         "uv_index": [5.0, 5.2, 5.1],
         "predicted_uva_wm2": [40.0, 42.0, 41.0],
         "tan_score_absolute_0_100": [30.0, 32.0, 31.0],
@@ -1715,9 +1734,9 @@ def _valid_scored_frame(**overrides):
 
 
 def test_scored_hourly_validator_error_branches():
-    from sunstack.validation import validate_scored_hourly
+    from sunstack.validation import ValidationIssue, validate_scored_hourly
 
-    def errors(df):
+    def errors(df: pd.DataFrame) -> list[ValidationIssue]:
         return [i for i in validate_scored_hourly(df) if i.severity == "ERROR"]
 
     assert errors(_valid_scored_frame()) == []
@@ -1825,7 +1844,7 @@ def test_validate_live_sources_counts_feeds():
     from sunstack.fetch import FetchResult
     from sunstack.validation import validate_live_sources
 
-    def ok(name):
+    def ok(name: str) -> FetchResult:
         return FetchResult(name, "", {}, {"hourly": {}}, None)
 
     full = [ok("deterministic__best_match"), ok("hrrr_15min"),
@@ -1889,17 +1908,17 @@ def test_action_spectra_missing_files_are_errors(tmp_path: Path, monkeypatch: py
     import sunstack.photobiology as pb
     from sunstack.validation import validate_action_spectra
 
-    saved = dict(pb._cache)
-    pb._cache.clear()
+    pb.clear_spectrum_cache()
     monkeypatch.setattr(pb, "_spectra_dir", lambda: tmp_path / "empty")
     try:
         issues = validate_action_spectra()
     finally:
-        pb._cache.update(saved)
+        # Leave the cache cold: every later read re-loads from disk.
+        pb.clear_spectrum_cache()
     assert any(i.severity == "ERROR" for i in issues)
 
 
-def test_photobiology_gate_rejects_bad_reference_and_missing_spectrum(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_photobiology_gate_rejects_bad_reference_and_missing_spectrum(monkeypatch: pytest.MonkeyPatch):
     import pytest
 
     import sunstack.photobiology as pb
@@ -1986,7 +2005,7 @@ def test_cams_accumulated_uv_differences_within_cycles_only():
         "cams_cycle": ["a", "a", "a", "b", "b"],
     })
     out = cams_features(cams.iloc[[3, 1, 4, 0, 2]])  # unordered input rows
-    irr = num(out, "cams_downward_surface_uv_wm2").to_numpy(dtype=float)
+    irr = num(out, "cams_downward_surface_uv_wm2").tolist()
     assert bool(np.isnan(irr[0]))  # 03:00 — first row of cycle b
     assert abs(irr[1] - 1.0) < 1e-9  # 01:00 — within cycle a
     assert abs(irr[2] - 200.0 / 3600.0) < 1e-9  # 04:00 — within cycle b
@@ -2075,7 +2094,7 @@ def test_pigment_channel_failure_is_loud(tmp_path: Path, monkeypatch: pytest.Mon
     import sunstack.spectral as _spectral
     from sunstack.tanscore import score_forecast
 
-    def _boom(*a, **k):
+    def _boom(*_args: object, **_kwargs: object) -> None:
         raise ValueError("ERROR photobiology: no spectra")
 
     monkeypatch.setattr(_spectral, "pigment_darkening_from_broadband", _boom)
@@ -2214,7 +2233,7 @@ def test_epa_normalizers_parse_live_shape():
     assert normalize_epa_daily(None).empty
 
 
-def test_registry_zip_parses_and_intake_accepts_zip(tmp_path: Path):
+def test_registry_zip_parses_and_intake_accepts_zip():
     # ZIP is optional registry metadata for the EPA feed; the intake parser
     # threads it through only when the issue supplies it.
     import sys

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -272,13 +273,18 @@ def _trapezoidal_dose(
     coverage fraction. Never silently integrates across missing hours.
     """
     t = pd.to_datetime(times_utc, utc=True)
-    v = pd.to_numeric(values_wm2, errors="coerce").to_numpy(dtype=float)
     secs_all = _epoch_seconds(t)
-    order = np.argsort(secs_all)
+    order = cast("np.ndarray", np.argsort(secs_all))
     t = t.iloc[order].reset_index(drop=True)
-    v = v[order]
-    valid = np.isfinite(v)
-    n_valid = int(valid.sum())
+    # Scalar ndarray indexing types as Any in these stubs, and that Any would
+    # poison the running integral; read the values once as typed lists in the
+    # argsort order (identical order to v[order]).
+    values_array = cast(
+        "np.ndarray", pd.to_numeric(values_wm2, errors="coerce").to_numpy(dtype=float))
+    values_all = cast("list[float]", values_array.tolist())
+    v_list = [values_all[i] for i in cast("list[int]", order.tolist())]
+    valid_list = [math.isfinite(x) for x in v_list]
+    n_valid = sum(valid_list)
     if n_valid == 0:
         # No valid samples: the dose is UNKNOWN (NaN), never zero.
         return float("nan"), False, 0.0
@@ -287,36 +293,37 @@ def _trapezoidal_dose(
         # UNKNOWN (NaN), never numeric zero — one point spans zero time but
         # cannot claim the window's energy. A zero-duration request (single
         # stamp) keeps dose 0 with incomplete coverage.
-        span = float(secs_all.max() - secs_all.min()) if len(secs_all) > 1 else 0.0
+        span = cast(float, secs_all.max() - secs_all.min()) if len(secs_all) > 1 else 0.0
         if span > 0:
             return float("nan"), False, 0.0
         return 0.0, False, 0.0
     secs = _epoch_seconds(t)
+    secs_list = cast("list[float]", secs.tolist())
     dose = 0.0
     covered = 0.0
     # Span the full requested window (first to last TIMESTAMP), not just the
     # valid samples: trailing/leading missing runs must dilute coverage, and
     # missing endpoints must fail the completeness gate below.
-    total_span = float(secs.max() - secs.min())
+    total_span = cast(float, secs.max() - secs.min())
     complete = True
-    idx = np.where(valid)[0]
+    idx = [i for i, ok in enumerate(valid_list) if ok]
     from itertools import pairwise
 
     for a, b in pairwise(idx):
-        dt = float(secs[b] - secs[a])
+        dt = secs_list[b] - secs_list[a]
         if dt <= 0:
             continue
         if dt > max_gap_s:
             complete = False
             continue
-        dose += 0.5 * (v[a] + v[b]) * dt
+        dose += 0.5 * (v_list[a] + v_list[b]) * dt
         covered += dt
     coverage = (covered / total_span) if total_span > 0 else 1.0
-    if not valid[0] or not valid[-1]:
+    if not valid_list[0] or not valid_list[-1]:
         # Samples missing at either end of the window: the integral is cut
         # short, so it must not be presented as complete.
         complete = False
-    return float(max(dose, 0.0)), bool(complete), float(np.clip(coverage, 0, 1))
+    return float(max(dose, 0.0)), bool(complete), cast(float, np.clip(coverage, 0, 1))
 
 
 def integrate_tandose(
