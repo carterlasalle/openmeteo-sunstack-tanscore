@@ -7,6 +7,7 @@ canonical dose columns, SED gap handling, and the TanResponse baseline.
 """
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Protocol, TypedDict, cast
 
@@ -133,9 +134,9 @@ def test_all_direct_cams_fields_propagate(tmp_path: Path):
     # Accumulated downward UV differentiates back to a physical irradiance;
     # the first interval has no backward difference (contract §5.7) and stays
     # unknown — never back-filled.
-    dw = num(out, "cams_downward_surface_uv_wm2").tolist()
-    assert bool(np.isnan(dw[0]))
-    assert np.allclose(dw[1:], 0.25, atol=0.01)
+    dw = num(out, "cams_downward_surface_uv_wm2")
+    assert math.isnan(dw.iloc[0])
+    assert np.allclose(dw.iloc[1:], 0.25, atol=0.01)
 
 
 def test_uvi_disagreement_moves_confidence_not_physics(tmp_path: Path):
@@ -1225,15 +1226,16 @@ def test_filtered_payload_personal_mmd(tmp_path: Path):
 
     root = _payload_fixture(tmp_path)
     _, hourly, half, _, _ = filtered_payload(root, None, None, None, 2000.0, "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
-    assert (num(hourly, "personal_mmd_fraction").to_numpy() ==
-            np.array([0.5, 1.0, 0.75])).all()
-    assert (hourly["personalization_basis"] == "SUNSTACK_EFFECTIVE_DOSE_MEASURED").all()
-    assert (num(half, "personal_mmd_fraction").to_numpy()[:3] ==
-            np.array([0.25, 0.4, 0.5])).all()
+    assert np.array_equal(num(hourly, "personal_mmd_fraction").to_numpy(dtype=float),
+                          np.array([0.5, 1.0, 0.75]))
+    basis = _text(hourly, "personalization_basis")
+    assert bool((basis == "SUNSTACK_EFFECTIVE_DOSE_MEASURED").all())
+    assert np.array_equal(num(half, "personal_mmd_fraction").to_numpy(dtype=float)[:3],
+                          np.array([0.25, 0.4, 0.5]))
     _, plain_hourly, _, _, _ = filtered_payload(root, None, None, None)
     assert num(plain_hourly, "personal_mmd_fraction").isna().all()
-    assert (num(plain_hourly, "tan_dose_1h_j_m2").to_numpy() ==
-            num(hourly, "tan_dose_1h_j_m2").to_numpy()).all()
+    assert np.array_equal(num(plain_hourly, "tan_dose_1h_j_m2").to_numpy(dtype=float),
+                          num(hourly, "tan_dose_1h_j_m2").to_numpy(dtype=float))
 
 
 def _api_fixture(tmp_path: Path):
@@ -2005,12 +2007,12 @@ def test_cams_accumulated_uv_differences_within_cycles_only():
         "cams_cycle": ["a", "a", "a", "b", "b"],
     })
     out = cams_features(cams.iloc[[3, 1, 4, 0, 2]])  # unordered input rows
-    irr = num(out, "cams_downward_surface_uv_wm2").tolist()
-    assert bool(np.isnan(irr[0]))  # 03:00 — first row of cycle b
-    assert abs(irr[1] - 1.0) < 1e-9  # 01:00 — within cycle a
-    assert abs(irr[2] - 200.0 / 3600.0) < 1e-9  # 04:00 — within cycle b
-    assert bool(np.isnan(irr[3]))  # 00:00 — first row of cycle a, unfilled
-    assert bool(np.isnan(irr[4]))  # 02:00 — accumulation reset within cycle a
+    irr = num(out, "cams_downward_surface_uv_wm2")
+    assert math.isnan(irr.iloc[0])  # 03:00 — first row of cycle b
+    assert abs(irr.iloc[1] - 1.0) < 1e-9  # 01:00 — within cycle a
+    assert abs(irr.iloc[2] - 200.0 / 3600.0) < 1e-9  # 04:00 — within cycle b
+    assert math.isnan(irr.iloc[3])  # 00:00 — first row of cycle a, unfilled
+    assert math.isnan(irr.iloc[4])  # 02:00 — accumulation reset within cycle a
 
 
 def test_utc_parsing_handles_dst_fold_and_gap(monkeypatch: pytest.MonkeyPatch):

@@ -194,7 +194,7 @@ def require_canonical_spectrum(stem: str = ACTION_SPECTRUM_STEM) -> ActionSpectr
     spec = load_action_spectrum(stem)
     if spec.tier != "canonical":
         raise RuntimeError(
-            f"ERROR photobiology: strict mode requires the canonical spectrum but "
+            "ERROR photobiology: strict mode requires the canonical spectrum but "
             + f"{stem} tier is {spec.tier!r}. Obtain CIE 103/3 in usable form; "
             + f"see data/research/action_spectra/{stem}.meta.json."
         )

@@ -103,7 +103,7 @@ def _feature_schema(bundle: dict[str, object]) -> list[str]:
     return listed if listed is not None else []
 
 
-def to_utc_from_openmeteo(times: pd.Series) -> pd.Series:
+def to_utc_from_openmeteo(times: pd.Series) -> pd.Series[pd.Timestamp]:
     parsed = pd.to_datetime(times)
     if getattr(parsed.dt, "tz", None) is None:
         parsed = parsed.dt.tz_localize(ZoneInfo(config.TIMEZONE), ambiguous="infer", nonexistent="shift_forward")

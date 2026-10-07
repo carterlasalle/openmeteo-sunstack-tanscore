@@ -123,6 +123,7 @@ pytest_add_cli_args_test_selection = ["tests/"]
 mutate_only_covered_lines = true
 # END BUGHUNT MANAGED MUTMUT CONFIG
 also_copy = [
+    ".github/workflows/",
     "data/research/action_spectra/",
     "locations.yaml",
 ]

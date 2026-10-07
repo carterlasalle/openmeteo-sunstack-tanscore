@@ -104,7 +104,7 @@ def filtered_payload(
     skin_tilt_deg: float | None = None,
     skin_azimuth_deg: float | None = None,
     class_blocks: ClassBlocks | None = None,
-):
+) -> tuple[Path, pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, object]]:
     from .spectral import apply_skin_plane as _apply_plane
 
     run = latest_dir(root, site)
@@ -145,7 +145,13 @@ def filtered_payload(
             if twin not in frame.columns:
                 frame[twin] = frame[col]
     summary_path = run / "summary.json"
-    summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
+    # `json.loads` is only annotated `Any`; the summary is the run's JSON object,
+    # so narrow it once here rather than letting it erase the payload's type.
+    summary: dict[str, object] = {}
+    if summary_path.exists():
+        loaded = cast(object, json.loads(summary_path.read_text()))
+        if isinstance(loaded, dict):
+            summary = cast("dict[str, object]", loaded)
     return run, hourly, half, daily, summary
 
 
