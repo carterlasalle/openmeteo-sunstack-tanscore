@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-09-13T21:47:13.170751-04:00",
+  "created_at": "2026-10-07T15:05:02.309799-04:00",
   "coordinates": [
     41.703293,
     -86.238292
@@ -7,28 +7,35 @@
   "timezone": "America/Indiana/Indianapolis",
   "strict": true,
   "nasa_rows": 222408,
-  "openmeteo_historical_rows": 41160,
+  "openmeteo_historical_rows": 41736,
   "previous_runs_rows": 96096,
   "cams_eac4_rows": 67208,
-  "training_rows": 222408,
+  "training_rows": 0,
   "local_reference_rows": 108744,
   "skill_rows": 111,
   "direct_cams_credentials": true,
   "model_metrics": {
     "rows": 108956,
     "validation_split_year": 2024,
+    "dropped_constant_features": [],
     "uva": {
-      "mae": 0.3240924466093497,
-      "rmse": 0.47055100402114347,
-      "r2": 0.9989322264232272,
-      "median_absolute_error": 0.21340560900729244
+      "mae": 0.32672572126342153,
+      "rmse": 0.483055263348548,
+      "r2": 0.9988747231151854,
+      "median_absolute_error": 0.21654770289529424
     },
     "uvb": {
-      "mae": 0.02330294994781255,
-      "rmse": 0.0402699178122504,
-      "r2": 0.989823631934423,
-      "median_absolute_error": 0.010592917676502445
+      "mae": 0.02374961585268027,
+      "rmse": 0.04105674446319054,
+      "r2": 0.9894220785132187,
+      "median_absolute_error": 0.010954301020847185
     }
+  },
+  "tan_score_model": {
+    "tan_score_model_version": "action-spectrum-v2",
+    "global_reference_version": "global-mel-ref-v2",
+    "global_reference_e_mel_wm2": 1.793,
+    "formula": "score = clip(100 * E_mel / E_mel_global_reference, 0, 100)"
   },
   "legacy_absolute_score_definition_55_30_15": {
     "status": "DEPRECATED: retained for migration diagnostics only; never used in v4 production scoring",

@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-09-22T05:35:02.793262+00:00",
+  "created_at": "2026-10-07T15:05:21.237039-04:00",
   "coordinates": [
     34.04,
     -118.53
@@ -7,16 +7,17 @@
   "timezone": "America/Los_Angeles",
   "strict": true,
   "nasa_rows": 222624,
-  "openmeteo_historical_rows": 41376,
-  "previous_runs_rows": 72072,
+  "openmeteo_historical_rows": 41736,
+  "previous_runs_rows": 96096,
   "cams_eac4_rows": 67208,
-  "training_rows": 222624,
+  "training_rows": 0,
   "local_reference_rows": 111696,
-  "skill_rows": 71,
+  "skill_rows": 111,
   "direct_cams_credentials": true,
   "model_metrics": {
     "rows": 111761,
     "validation_split_year": 2024,
+    "dropped_constant_features": [],
     "uva": {
       "mae": 0.42540930440997204,
       "rmse": 0.6704849781593735,
@@ -30,7 +31,14 @@
       "median_absolute_error": 0.014291591724237107
     }
   },
-  "absolute_score_definition": {
+  "tan_score_model": {
+    "tan_score_model_version": "action-spectrum-v2",
+    "global_reference_version": "global-mel-ref-v2",
+    "global_reference_e_mel_wm2": 1.793,
+    "formula": "score = clip(100 * E_mel / E_mel_global_reference, 0, 100)"
+  },
+  "legacy_absolute_score_definition_55_30_15": {
+    "status": "DEPRECATED: retained for migration diagnostics only; never used in v4 production scoring",
     "uvi_reference": 20.0,
     "uva_reference_wm2": 60.0,
     "weights": {

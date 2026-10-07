@@ -1,19 +1,11 @@
 {
-  "bands": [
-    "0_24h",
-    "24_72h",
-    "3_7d"
-  ],
-  "row_counts": {
-    "0_24h": 69698,
-    "24_72h": 30167,
-    "3_7d": 60722
-  },
+  "bands": [],
+  "row_counts": {},
   "tan_score_model_version": "action-spectrum-v2",
   "action_spectrum_version": "parrish-fda-3630-v1",
   "spectral_backend_version": "tierC-broadband-proxy-v2",
   "temporal_semantics_version": "interval-contract-v1",
-  "global_reference_version": "global-mel-ref-v1-provisional",
-  "global_reference_e_mel_wm2": 1.6,
+  "global_reference_version": "global-mel-ref-v2",
+  "global_reference_e_mel_wm2": 1.793,
   "fallback": "Use local_reference.parquet when the serving lead band is unavailable."
 }
