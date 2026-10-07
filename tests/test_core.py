@@ -889,10 +889,12 @@ def test_calendar_feed_lists_each_window_once_with_stable_uids():
     rich = build_calendar_ics(daily, "20260915_004803", hourly)
     flat = rich.replace("\r\n ", "")
     assert "Peak UV 5.4 at 1:00 PM" in flat
-    assert "UVA 42.9 W/m2" in flat
-    assert "UVB 1 W/m2" in flat
-    assert "Best usable sun 12:30 PM-1:00 PM (dose 800 J/m2 E_mel)" in flat
-    assert "Strongest 30m 1:00 PM-1:30 PM (dose 1000 J/m2 E_mel) is blocked" in flat
+    assert "Best usable sun 12:30 PM-1:00 PM - 800 J/m² pigment-weighted dose" in flat
+    # F-18: the blocked-window caveat survives; the per-row UVA/UVB irradiance
+    # lines do not - they are table detail and made this a fourteen-line
+    # description. Units are standardised in what remains.
+    assert "strongest window is blocked by outdoor constraints" in flat
+    assert "J/m2" not in flat
 
 
 def test_30min_handles_fall_back_duplicate_hours():

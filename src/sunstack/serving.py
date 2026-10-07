@@ -388,94 +388,82 @@ def build_calendar_ics(
         usable_dose = _fmt_opt(usable[2]) if usable is not None else None
         strongest_dose = _fmt_opt(strongest[2]) if strongest is not None else None
         if usable is not None and usable_dose is not None:
-            start, end, _ = usable
-            basis, dose = "Best usable sun", usable_dose
+            start, end = usable[0], usable[1]
+            dose = usable_dose
         elif strongest is not None and strongest_dose is not None:
-            start, end, _ = strongest
-            basis, dose = "Strongest 30m", strongest_dose
+            start, end = strongest[0], strongest[1]
+            dose = strongest_dose
         elif legacy is not None:
-            start, end, legacy_dose = legacy
-            basis, dose = "Best sun", _fmt_opt(legacy_dose)
+            start, end = legacy[0], legacy[1]
+            dose = _fmt_opt(legacy[2])
         else:
             continue
         date = str(row.get("date", ""))
-        peak = fnum(row, "day_overall_peak_0_100")
-        peak_s = str(int(peak)) if pd.notna(peak) else "?"
         parts: list[str] = []
-        if (
-            usable is not None and strongest is not None
-            and usable[:2] != strongest[:2]
-        ):
-            usable_text = usable_dose or "?"
-            strongest_text = strongest_dose or "?"
+        # F-18: a calendar entry is a glance, not the table. This used to emit up
+        # to fourteen lines carrying `J/m2`, an unexpanded `SED`, an unexpanded
+        # `E_mel`, and the LEGACY Overall beside the absolute scale. Now: the
+        # answer, the scale it sits on, the day totals, and one caveat.
+        if usable is not None:
+            window = f"{_ics_hhmm(usable[0], tz_name)}-{_ics_hhmm(usable[1], tz_name)}"
             parts.append(
-                f"Best usable 30m {_ics_hhmm(usable[0], tz_name)}-"
-                f"{_ics_hhmm(usable[1], tz_name)} (dose {usable_text} J/m2 E_mel)")
+                f"Best usable sun {window} - {usable_dose} J/m² pigment-weighted dose"
+                if usable_dose else f"Best usable sun {window}"
+            )
+        elif strongest is not None:
+            window = f"{_ics_hhmm(strongest[0], tz_name)}-{_ics_hhmm(strongest[1], tz_name)}"
             parts.append(
-                f"Strongest 30m {_ics_hhmm(strongest[0], tz_name)}-"
-                f"{_ics_hhmm(strongest[1], tz_name)} (dose {strongest_text} "
-                "J/m2 E_mel) is blocked by hard outdoor constraints")
-        elif dose is not None:
+                f"Strongest 30 min {window} - {strongest_dose} J/m² pigment-weighted dose"
+                if strongest_dose else f"Strongest 30 min {window}"
+            )
+        elif legacy is not None:
+            window = f"{_ics_hhmm(legacy[0], tz_name)}-{_ics_hhmm(legacy[1], tz_name)}"
+            legacy_text = _fmt_opt(legacy[2])
             parts.append(
-                f"{basis} {_ics_hhmm(start, tz_name)}-{_ics_hhmm(end, tz_name)} "
-                f"(dose {dose} J/m2 E_mel)")
-        parts.append(f"Overall {peak_s}/100")
-        locp = _fmt_opt(row.get("day_local_peak_0_100"), ".0f", "/100")
-        if locp:
-            parts.append(f"Local {locp} (within this location)")
-        locb = _fmt_opt(row.get("day_local_at_best_usable_30m_0_100"), ".0f", "/100")
-        if locb:
-            parts.append(f"Local@best {locb} (within this location)")
+                f"Best sun {window} - {legacy_text} J/m² pigment-weighted dose"
+                if legacy_text else f"Best sun {window}"
+            )
         absp = _fmt_opt(row.get("day_absolute_peak_0_100"), ".0f", "/100")
-        if absp:
-            parts.append(f"Abs {absp}")
+        locp = _fmt_opt(row.get("day_local_peak_0_100"), ".0f", "/100")
+        scale = " · ".join(
+            text for text in (
+                f"Absolute {absp} (worldwide scale)" if absp else "",
+                f"Local {locp} (percentile within this location)" if locp else "",
+            ) if text
+        )
+        if scale:
+            parts.append(scale)
+        # Peak UV is a real calendar datapoint, not table detail: it is the one
+        # number a sun-seeker checks before deciding whether the day matters.
         uv = peaks.get(date, {})
         if uv.get("uvi"):
             when = f" at {uv['uvi_time']}" if uv.get("uvi_time") else ""
             parts.append(f"Peak UV {uv['uvi']}{when}")
-            if uv.get("uva"):
-                parts.append(f"UVA {uv['uva']} W/m2")
-            if uv.get("uvb"):
-                parts.append(f"UVB {uv['uvb']} W/m2")
         else:
-            uvi = fnum(row, "peak_uv_index")
-            if pd.notna(uvi):
-                parts.append(f"UV index {uvi:g}")
-            uva = fnum(row, "peak_predicted_uva_wm2")
-            if pd.notna(uva):
-                parts.append(f"UVA {uva:g} W/m2")
-        for label, col, fmt, suf, flag in (
-            ("TanDose window", "tan_dose_best_window_j_m2", "g", " J/m2 mel",
-             "tan_dose_best_window_complete"),
-            ("TanDose day", "tan_dose_day_j_m2", "g", " J/m2 mel",
-             "tan_dose_complete"),
-            ("SED window", "sed_best_window", "g", "",
-             "sed_best_window_complete"),
-            ("SED day", "sed_day_total", "g", "", "sed_complete"),
-            ("UVA day", "uva_dose_day_j_m2", "g", " J/m2", None),
-            ("UVB day", "uvb_dose_day_j_m2", "g", " J/m2", None),
-            ("Confidence", "day_confidence_at_peak_0_100", ".0f", "", None),
-        ):
-            v = _fmt_opt(row.get(col), fmt, suf)
-            if v is not None:
-                parts.append(f"{label} {v}{_partial_marker(row, flag)}")
+            _uv_peak = fnum(row, "peak_uv_index")
+            if pd.notna(_uv_peak):
+                parts.append(f"Peak UV {_uv_peak:g}")
+        day_dose = _fmt_opt(row.get("tan_dose_day_j_m2"), "g", " J/m² pigment-weighted")
+        if day_dose:
+            parts.append(f"Day total {day_dose}{_partial_marker(row, 'tan_dose_complete')}")
+        sed_day = _fmt_opt(row.get("sed_day_total"), "g", "")
+        if sed_day:
+            parts.append(f"SED {sed_day} (standard erythema dose){_partial_marker(row, 'sed_complete')}")
+        if usable is not None and strongest is not None and usable[:2] != strongest[:2]:
+            parts.append("strongest window is blocked by outdoor constraints")
         status = str(row.get("day_status") or "").strip()
         if status and status.lower() != "nan":
             parts.append(status)
         parts.append("Times refresh with each SunStack run.")
         desc = ". ".join(parts)
+        # F-18: SUMMARY is what a lock screen shows, so it stays one line: the
+        # window and the dose that ranks it, with units and no bare abbreviation.
+        _peak_uvi = fnum(row, "peak_uv_index")
+        summary = f"Best sun {_ics_hhmm(start, tz_name)}-{_ics_hhmm(end, tz_name)}"
         if dose is not None:
-            summary = (
-                f"{basis} {_ics_hhmm(start, tz_name)}-{_ics_hhmm(end, tz_name)} "
-                f"(dose {dose} J/m2 E_mel)")
-        elif uv.get("uvi"):
-            summary = (
-                f"Best sun {_ics_hhmm(start, tz_name)}-{_ics_hhmm(end, tz_name)} "
-                f"(UV {uv['uvi']}, overall {peak_s})")
-        else:
-            summary = (
-                f"Best sun {_ics_hhmm(start, tz_name)}-{_ics_hhmm(end, tz_name)} "
-                f"(overall {peak_s})")
+            summary += f" - {dose} J/m² pigment-weighted dose"
+        elif pd.notna(_peak_uvi):
+            summary += f" - peak UV {_peak_uvi:g}"
         uid_scope = site_slug or "sunstack"
         events.append(
             "\r\n".join(

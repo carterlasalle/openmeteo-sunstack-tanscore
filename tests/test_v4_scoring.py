@@ -1783,8 +1783,21 @@ def test_calendar_marks_partial_doses_and_leaves_legacy_clean():
         "sed_complete": True,
     }])
     ics = build_calendar_ics(daily, "20260926_000000")
-    assert "TanDose window 9253.2 J/m2 mel (partial)" in ics.replace("\r\n ", "")
-    assert "TanDose day 15761 J/m2 mel." in ics.replace("\r\n ", "")
+    flat = ics.replace("\r\n ", "")
+    # F-18: one unit everywhere, abbreviations expanded, and a description that
+    # fits a lock screen - it used to emit fourteen lines carrying `J/m2`, a
+    # bare `SED`/`E_mel`, per-row window doses, peaks, and the LEGACY Overall.
+    assert "J/m2" not in flat
+    assert "E_mel" not in flat
+    assert "Overall" not in flat
+    assert "TanDose" not in flat
+    assert "Best sun 11:30 AM-3:30 PM - 9253.2 J/m² pigment-weighted dose" in flat
+    assert "Absolute 45/100 (worldwide scale)." in flat
+    assert "Day total 15761 J/m² pigment-weighted." in flat
+    assert "SED 30.75 (standard erythema dose)." in flat
+    # The SUMMARY is the one line a lock screen shows.
+    summary_line = next(line for line in flat.splitlines() if line.startswith("SUMMARY:"))
+    assert summary_line == "SUMMARY:Best sun 11:30 AM-3:30 PM - 9253.2 J/m² pigment-weighted dose"
     legacy = daily.drop(columns=[c for c in daily.columns if "complete" in c])
     legacy_ics = build_calendar_ics(legacy, "20260926_000000")
     assert "(partial)" not in legacy_ics
