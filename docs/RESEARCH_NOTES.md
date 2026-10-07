@@ -869,3 +869,28 @@ Corpus provenance for the Tier-B record (§8.2): 16 000 samples, 0 failures,
 passes 3 %, p95 0.135 vs 0.10; UVA p95 0.095 vs 0.05; UVB median 0.031 vs 0.02;
 regime bias 0.0756 vs 0.07), so strict Tier-B remains unavailable and the
 degraded Tier-C backend stays labelled on every row.
+
+## 2026-10-06 - Live UI/UX audit (driven in a real browser)
+
+Every control exercised against the running server at 1440x900 and 320-414px.
+Four defects, one of which explains why the whole surface/posture feature
+appeared to do nothing.
+
+| # | symptom a user sees | root cause | fix | status |
+|---|---|---|---|---|
+| H | Surface / Tilt / Azimuth / Apply change nothing: the plane value equals the horizontal value, reflected stays 0 | the live feed delivers the radiation split as strings; `_SUBHOUR_NUMERIC_COLUMNS` rescued the weather columns but not `shortwave/direct/diffuse`, so `select_dtypes` dropped them and the native-HRRR override created each as all-NaN and filled only its own stamps. Production shipped `shortwave_radiation` non-null on 36/671 rows (12/326 daylight); with no beam/diffuse split `skin_plane_factor` pinned at 1.0 | radiation columns added to the rescue list (with a warning if they ever go missing); regenerated 326/326 daylight rows | FIXED |
+| I | the Skin selector changes nothing on screen | the API returns `fitzpatrick_type` / `fitzpatrick_label` / `skin_response_note` per row and no client code read them | rendered under the legend, including the "not specified" state | FIXED |
+| J | a 404 in the console on every live load | the client tries `./locations.json` first (correct for the static site) then falls back to `/api/locations`; the live server only had the API path | the live server serves both | FIXED |
+| K | 9px of page-level horizontal scroll at 320px | `svg#sunfig` was a fixed 300px with no `viewBox` | `viewBox` + responsive CSS; 320-414px clean | FIXED |
+
+Verified working (no change needed): location switch, Apply, the day strip,
+chart prev/next with wrap-around, the time select, all three disclosures,
+Export CSV (42 columns), the Calendar `webcal://` link, the legacy-Overall
+labelling, the provenance/tier line, and the Refresh button (it really does
+fetch Open-Meteo and CAMS - it sat in the ADS queue for minutes, which is the
+documented slow path, not a hang).
+
+Surface/posture after the fix, on the same 30-min row, in the UI:
+horizontal E_DP bit-identical at 0.63116 for unknown / dry sand / fresh snow
+while the reflected term goes 0 -> 9.15 -> 48.78. Contract DoD item 6 is now
+demonstrable in the product rather than only in a fixture.
