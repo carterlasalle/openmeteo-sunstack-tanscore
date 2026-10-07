@@ -295,6 +295,65 @@ def test_30min_frame_carries_action_spectrum_row_identity():
     }
 
 
+def test_30min_keeps_object_typed_radiation_split():
+    # The live feed delivers the radiation split as strings/None, exactly like
+    # the weather columns. Those were rescued by _SUBHOUR_NUMERIC_COLUMNS; the
+    # radiation columns were not, so select_dtypes dropped them and the
+    # native-HRRR override then created each one as all-NaN and filled only its
+    # own stamps. Production shipped 30-min frames with shortwave/direct/diffuse
+    # non-null on 36 of 671 rows (5%), which silently made the whole
+    # surface/posture model inert: skin_plane_factor stayed 1.0 and the
+    # reflected component stayed 0 on every interpolated daylight row.
+    from sunstack.opportunity import build_30min_forecast
+    from sunstack.spectral import apply_skin_plane
+
+    hours = pd.date_range("2026-06-21 10:00", periods=6, freq="h")
+    hourly = pd.DataFrame({
+        "time": hours.strftime("%Y-%m-%dT%H:%M"),
+        "shortwave_radiation": [400.0, 600.0, 750.0, 700.0, 500.0, 300.0],
+        "direct_radiation": [250.0, 420.0, 560.0, 520.0, 330.0, 180.0],
+        "diffuse_radiation": [150.0, 180.0, 190.0, 180.0, 170.0, 120.0],
+        "shortwave_radiation_instant": [410.0, 610.0, 760.0, 710.0, 510.0, 310.0],
+        "solar_elevation_deg": [45.0, 55.0, 62.0, 58.0, 48.0, 33.0],
+        "solar_azimuth_deg": [130.0, 150.0, 180.0, 210.0, 230.0, 250.0],
+        "albedo": [0.2] * 6,
+        "uv_index": [5.0, 7.0, 8.0, 7.5, 5.5, 3.0],
+        "tan_score_absolute_0_100": [40.0, 60.0, 70.0, 65.0, 45.0, 25.0],
+    })
+    # Native HRRR covers only the 10:00 and 12:00 stamps (minutes 0/30).
+    hrrr = pd.DataFrame({
+        "time": ["2026-06-21T10:00", "2026-06-21T12:00"],
+        "shortwave_radiation": [405.0, 755.0],
+        "direct_radiation": [255.0, 565.0],
+        "diffuse_radiation": [150.0, 190.0],
+    })
+    object_typed = hourly.copy()
+    for col in ("shortwave_radiation", "direct_radiation", "diffuse_radiation"):
+        object_typed[col] = object_typed[col].map(str).astype(object)
+
+    out = build_30min_forecast(object_typed, hrrr)
+    for col in ("shortwave_radiation", "direct_radiation", "diffuse_radiation"):
+        assert col in out.columns, f"{col} must survive the object-typed feed"
+        assert pd.to_numeric(out[col], errors="coerce").notna().all(), (
+            f"{col} must be populated on every 30-min row, not just the "
+            f"{int(pd.to_numeric(out[col], errors='coerce').notna().sum())} "
+            "native-HRRR stamps")
+
+    # And the model that consumes it must actually respond to posture. The
+    # factor is a transposition ratio, not "bigger is better": with a high sun
+    # a 45 deg plane catches less than horizontal, so assert it MOVES off 1.0
+    # rather than that it exceeds it.
+    flat = apply_skin_plane(out.copy(), None, None, "unknown", "local")
+    tilted = apply_skin_plane(out.copy(), 45.0, 180.0, "dry_beach_sand", "local")
+    assert (flat["skin_plane_factor"] == 1.0).all(), "flat plane is the reference"
+    factors = pd.to_numeric(tilted["skin_plane_factor"], errors="coerce")
+    assert ((factors - 1.0).abs() > 1e-6).any(), (
+        "a 45 deg tilt must move the plane factor off the horizontal reference "
+        "once the beam/diffuse split is present")
+    assert (tilted["skin_plane_ground_reflected_delayed_pigmentation_wm2"] > 0).any(), (
+        "a tilted plane over sand must pick up ground reflection")
+
+
 def test_30min_keeps_object_typed_weather_and_feasibility_agrees():
     # P0 regression: production feeds deliver temperature/wind/precip as
     # object/string dtype. The transformer must coerce (not drop) them, and

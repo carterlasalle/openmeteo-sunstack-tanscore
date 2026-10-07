@@ -466,6 +466,20 @@ def build_30min_forecast(
         "snowfall",
         "snow_depth",
         "wind_speed_10m",
+        # Radiation split. These are NOT optional: the skin-plane/posture
+        # model needs the beam/diffuse decomposition, and the native-HRRR
+        # override below creates a column it cannot find as all-NaN and then
+        # fills only its own 36 stamps — so an object-typed feed silently
+        # produced 30-min frames where shortwave/direct/diffuse were non-null
+        # on 36 of 671 rows (5 % of daylight), which made the whole surface
+        # and posture feature inert. Same failure shape as the weather
+        # columns above; they were simply missing from this list.
+        "shortwave_radiation",
+        "direct_radiation",
+        "diffuse_radiation",
+        "direct_normal_irradiance",
+        "terrestrial_radiation",
+        "global_tilted_irradiance",
     )
     numeric = h.select_dtypes(include=[np.number, "bool"]).copy()
     for _col in _SUBHOUR_NUMERIC_COLUMNS:
@@ -476,10 +490,12 @@ def build_30min_forecast(
     # missing rain/wind as 0). Warn so a silently-dropped column can never
     # again read as perfect weather without anyone noticing.
     _missing = [c for c in ("temperature_2m", "precipitation_probability",
-                            "wind_speed_10m", "weather_code")
+                            "wind_speed_10m", "weather_code",
+                            "shortwave_radiation", "direct_radiation",
+                            "diffuse_radiation")
                 if c not in numeric.columns]
     if _missing and not h.empty:
-        LOG.warning("30-min transformer missing feasibility columns: %s", _missing)
+        LOG.warning("30-min transformer missing columns: %s", _missing)
     idx = pd.date_range(h.index.min(), h.index.max(), freq="30min")
     union_idx = numeric.index.union(idx)
     # Boolean flags cannot hold reindex gaps (numpy bool upcasts to object and

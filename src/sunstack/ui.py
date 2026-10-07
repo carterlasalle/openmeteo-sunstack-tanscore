@@ -135,7 +135,12 @@ def create_app(root: Path, run_live_fn: RunLiveFn | None = None) -> FastAPI:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     @app.get("/api/locations")
+    @app.get("/locations.json")
     def locations():
+        # Both paths on purpose: the client tries the static ./locations.json
+        # first (that is what the exported site serves) and falls back to the
+        # API. Serving the same payload here means the live UI does not emit a
+        # 404 into the console on every load.
         return {
             "locations": [
                 {k: e[k] for k in ("slug", "name", "lat", "lon", "timezone", "default")}
