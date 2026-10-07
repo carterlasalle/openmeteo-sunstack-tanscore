@@ -37,3 +37,6 @@ bun.lock
 /CLAUDE.md
 /CODEX.md
 /package.json
+
+# mutmut's shadow checkout (full src/ + tests/ copy), regenerated on every run.
+mutants/

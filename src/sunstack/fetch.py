@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import requests
 import requests_cache
@@ -51,8 +51,36 @@ def build_session(cache_dir: Path, expire_after: int = 900, fresh: bool = False)
     return retry(cached, retries=5, backoff_factor=0.35)
 
 
-def _request(
-    session, name: str, endpoint: str, params: dict[str, Any], timeout: int = 120
+class HttpResponse(Protocol):
+    """The slice of an HTTP response the diagnostics touch.
+
+    Declared as read-only properties, not mutable attributes: requests exposes
+    them as properties, and a mutable attribute in a Protocol is invariant, so
+    a real Response would not satisfy it.
+    """
+
+    @property
+    def status_code(self) -> int: ...
+    @property
+    def content(self) -> bytes | None: ...
+    @property
+    def text(self) -> str: ...
+
+    def raise_for_status(self) -> None: ...
+    def json(self) -> Any: ...
+
+
+class HttpSession(Protocol):
+    """The slice of a requests session: one GET, as requests/httpx provide it."""
+
+    def get(
+        self, url: str, /, *, params: dict[str, Any], timeout: int
+    ) -> HttpResponse: ...
+
+
+def request(
+    session: HttpSession, name: str, endpoint: str, params: dict[str, Any],
+    timeout: int = 120,
 ) -> FetchResult:
     started = time.perf_counter()
     try:
@@ -200,7 +228,7 @@ def fetch_all(cache_dir: Path, fresh: bool = True) -> list[FetchResult]:
     results: list[FetchResult] = []
 
     def _get(name: str, endpoint: str, params: dict[str, Any]) -> FetchResult:
-        res = _request(session, name, endpoint, params)
+        res = request(session, name, endpoint, params)
         status = "OK" if res.payload is not None else f"FAIL: {res.error}"
         log.info("[%s] %s (%s ms)", name, status, res.elapsed_ms)
         results.append(res)
@@ -247,7 +275,7 @@ def probe_live(timeout: int = 20) -> list[FetchResult]:
 
     def _one(item: tuple[str, str, dict[str, Any]]) -> FetchResult:
         name, endpoint, params = item
-        return _request(requests.Session(), name, endpoint, params, timeout=timeout)
+        return request(requests.Session(), name, endpoint, params, timeout=timeout)
 
     with ThreadPoolExecutor(max_workers=3) as pool:
         return list(pool.map(_one, probes))

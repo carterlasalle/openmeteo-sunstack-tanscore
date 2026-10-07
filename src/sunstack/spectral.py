@@ -312,7 +312,7 @@ def emulator_manifest(spectral_backend: str = SPECTRAL_BACKEND_VERSION) -> dict[
             "(uniform intra-band Tier-C approximation). No hand tuning."
         ),
         # §7 consumer contract: every direct-CAMS field carried by
-        # _cams_features but not consumed by Tier C is a reserved Tier-B
+        # cams_features but not consumed by Tier C is a reserved Tier-B
         # emulator input. Nothing is fetched merely to be left unused; the
         # corpus design (scripts/build_spectral_corpus.py RANGES) spans each
         # of these dimensions.

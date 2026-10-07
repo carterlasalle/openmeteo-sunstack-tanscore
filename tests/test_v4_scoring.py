@@ -8,15 +8,35 @@ canonical dose columns, SED gap handling, and the TanResponse baseline.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Protocol, TypedDict, cast
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from sunstack.doses import add_interval_doses, day_totals, window_dose
+from sunstack.frame import num
 from sunstack.opportunity import build_daily_summary
 from sunstack.photobiology import integrate_sed, integrate_tandose
 from sunstack.spectral import melanogenic_from_broadband
 from sunstack.tanscore import score_forecast
+
+
+class _ReferenceManifest(TypedDict):
+    """The global melanogenic reference document written by the rebuild script."""
+
+    global_reference_version: str
+    global_reference_e_mel_wm2: float
+    empirical_two_site_grounding: dict[str, dict[str, dict[str, float]]]
+
+
+def _text(frame: pd.DataFrame, name: str) -> pd.Series[str]:
+    """Text-column read.
+
+    The pandas stubs type ``frame[name]`` as ``Any``, which erases the whole
+    expression that consumes it; the tests read text columns by contract.
+    """
+    return cast("pd.Series[str]", frame[name])
 
 
 def _best_air() -> pd.DataFrame:
@@ -70,36 +90,36 @@ def _confidence(value: float = 80.0) -> pd.DataFrame:
     })
 
 
-def test_v4_absolute_is_normalized_emel_with_legacy_diagnostic(tmp_path):
+def test_v4_absolute_is_normalized_emel_with_legacy_diagnostic(tmp_path: Path):
     out = score_forecast(_best_air(), Path(tmp_path), None, _confidence())
-    assert out["tan_score_model_version"].unique().tolist() == ["action-spectrum-v2"]
+    assert _text(out, "tan_score_model_version").unique().tolist() == ["action-spectrum-v2"]
     expected_emel = melanogenic_from_broadband(
-        out["predicted_uva_wm2"].to_numpy(), out["predicted_uvb_wm2"].to_numpy())
-    assert np.allclose(out["melanogenic_effective_irradiance_wm2"].to_numpy(),
+        num(out, "predicted_uva_wm2").to_numpy(), num(out, "predicted_uvb_wm2").to_numpy())
+    assert np.allclose(num(out, "melanogenic_effective_irradiance_wm2").to_numpy(),
                        np.round(expected_emel, 5))
     from sunstack import config as _config
 
     expected_score = np.round(
         np.clip(100.0 * expected_emel / _config.GLOBAL_MELANOGENIC_REFERENCE_WM2, 0, 100), 1)
-    assert np.allclose(out["tan_score_absolute_0_100"].to_numpy(), expected_score)
+    assert np.allclose(num(out, "tan_score_absolute_0_100").to_numpy(), expected_score)
     # Legacy diagnostic present for migration comparison, never the headline.
     assert "legacy_absolute_tan_score_55_30_15" in out
-    assert not out["legacy_absolute_tan_score_55_30_15"].equals(
+    assert not num(out, "legacy_absolute_tan_score_55_30_15").equals(
         out["tan_score_absolute_0_100"])
     # Erythemal is the consensus channel (weighted fusion), not raw OM UVI.
-    assert (out["erythemal_irradiance_wm2"].to_numpy() ==
-            out["uvi_consensus"].to_numpy() / 40.0).all()
+    assert np.allclose(num(out, "erythemal_irradiance_wm2").to_numpy(dtype=float),
+                       num(out, "uvi_consensus").to_numpy(dtype=float) / 40.0)
 
 
-def test_all_direct_cams_fields_propagate(tmp_path):
+def test_all_direct_cams_fields_propagate(tmp_path: Path):
     uvbed = [0.125, 0.1625, 0.15]
     out = score_forecast(_best_air(), Path(tmp_path),
                          _cams(uvbed, [0.15, 0.175, 0.1625]), _confidence())
-    assert np.allclose(out["cams_erythemal_irradiance_wm2"].to_numpy(), uvbed)
-    assert np.allclose(out["cams_uv_index"].to_numpy(), np.array(uvbed) * 40.0)
-    assert np.allclose(out["cams_uv_index_clear_sky"].to_numpy(),
+    assert np.allclose(num(out, "cams_erythemal_irradiance_wm2").to_numpy(), uvbed)
+    assert np.allclose(num(out, "cams_uv_index").to_numpy(), np.array(uvbed) * 40.0)
+    assert np.allclose(num(out, "cams_uv_index_clear_sky").to_numpy(),
                        np.array([0.15, 0.175, 0.1625]) * 40.0)
-    assert np.allclose(out["cams_uv_transmission"].to_numpy(),
+    assert np.allclose(num(out, "cams_uv_transmission").to_numpy(),
                        np.array(uvbed) / np.array([0.15, 0.175, 0.1625]))
     for col in ("cams_aod_340", "cams_aod_355", "cams_aod_380", "cams_aod_400",
                 "cams_abs_aod_340", "cams_ssa_340", "cams_asymmetry_340",
@@ -108,16 +128,16 @@ def test_all_direct_cams_fields_propagate(tmp_path):
                 "cams_forecast_albedo", "cams_downward_uv_accumulated_j_m2"):
         assert col in out, col
         assert out[col].notna().all(), col
-    assert (out["cams_ozone_du"].to_numpy() > 200).all()
+    assert bool(np.all(num(out, "cams_ozone_du").to_numpy(dtype=float) > 200))
     # Accumulated downward UV differentiates back to a physical irradiance;
     # the first interval has no backward difference (contract §5.7) and stays
     # unknown — never back-filled.
-    dw = out["cams_downward_surface_uv_wm2"].to_numpy()
+    dw = num(out, "cams_downward_surface_uv_wm2").to_numpy(dtype=float)
     assert bool(np.isnan(dw[0]))
     assert np.allclose(dw[1:], 0.25, atol=0.01)
 
 
-def test_uvi_disagreement_moves_confidence_not_physics(tmp_path):
+def test_uvi_disagreement_moves_confidence_not_physics(tmp_path: Path):
     # v5: confidence comes from the calibrated error model (spread/source
     # driven), so wide CAMS disagreement lowers it while physics stays put.
     agree = score_forecast(_best_air(), Path(tmp_path),
@@ -126,16 +146,16 @@ def test_uvi_disagreement_moves_confidence_not_physics(tmp_path):
     clash = score_forecast(_best_air(), Path(tmp_path),
                            _cams([0.01, 0.01, 0.01], [0.15, 0.175, 0.1625]),
                            _confidence(80.0))
-    assert bool((clash["tan_forecast_confidence_0_100"].to_numpy() <
-                 agree["tan_forecast_confidence_0_100"].to_numpy()).all())
-    assert clash["uvi_source_disagree"].all()
+    assert bool((num(clash, "tan_forecast_confidence_0_100").to_numpy() <
+                 num(agree, "tan_forecast_confidence_0_100").to_numpy()).all())
+    assert num(clash, "uvi_source_disagree").all()
     # Identical broadband inputs => identical melanogenic physics.
-    assert np.allclose(agree["melanogenic_effective_irradiance_wm2"].to_numpy(),
-                       clash["melanogenic_effective_irradiance_wm2"].to_numpy())
-    assert np.allclose(agree["tan_score_absolute_0_100"].to_numpy(),
-                       clash["tan_score_absolute_0_100"].to_numpy())
+    assert np.allclose(num(agree, "melanogenic_effective_irradiance_wm2").to_numpy(),
+                       num(clash, "melanogenic_effective_irradiance_wm2").to_numpy())
+    assert np.allclose(num(agree, "tan_score_absolute_0_100").to_numpy(),
+                       num(clash, "tan_score_absolute_0_100").to_numpy())
 
-def test_uvi_disagreement_covers_epa_outlier(tmp_path):
+def test_uvi_disagreement_covers_epa_outlier(tmp_path: Path):
     # OM + CAMS agree while EPA is far: the all-source spread must flag and
     # discount confidence, never touch E_mel. The old pairwise OM/CAMS check
     # was blind to exactly this case.
@@ -147,24 +167,24 @@ def test_uvi_disagreement_covers_epa_outlier(tmp_path):
     clash_epa["uvi_epa"] = [0.5]
     agree = score_forecast(agree_epa, Path(tmp_path), None, _confidence(80.0))
     clash = score_forecast(clash_epa, Path(tmp_path), None, _confidence(80.0))
-    assert not bool(agree["uvi_source_disagree"].iloc[0])
-    assert bool(clash["uvi_source_disagree"].iloc[0])
-    assert float(clash["tan_forecast_confidence_0_100"].iloc[0]) < 80.0
-    assert np.allclose(agree["melanogenic_effective_irradiance_wm2"].to_numpy(),
-                       clash["melanogenic_effective_irradiance_wm2"].to_numpy())
+    assert not bool(num(agree, "uvi_source_disagree").iloc[0])
+    assert bool(num(clash, "uvi_source_disagree").iloc[0])
+    assert float(num(clash, "tan_forecast_confidence_0_100").iloc[0]) < 80.0
+    assert np.allclose(num(agree, "melanogenic_effective_irradiance_wm2").to_numpy(),
+                       num(clash, "melanogenic_effective_irradiance_wm2").to_numpy())
 
 
-def test_uvi_spread_thresholds_are_absolute(tmp_path):
+def test_uvi_spread_thresholds_are_absolute(tmp_path: Path):
     # Spread is absolute UVI: wider spread => lower calibrated confidence.
     one = _best_air().iloc[:1].copy()
     one["cams_uv_index"] = one["uv_index"] + 1.2
     mild = score_forecast(one, Path(tmp_path), None, _confidence(80.0))
-    assert bool(mild["uvi_source_disagree"].iloc[0])
+    assert bool(num(mild, "uvi_source_disagree").iloc[0])
     two = _best_air().iloc[:1].copy()
     two["cams_uv_index"] = two["uv_index"] + 2.5
     strong = score_forecast(two, Path(tmp_path), None, _confidence(80.0))
-    assert (float(strong["tan_forecast_confidence_0_100"].iloc[0]) <
-            float(mild["tan_forecast_confidence_0_100"].iloc[0]))
+    assert (float(num(strong, "tan_forecast_confidence_0_100").iloc[0]) <
+            float(num(mild, "tan_forecast_confidence_0_100").iloc[0]))
 
 
 def _half_hour_frame(emel_scale: float = 1.0) -> pd.DataFrame:
@@ -195,11 +215,11 @@ def test_sustained_window_prefers_longer_eligible_group():
     assert first.loc[0, "best_window_end"] == scaled.loc[0, "best_window_end"]
     # The longer eligible group wins on sustained opportunity, not on dose.
     # Windows display average intensity AND cumulative dose side by side.
-    first_mean = first["best_window_mean_0_100"].iloc[0]
-    first_dose = first["tan_dose_best_window_j_m2"].iloc[0]
+    first_mean = num(first, "best_window_mean_0_100").iloc[0]
+    first_dose = num(first, "tan_dose_best_window_j_m2").iloc[0]
     assert np.isfinite(first_mean)
     assert first_dose > 0
-    assert scaled["tan_dose_best_window_j_m2"].iloc[0] == first_dose * 10
+    assert num(scaled, "tan_dose_best_window_j_m2").iloc[0] == first_dose * 10
 
 
 def test_canonical_dose_columns_exist():
@@ -226,13 +246,13 @@ def test_canonical_dose_columns_exist():
                 "sed_30m_complete", "sed_30m_coverage_fraction"):
         assert col in dosed, col
     # Row 0 has no history: doses UNKNOWN (NaN), never zero; flags loud.
-    assert pd.isna(dosed.loc[0, "tan_dose_30m_j_m2"])
-    assert not dosed.loc[0, "tan_dose_30m_complete"]
-    assert dosed.loc[0, "tan_dose_30m_coverage_fraction"] == 0.0
+    assert pd.isna(num(dosed, "tan_dose_30m_j_m2").iloc[0])
+    assert not bool(num(dosed, "tan_dose_30m_complete").iloc[0])
+    assert num(dosed, "tan_dose_30m_coverage_fraction").iloc[0] == 0.0
     # Row 1 has one 30-min leg: finite dose, full coverage.
-    assert dosed.loc[1, "tan_dose_30m_j_m2"] > 0
-    assert bool(dosed.loc[1, "tan_dose_30m_complete"])
-    assert dosed.loc[1, "tan_dose_30m_coverage_fraction"] == 1.0
+    assert num(dosed, "tan_dose_30m_j_m2").iloc[1] > 0
+    assert bool(num(dosed, "tan_dose_30m_complete").iloc[1])
+    assert num(dosed, "tan_dose_30m_coverage_fraction").iloc[1] == 1.0
     win = window_dose(
         frame.assign(dt=pd.to_datetime(frame["time"])),
         "2026-06-21T12:00", "2026-06-21T13:30")
@@ -284,10 +304,10 @@ def test_sub_grid_windows_are_nan_not_zero():
         "predicted_uvb_wm2": [1.0, 1.1, 1.05],
     })
     dosed = add_interval_doses(frame)
-    assert dosed["tan_dose_30m_j_m2"].isna().all()
-    assert dosed["tan_dose_15m_j_m2"].isna().all()
+    assert num(dosed, "tan_dose_30m_j_m2").isna().all()
+    assert num(dosed, "tan_dose_15m_j_m2").isna().all()
     assert not dosed.loc[0, "tan_dose_30m_complete"]
-    assert dosed["tan_dose_1h_j_m2"].iloc[1] > 0
+    assert num(dosed, "tan_dose_1h_j_m2").iloc[1] > 0
     assert bool(dosed.loc[1, "tan_dose_1h_complete"])
     # Night rows with real coverage integrate as true zero, not NaN.
     night = frame.copy()
@@ -364,13 +384,13 @@ def test_pigment_channel_never_enters_opportunity():
     boosted["pigment_darkening_dose_1h_j_m2"] *= 10.0
     a = apply_outdoor_feasibility(base)
     b = apply_outdoor_feasibility(boosted)
-    assert (a["overall_tan_opportunity_0_100"].to_numpy() ==
-            b["overall_tan_opportunity_0_100"].to_numpy()).all()
-    assert (a["overall_components_unblocked_0_100"].to_numpy() ==
-            b["overall_components_unblocked_0_100"].to_numpy()).all()
+    assert np.array_equal(num(a, "overall_tan_opportunity_0_100").to_numpy(dtype=float),
+                          num(b, "overall_tan_opportunity_0_100").to_numpy(dtype=float))
+    assert np.array_equal(num(a, "overall_components_unblocked_0_100").to_numpy(dtype=float),
+                          num(b, "overall_components_unblocked_0_100").to_numpy(dtype=float))
 
 
-def test_tierB_contract_covers_every_carried_cams_field(tmp_path):
+def test_tierB_contract_covers_every_carried_cams_field(tmp_path: Path):
     from sunstack.spectral import emulator_manifest
 
     contract = emulator_manifest()["tierB_reserved_inputs"]
@@ -388,19 +408,19 @@ def test_tierB_contract_covers_every_carried_cams_field(tmp_path):
     assert missing == [], missing
 
 
-def test_local_reference_staleness_is_loud(tmp_path):
+def test_local_reference_staleness_is_loud(tmp_path: Path):
     import json
 
     from sunstack.validation import validate_scored_hourly
 
     out = score_forecast(_best_air(), Path(tmp_path), None, _confidence())
-    assert out["local_reference_stale"].all()  # no version file in tmp caldir
+    assert num(out, "local_reference_stale").all()  # no version file in tmp caldir
     warns = [i for i in validate_scored_hourly(out)
              if i.source == "local_reference"]
     assert warns and all(w.severity == "WARN" for w in warns)
     caldir = Path(tmp_path) / "cal"
     caldir.mkdir()
-    (caldir / "local_reference_version.json").write_text(json.dumps(
+    _ = (caldir / "local_reference_version.json").write_text(json.dumps(
         {"tan_score_model_version": "action-spectrum-v2",
          "action_spectrum_version": "parrish-fda-3630-v1",
          "spectral_backend_version": "tierC-broadband-proxy-v2",
@@ -408,7 +428,7 @@ def test_local_reference_staleness_is_loud(tmp_path):
          "global_reference_version": "global-mel-ref-v2",
          "global_reference_e_mel_wm2": 1.793}))
     out2 = score_forecast(_best_air(), caldir, None, _confidence())
-    assert not out2["local_reference_stale"].any()
+    assert not num(out2, "local_reference_stale").any()
 
 
 def test_half_hour_keeps_constants_without_fabricating_observations():
@@ -431,12 +451,12 @@ def test_half_hour_keeps_constants_without_fabricating_observations():
         "uvi_cams": [5.1, np.nan, np.nan],  # CAMS horizon ends: must stay NaN
     })
     out = build_30min_forecast(hourly, None)
-    half = out.loc[out["time"] == "2026-06-21T11:30"].iloc[0]
-    assert half["spectral_tier"] == "C"
-    assert half["tan_score_model_version"] == "action-spectrum-v2"
-    assert half["cams_cycle"] == "2026-06-21T00:00Z"
-    late = out.loc[out["time"] == "2026-06-21T13:00"].iloc[0]
-    assert pd.isna(late["uvi_cams"])  # never forward-filled into fabrication
+    half = out.loc[_text(out, "time") == "2026-06-21T11:30"]
+    assert _text(half, "spectral_tier").iloc[0] == "C"
+    assert _text(half, "tan_score_model_version").iloc[0] == "action-spectrum-v2"
+    assert _text(half, "cams_cycle").iloc[0] == "2026-06-21T00:00Z"
+    # Never forward-filled into fabrication.
+    assert pd.isna(num(out.loc[_text(out, "time") == "2026-06-21T13:00"], "uvi_cams").iloc[0])
 
 
 def test_missing_inputs_integrate_as_unknown_not_zero():
@@ -447,16 +467,16 @@ def test_missing_inputs_integrate_as_unknown_not_zero():
         "uv_index": [5.0, 6.0, 5.5],
     })
     dosed = add_interval_doses(frame)  # no melanogenic column at all
-    assert dosed["tan_dose_30m_j_m2"].isna().all()
-    assert not dosed["tan_dose_30m_complete"].any()
+    assert num(dosed, "tan_dose_30m_j_m2").isna().all()
+    assert not num(dosed, "tan_dose_30m_complete").any()
     # But the erythemal path (UVI present) still integrates: no needless degrade.
-    assert dosed["sed_30m"].iloc[2] > 0
+    assert num(dosed, "sed_30m").iloc[2] > 0
     assert bool(dosed.loc[2, "sed_30m_complete"])
     days = day_totals(
         frame.assign(time_utc=pd.to_datetime(frame["time"], utc=True)))
     assert pd.isna(days.loc[0, "tan_dose_day_j_m2"])
     assert not bool(days.loc[0, "tan_dose_complete"])
-    assert days["sed_day_total"].iloc[0] > 0
+    assert num(days, "sed_day_total").iloc[0] > 0
 
 
 def test_primitive_with_no_valid_samples_is_unknown():
@@ -474,10 +494,10 @@ def test_primitive_with_no_valid_samples_is_unknown():
     assert solo["complete"] is False  # ...and cannot claim a complete window
 
 
-def test_doctor_checks_photobiology_resources(tmp_path, capsys):
-    from sunstack.cli import _global_reference_status, doctor
+def test_doctor_checks_photobiology_resources(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+    from sunstack.cli import doctor, global_reference_status
 
-    ok, detail = _global_reference_status()
+    ok, detail = global_reference_status()
     assert ok and "1.793" in detail  # real repo resources resolve
     # Empty root: missing models fail loud, spectra still resolve from repo.
     assert doctor(Path(tmp_path)) is False
@@ -487,38 +507,40 @@ def test_doctor_checks_photobiology_resources(tmp_path, capsys):
     assert "local_reference_version.json" in out  # unknown-version note
 
 
-def test_doctor_flags_stale_local_reference(tmp_path, capsys):
+def test_doctor_flags_stale_local_reference(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     import json
 
-    (Path(tmp_path) / "local_reference_version.json").write_text(json.dumps(
+    _ = (Path(tmp_path) / "local_reference_version.json").write_text(json.dumps(
         {"tan_score_model_version": "legacy-55-30-15"}))
     # doctor() resolves the *default-site* calibration dir for the tmp root;
     # emulate it so the stale file is seen.
     from sunstack import cli as _cli
     from sunstack import config as _config
 
-    real_paths = _cli._calibration_paths
-    _cli._calibration_paths = lambda root, slug=None: (
+    real_paths = _cli.calibration_paths
+    _cli.calibration_paths = lambda root, slug=None: (
         root / "x", Path(tmp_path), root / "y")
     try:
-        _cli.doctor(Path(tmp_path))
+        _ = _cli.doctor(Path(tmp_path))
     finally:
-        _cli._calibration_paths = real_paths
+        _cli.calibration_paths = real_paths
     out = capsys.readouterr().out
     assert "STALE" in out and "rebuild_v4_references" in out
     assert _config.TAN_SCORE_MODEL_VERSION in out
 
 
-def test_tierAB_claim_without_manifest_fails_loud(tmp_path, monkeypatch):
+def test_tierAB_claim_without_manifest_fails_loud(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import pytest
 
     import sunstack.spectral as _spectral
     from sunstack.tanscore import score_forecast
 
-    monkeypatch.setattr(_spectral, "spectral_tier_for_row",
-                        lambda *a, **k: "B")
+    def _tier_b(*_args: object, **_kwargs: object) -> str:
+        return "B"
+
+    monkeypatch.setattr(_spectral, "spectral_tier_for_row", _tier_b)
     with pytest.raises(RuntimeError, match="no emulator manifest"):
-        score_forecast(_best_air(), Path(tmp_path), None, _confidence())
+        _ = score_forecast(_best_air(), Path(tmp_path), None, _confidence())
 
 
 def test_best_hour_dose_integrates_full_hour():
@@ -560,13 +582,12 @@ def test_best_30m_dose_belongs_to_forward_interval():
         "predicted_uvb_wm2": [0.5] * 5,
     })
     out = build_daily_summary(add_interval_doses(frame))
-    row = out.iloc[0]
     # Best slot starts 11:30; its forward half hour [11:30, 12:00) doses the
     # 1.0->0.0 leg: 0.5*1.0*1800 = 900, not the trailing 1800 ending at 11:30.
-    assert abs(row["best_30m_tan_dose_j_m2"] - 900.0) < 1e-6
+    assert abs(num(out, "best_30m_tan_dose_j_m2").iloc[0] - 900.0) < 1e-6
 
 
-def test_day_totals_use_wall_date_without_time_utc(monkeypatch):
+def test_day_totals_use_wall_date_without_time_utc(monkeypatch: pytest.MonkeyPatch):
     from sunstack import config as _config
     from sunstack.doses import day_totals
 
@@ -583,10 +604,10 @@ def test_day_totals_use_wall_date_without_time_utc(monkeypatch):
     })
     days = day_totals(frame)
     assert len(days) == 1 and days.loc[0, "date"] == "2026-06-21"
-    assert days["tan_dose_day_j_m2"].iloc[0] > 0
+    assert num(days, "tan_dose_day_j_m2").iloc[0] > 0
 
 
-def test_configured_gap_threshold_reaches_day_and_window(monkeypatch):
+def test_configured_gap_threshold_reaches_day_and_window(monkeypatch: pytest.MonkeyPatch):
     from sunstack import config as _config
     from sunstack.doses import day_totals, window_dose
 
@@ -607,7 +628,7 @@ def test_configured_gap_threshold_reaches_day_and_window(monkeypatch):
     assert split["tan_dose_best_window_j_m2"] == 2 * 0.5 * 3600
     days = day_totals(frame)
     assert not bool(days.loc[0, "tan_dose_complete"])
-    assert days["tan_dose_coverage_fraction"].iloc[0] < 1.0
+    assert num(days, "tan_dose_coverage_fraction").iloc[0] < 1.0
     monkeypatch.setattr(_config, "TANDOSE_MAX_INTERP_GAP_S", 10800.0)
     assert window_dose(frame, stamps[0], stamps[3])["tan_dose_best_window_j_m2"] > 0
     assert day_totals(frame).loc[0, "tan_dose_complete"]
@@ -618,10 +639,9 @@ def test_daily_summary_carries_sed_completeness():
     from sunstack.opportunity import build_daily_summary
 
     out = build_daily_summary(add_interval_doses(_half_hour_frame(1.0)))
-    row = out.iloc[0]
     assert "sed_complete" in out.columns and "sed_coverage_fraction" in out.columns
-    assert bool(row["sed_complete"])
-    assert row["sed_coverage_fraction"] == 1.0
+    assert bool(num(out, "sed_complete").iloc[0])
+    assert num(out, "sed_coverage_fraction").iloc[0] == 1.0
 
 
 def test_daily_summary_carries_window_completeness():
@@ -632,7 +652,6 @@ def test_daily_summary_carries_window_completeness():
     from sunstack.opportunity import build_daily_summary
 
     out = build_daily_summary(add_interval_doses(_half_hour_frame(1.0)))
-    row = out.iloc[0]
     for col in ("tan_dose_best_window_complete",
                 "tan_dose_best_window_coverage_fraction",
                 "sed_best_window_complete",
@@ -642,10 +661,10 @@ def test_daily_summary_carries_window_completeness():
                 "best_hour_sed_complete",
                 "best_hour_sed_coverage_fraction"):
         assert col in out.columns, col
-    assert bool(row["tan_dose_best_window_complete"])
-    assert row["tan_dose_best_window_coverage_fraction"] == 1.0
-    assert bool(row["sed_best_window_complete"])
-    assert bool(row["best_hour_tan_dose_complete"])
+    assert bool(num(out, "tan_dose_best_window_complete").iloc[0])
+    assert num(out, "tan_dose_best_window_coverage_fraction").iloc[0] == 1.0
+    assert bool(num(out, "sed_best_window_complete").iloc[0])
+    assert bool(num(out, "best_hour_tan_dose_complete").iloc[0])
 
     gappy = _half_hour_frame(1.0)
     gappy.loc[7, "melanogenic_effective_irradiance_wm2"] = np.nan
@@ -656,22 +675,21 @@ def test_daily_summary_carries_window_completeness():
     assert win["sed_best_window_complete"]
 
 
-def test_day_dose_failure_defaults_to_incomplete(monkeypatch):
+def test_day_dose_failure_defaults_to_incomplete(monkeypatch: pytest.MonkeyPatch):
     from sunstack import doses as _doses
     from sunstack.opportunity import build_daily_summary
 
-    def _boom(frame):
+    def _boom(_frame: pd.DataFrame) -> pd.DataFrame:
         raise RuntimeError("no climatology")
 
     monkeypatch.setattr(_doses, "day_totals", _boom)
     out = build_daily_summary(_half_hour_frame(1.0))
-    row = out.iloc[0]
-    assert pd.isna(row["tan_dose_day_j_m2"])
-    assert not bool(row["tan_dose_complete"])
-    assert pd.isna(row["tan_dose_coverage_fraction"])
+    assert pd.isna(num(out, "tan_dose_day_j_m2").iloc[0])
+    assert not bool(num(out, "tan_dose_complete").iloc[0])
+    assert pd.isna(num(out, "tan_dose_coverage_fraction").iloc[0])
 
 
-def test_stale_reference_yields_no_local_percentiles(tmp_path):
+def test_stale_reference_yields_no_local_percentiles(tmp_path: Path):
     import json
 
     import pandas as pd
@@ -679,7 +697,7 @@ def test_stale_reference_yields_no_local_percentiles(tmp_path):
     from sunstack.tanscore import score_forecast
 
     caldir = Path(tmp_path)
-    (caldir / "local_reference_version.json").write_text(json.dumps(
+    _ = (caldir / "local_reference_version.json").write_text(json.dumps(
         {"tan_score_model_version": "legacy-55-30-15",
          "action_spectrum_version": "parrish-fda-3630-v1",
          "spectral_backend_version": "tierC-broadband-proxy-v2",
@@ -694,17 +712,17 @@ def test_stale_reference_yields_no_local_percentiles(tmp_path):
     })
     ref.to_parquet(caldir / "local_reference.parquet", index=False)
     out = score_forecast(_best_air(), caldir, None, _confidence())
-    assert out["local_tan_score_0_100"].isna().all()
-    assert out["local_reference_stale"].all()
+    assert num(out, "local_tan_score_0_100").isna().all()
+    assert num(out, "local_reference_stale").all()
 
 
-def test_reference_value_override_flags_stale(tmp_path):
+def test_reference_value_override_flags_stale(tmp_path: Path):
     import json
 
     from sunstack.tanscore import score_forecast
 
     caldir = Path(tmp_path)
-    (caldir / "local_reference_version.json").write_text(json.dumps(
+    _ = (caldir / "local_reference_version.json").write_text(json.dumps(
         {"tan_score_model_version": "action-spectrum-v2",
          "action_spectrum_version": "parrish-fda-3630-v1",
          "spectral_backend_version": "tierC-broadband-proxy-v2",
@@ -712,11 +730,11 @@ def test_reference_value_override_flags_stale(tmp_path):
          "global_reference_version": "global-mel-ref-v1-provisional",
          "global_reference_e_mel_wm2": 999.0}))
     out = score_forecast(_best_air(), caldir, None, _confidence())
-    assert out["local_reference_stale"].all()
-    assert out["local_tan_score_0_100"].isna().all()
+    assert num(out, "local_reference_stale").all()
+    assert num(out, "local_tan_score_0_100").isna().all()
 
 
-def test_interval_ics_closes_events_and_skips_night(tmp_path):
+def test_interval_ics_closes_events_and_skips_night(tmp_path: Path):
     from sunstack.output import export_static_site
     from sunstack.ui import build_interval_ics
 
@@ -761,16 +779,16 @@ def test_interval_ics_closes_events_and_skips_night(tmp_path):
     })
     hourly.to_parquet(latest / "tables" / "tan_forecast_hourly.parquet", index=False)
     dayhalf.to_parquet(latest / "tables" / "tan_forecast_30min.parquet", index=False)
-    (latest / "summary.json").write_text(
+    _ = (latest / "summary.json").write_text(
         '{"run": "test123", "created_at": "2026-09-15T00:00:00-04:00"}')
-    export_static_site(tmp_path, tmp_path / "site")
+    _ = export_static_site(tmp_path, tmp_path / "site")
     site_ics = (tmp_path / "site" / "calendar-30min.ics").read_text()
     assert site_ics.count("BEGIN:VEVENT") == 2
     assert site_ics.count("END:VEVENT") == 2
     assert "02:00" not in site_ics
 
 
-def test_compare_guards_pre_v4_secondary_input(tmp_path, monkeypatch):
+def test_compare_guards_pre_v4_secondary_input(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import sys
 
     sys.path.insert(0, "src")
@@ -824,17 +842,24 @@ def test_canonical_env_parsing_is_explicit():
         assert proc.stdout.strip() == want, (value, proc.stdout, proc.stderr)
 
 
-def _load_script(name):
+class _ScriptModule(Protocol):
+    """A scripts/ module loaded by path: tests drive its CLI entrypoint."""
+
+    def main(self, argv: list[str] | None = None) -> None: ...
+
+
+def _load_script(name: str) -> _ScriptModule:
+    """Load a scripts/ module by file path (scripts/ is not a package)."""
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(name, f"scripts/{name}.py")
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    _ = spec.loader.exec_module(module)
+    return cast(_ScriptModule, module)
 
 
-def test_rebuild_adopt_orders_manifest_before_references(tmp_path, monkeypatch):
+def test_rebuild_adopt_orders_manifest_before_references(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import json
     import sys
 
@@ -842,7 +867,7 @@ def test_rebuild_adopt_orders_manifest_before_references(tmp_path, monkeypatch):
     import pandas as pd
     import yaml
 
-    (tmp_path / "locations.yaml").write_text(yaml.safe_dump(
+    _ = (tmp_path / "locations.yaml").write_text(yaml.safe_dump(
         [{"slug": "town", "name": "Town", "lat": 40.0, "lon": -80.0,
           "timezone": "UTC", "enabled": True, "default": True}]),
         encoding="utf-8")
@@ -860,7 +885,7 @@ def test_rebuild_adopt_orders_manifest_before_references(tmp_path, monkeypatch):
     }).to_parquet(caldir / "training_calibration_hourly.parquet", index=False)
     refdir = caldir / "global_melanogenic_reference"
     refdir.mkdir(parents=True)
-    (refdir / "reference.json").write_text(json.dumps(
+    _ = (refdir / "reference.json").write_text(json.dumps(
         {"global_reference_e_mel_wm2": 1.6,
          "global_reference_version": "global-mel-ref-v1-provisional"}),
         encoding="utf-8")
@@ -877,18 +902,23 @@ def test_rebuild_adopt_orders_manifest_before_references(tmp_path, monkeypatch):
                         ["rebuild", "--root", str(tmp_path),
                          "--adopt-empirical-p999", "--new-version", "test-v9"])
     rb.main()
-    manifest = json.loads((refdir / "reference.json").read_text(encoding="utf-8"))
+    manifest = cast(
+        _ReferenceManifest, json.loads((refdir / "reference.json").read_text(encoding="utf-8"))
+    )
     assert manifest["global_reference_version"] == "test-v9"
     assert manifest["global_reference_e_mel_wm2"] == manifest["empirical_two_site_grounding"]["distribution"]["p99.9"]
-    ver = json.loads((caldir / "local_reference_version.json").read_text(encoding="utf-8"))
+    ver = cast(
+        "dict[str, object]",
+        json.loads((caldir / "local_reference_version.json").read_text(encoding="utf-8")),
+    )
     assert ver["global_reference_version"] == "test-v9"
     assert ver["global_reference_e_mel_wm2"] == manifest["global_reference_e_mel_wm2"]
     check = pd.read_parquet(caldir / "local_reference.parquet")
-    e = check["melanogenic_effective_irradiance_wm2"].to_numpy(dtype=float)
+    e = num(check, "melanogenic_effective_irradiance_wm2").to_numpy(dtype=float)
     # Builder clips scores at 100 (adopted ref == p99.9 < p100max). Tolerance
     # covers last-ulp drift: the builder scores unrounded E_mel while the
     # parquet stores it rounded to 1e-5, which can flip a 0.1 rounding boundary.
-    got = check["absolute_tan_score_0_100"].to_numpy(dtype=float)
+    got = num(check, "absolute_tan_score_0_100").to_numpy(dtype=float)
     expect = np.clip(np.round(100.0 * e / manifest["global_reference_e_mel_wm2"], 1),
                      0, 100)
     assert np.allclose(got, expect, atol=0.11, equal_nan=True)
@@ -897,7 +927,7 @@ def test_rebuild_adopt_orders_manifest_before_references(tmp_path, monkeypatch):
     assert not np.allclose(got, stale, atol=0.11, equal_nan=True)
 
 
-def test_corpus_builder_survives_empty_uvspec_output(tmp_path, monkeypatch):
+def test_corpus_builder_survives_empty_uvspec_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import json
     import shutil
     import subprocess
@@ -906,22 +936,31 @@ def test_corpus_builder_survives_empty_uvspec_output(tmp_path, monkeypatch):
     rb = _load_script("build_spectral_corpus")
 
     class _Done:
-        stdout = ""
-        stderr = ""
+        stdout: str = ""
+        stderr: str = ""
 
-    monkeypatch.setattr(shutil, "which", lambda name: "/fake/uvspec")
-    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Done())
+    def _fake_which(_name: str) -> str:
+        return "/fake/uvspec"
+
+    def _fake_run(*_args: object, **_kwargs: object) -> _Done:
+        return _Done()
+
+    monkeypatch.setattr(shutil, "which", _fake_which)
+    monkeypatch.setattr(subprocess, "run", _fake_run)
     monkeypatch.setattr(sys, "argv",
                         ["build", "--samples", "8", "--out", str(tmp_path / "corpus")])
     rb.main()
-    manifest = json.loads((tmp_path / "corpus" / "manifest.json").read_text(encoding="utf-8"))
+    manifest = cast(
+        "dict[str, object]",
+        json.loads((tmp_path / "corpus" / "manifest.json").read_text(encoding="utf-8")),
+    )
     # Fake binary present but versionless: no crash, design + manifest land.
     assert manifest["status"] == "ready-to-run"
     assert manifest["libRadtran"] == "uvspec-found-version-unknown"
     assert (tmp_path / "corpus" / "design.csv").exists()
 
 
-def test_offline_corpus_design_is_deterministic_but_not_tierB(tmp_path, monkeypatch):
+def test_offline_corpus_design_is_deterministic_but_not_tierB(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # Without libRadtran the builder's artifact is the deterministic design +
     # manifest (never fake spectra), and that manifest must NOT satisfy the
     # Tier-B admission contract.
@@ -933,7 +972,7 @@ def test_offline_corpus_design_is_deterministic_but_not_tierB(tmp_path, monkeypa
     from sunstack.spectral import validate_tierB_manifest
 
     rb = _load_script("build_spectral_corpus")
-    outs = []
+    outs: list[Path] = []
     for i in (1, 2):
         out = tmp_path / f"corpus{i}"
         monkeypatch.setattr(sys, "argv",
@@ -942,13 +981,16 @@ def test_offline_corpus_design_is_deterministic_but_not_tierB(tmp_path, monkeypa
         rb.main()
         outs.append(out)
     assert (outs[0] / "design.csv").read_bytes() == (outs[1] / "design.csv").read_bytes()
-    manifest = json.loads((outs[0] / "manifest.json").read_text(encoding="utf-8"))
+    manifest = cast(
+        "dict[str, object]",
+        json.loads((outs[0] / "manifest.json").read_text(encoding="utf-8")),
+    )
     assert manifest["status"] == "spectra-pending"
     with pytest.raises(ValueError, match="Tier-B manifest"):
-        validate_tierB_manifest(manifest)
+        _ = validate_tierB_manifest(manifest)
 
 
-def test_closure_requires_canonical_utc(tmp_path, monkeypatch):
+def test_closure_requires_canonical_utc(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import sys
 
     rb = _load_script("validate_external")
@@ -966,7 +1008,7 @@ def test_closure_requires_canonical_utc(tmp_path, monkeypatch):
     cams.to_parquet(latest / "cams_direct_forecast.parquet", index=False)
     hourly.to_parquet(latest / "tan_forecast_hourly.parquet", index=False)
     (tmp_path / "cal").mkdir()
-    (tmp_path / "cal" / "model_metrics.json").write_text(
+    _ = (tmp_path / "cal" / "model_metrics.json").write_text(
         '{"rows": 0, "validation_split_year": 2024}')
     out = tmp_path / "report.md"
     monkeypatch.setattr(sys, "argv",
@@ -979,7 +1021,7 @@ def test_closure_requires_canonical_utc(tmp_path, monkeypatch):
     assert "calibration_sources archive tables not present" in text
 
 
-def test_committed_estimator_holdout_skill_floors(tmp_path, monkeypatch):
+def test_committed_estimator_holdout_skill_floors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # The NASA POWER year-holdout skill of the committed UVA/UVB bundle is a
     # release gate: an estimator or training-data regression must break the
     # suite, not wait for a manual validation run.
@@ -1076,21 +1118,21 @@ def test_cli_personal_mmd_flags_and_threading():
 
     from sunstack import cli as _cli
 
-    for fn in (_cli.run_live, _cli._run_live_inner, _cli.run_one_site,
-               _cli._run_all_sites):
+    for fn in (_cli.run_live, _cli.run_live_inner, _cli.run_one_site,
+               _cli.run_all_sites):
         params = inspect.signature(fn).parameters
         assert "personal_mmd_j_m2" in params, fn.__name__
         assert "personal_mmd_basis" in params, fn.__name__
-    ns = _cli._build_parser().parse_args(
+    ns = _cli.build_parser().parse_args(
         ["run", "--personal-mmd", "2500", "--personal-mmd-basis", "SUNSTACK_EFFECTIVE_DOSE_MEASURED"])
     assert ns.personal_mmd == 2500.0
     assert ns.personal_mmd_basis == "SUNSTACK_EFFECTIVE_DOSE_MEASURED"
-    plain = _cli._build_parser().parse_args(["run"])
+    plain = _cli.build_parser().parse_args(["run"])
     assert plain.personal_mmd is None and plain.personal_mmd_basis is None
     import pytest
 
     with pytest.raises(SystemExit):
-        _cli._build_parser().parse_args(
+        _ = _cli.build_parser().parse_args(
             ["run", "--personal-mmd-basis", "FOLKLORE"])
 
 
@@ -1117,23 +1159,23 @@ def test_personal_mmd_fraction_on_live_shaped_frame():
 def test_parse_personal_mmd_is_loud():
     import pytest
 
-    from sunstack.ui import _parse_personal_mmd
+    from sunstack.ui import parse_personal_mmd
 
-    assert _parse_personal_mmd("", "") == (None, None)
-    assert _parse_personal_mmd(None, None) == (None, None)
-    assert _parse_personal_mmd("12000", "SUNSTACK_EFFECTIVE_DOSE_MEASURED") == (12000.0, "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
+    assert parse_personal_mmd("", "") == (None, None)
+    assert parse_personal_mmd(None, None) == (None, None)
+    assert parse_personal_mmd("12000", "SUNSTACK_EFFECTIVE_DOSE_MEASURED") == (12000.0, "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     with pytest.raises(ValueError, match="provenance|basis"):
-        _parse_personal_mmd("12000", "")
+        _ = parse_personal_mmd("12000", "")
     with pytest.raises(ValueError, match="one of"):
-        _parse_personal_mmd("12000", "FOLKLORE")
+        _ = parse_personal_mmd("12000", "FOLKLORE")
     with pytest.raises(ValueError, match="number"):
-        _parse_personal_mmd("a lot", "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
+        _ = parse_personal_mmd("a lot", "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     for bad in ("0", "-5", "nan", "inf"):
         with pytest.raises(ValueError, match="positive finite"):
-            _parse_personal_mmd(bad, "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
+            _ = parse_personal_mmd(bad, "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
 
 
-def _payload_fixture(tmp_path):
+def _payload_fixture(tmp_path: Path):
     latest = tmp_path / "latest"
     (latest / "tables").mkdir(parents=True)
     dts = pd.date_range("2026-09-15 11:00", periods=6, freq="30min")
@@ -1166,28 +1208,28 @@ def _payload_fixture(tmp_path):
     })
     hourly.to_parquet(latest / "tables" / "tan_forecast_hourly.parquet", index=False)
     half.to_parquet(latest / "tables" / "tan_forecast_30min.parquet", index=False)
-    (latest / "summary.json").write_text(
+    _ = (latest / "summary.json").write_text(
         '{"run": "mmdtest", "created_at": "2026-09-15T00:00:00-04:00"}')
     return tmp_path
 
 
-def test_filtered_payload_personal_mmd(tmp_path):
-    from sunstack.ui import _filtered_payload
+def test_filtered_payload_personal_mmd(tmp_path: Path):
+    from sunstack.ui import filtered_payload
 
     root = _payload_fixture(tmp_path)
-    _, hourly, half, _, _ = _filtered_payload(root, None, None, None, 2000.0, "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
-    assert (hourly["personal_mmd_fraction"].to_numpy() ==
+    _, hourly, half, _, _ = filtered_payload(root, None, None, None, 2000.0, "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
+    assert (num(hourly, "personal_mmd_fraction").to_numpy() ==
             np.array([0.5, 1.0, 0.75])).all()
     assert (hourly["personalization_basis"] == "SUNSTACK_EFFECTIVE_DOSE_MEASURED").all()
-    assert (half["personal_mmd_fraction"].to_numpy()[:3] ==
+    assert (num(half, "personal_mmd_fraction").to_numpy()[:3] ==
             np.array([0.25, 0.4, 0.5])).all()
-    _, plain_hourly, _, _, _ = _filtered_payload(root, None, None, None)
-    assert plain_hourly["personal_mmd_fraction"].isna().all()
-    assert (plain_hourly["tan_dose_1h_j_m2"].to_numpy() ==
-            hourly["tan_dose_1h_j_m2"].to_numpy()).all()
+    _, plain_hourly, _, _, _ = filtered_payload(root, None, None, None)
+    assert num(plain_hourly, "personal_mmd_fraction").isna().all()
+    assert (num(plain_hourly, "tan_dose_1h_j_m2").to_numpy() ==
+            num(hourly, "tan_dose_1h_j_m2").to_numpy()).all()
 
 
-def _api_fixture(tmp_path):
+def _api_fixture(tmp_path: Path):
     import pandas as pd
 
     latest = tmp_path / "latest"
@@ -1220,12 +1262,12 @@ def _api_fixture(tmp_path):
         "wind_gusts_10m": [6.0] * 6,
         "outdoor_blocked": [False] * 6,
     }).to_parquet(latest / "tables" / "tan_forecast_30min.parquet", index=False)
-    (latest / "summary.json").write_text(
+    _ = (latest / "summary.json").write_text(
         '{"run": "apitest", "created_at": "2026-09-15T00:00:00-04:00"}')
     return tmp_path
 
 
-def test_api_data_personal_mmd(tmp_path):
+def test_api_data_personal_mmd(tmp_path: Path):
     import pytest
 
     try:
@@ -1237,10 +1279,11 @@ def test_api_data_personal_mmd(tmp_path):
 
     from sunstack.ui import create_app
 
-    client = TestClient(create_app(_api_fixture(tmp_path)))
+    client = cast("httpx.Client", TestClient(create_app(_api_fixture(tmp_path))))
     plain = client.get("/api/data", params={"location": "south-bend"})
     assert plain.status_code == 200, plain.text
-    assert plain.json()["hourly"][0]["personal_mmd_fraction"] is None
+    body = cast("dict[str, list[dict[str, object]]]", plain.json())
+    assert body["hourly"][0]["personal_mmd_fraction"] is None
     mmd = client.get("/api/data", params={
         "location": "south-bend", "personal_mmd": "2000",
         "personal_mmd_basis": "SUNSTACK_EFFECTIVE_DOSE_MEASURED"})
@@ -1252,13 +1295,13 @@ def test_api_data_personal_mmd(tmp_path):
         "location": "south-bend", "personal_mmd": "2000",
         "personal_mmd_basis": "FOLKLORE"})
     assert bad.status_code == 400
-    assert "one of" in bad.json()["detail"]
+    assert "one of" in str(cast("dict[str, object]", bad.json())["detail"])
     unlabeled = client.get("/api/data", params={
         "location": "south-bend", "personal_mmd": "2000"})
     assert unlabeled.status_code == 400
 
 
-def test_api_refresh_rejects_bad_mmd_without_running(tmp_path):
+def test_api_refresh_rejects_bad_mmd_without_running(tmp_path: Path):
     import pytest
 
     try:
@@ -1278,23 +1321,23 @@ def test_api_refresh_rejects_bad_mmd_without_running(tmp_path):
     assert "one of" in bad.json()["detail"]
 
 
-def test_export_bakes_personal_mmd_when_asked(tmp_path):
+def test_export_bakes_personal_mmd_when_asked(tmp_path: Path):
     from sunstack.output import export_static_site
 
     root = _api_fixture(tmp_path)
-    export_static_site(root, tmp_path / "plain")
+    _ = export_static_site(root, tmp_path / "plain")
     import json as _json
 
     payload = _json.loads((tmp_path / "plain" / "data.json").read_text())
     assert payload["hourly"][0]["personal_mmd_fraction"] is None
-    export_static_site(root, tmp_path / "pers", personal_mmd_j_m2=2000.0,
+    _ = export_static_site(root, tmp_path / "pers", personal_mmd_j_m2=2000.0,
                        personal_mmd_basis="SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     payload = _json.loads((tmp_path / "pers" / "data.json").read_text())
     assert [r["personal_mmd_fraction"] for r in payload["hourly"]] == [0.5, 1.0, 0.75]
     assert payload["half_hour"][0]["personalization_basis"] == "SUNSTACK_EFFECTIVE_DOSE_MEASURED"
 
 
-def test_rescore_gate_exits_on_validation_errors(tmp_path, monkeypatch):
+def test_rescore_gate_exits_on_validation_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import sys
 
     rb = _load_script("rescore_latest_v4")
@@ -1336,7 +1379,7 @@ def test_rescore_gate_exits_on_validation_errors(tmp_path, monkeypatch):
     assert not report.exists()
 
 
-def test_rescore_tolerates_missing_cams_artifact(tmp_path, monkeypatch, capsys):
+def test_rescore_tolerates_missing_cams_artifact(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
     # Degraded (CAMS-less) runs write no cams_direct_forecast artifact; the
     # rescore must degrade to an empty frame (loudly) instead of crashing
     # with FileNotFoundError before its validation gate runs.
@@ -1396,17 +1439,17 @@ def test_site_stack_corruption_raises_without_assert():
     outer = next(s for s in _config.load_sites() if s.slug == "south-bend")
     inner = next(s for s in _config.load_sites() if s.slug == "pacific-palisades")
     ctx = _config.use_site(outer)
-    ctx.__enter__()
+    _ = ctx.__enter__()
     try:
-        _config._SITE_STACK.append(inner)  # intruder: pop returns the wrong site
+        _config.SITE_STACK.append(inner)  # intruder: pop returns the wrong site
         with pytest.raises(RuntimeError, match="site stack corrupted"):
-            ctx.__exit__(None, None, None)
+            _ = ctx.__exit__(None, None, None)
     finally:
-        _config._SITE_STACK.clear()
+        _config.SITE_STACK.clear()
     assert _config.LATITUDE == 41.703293  # globals restored despite the raise
 
 
-def test_cli_requires_basis_with_personal_mmd(tmp_path, monkeypatch):
+def test_cli_requires_basis_with_personal_mmd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import sys
 
     from sunstack import cli as _cli
@@ -1416,7 +1459,7 @@ def test_cli_requires_basis_with_personal_mmd(tmp_path, monkeypatch):
     def _fake_run_all_sites(root, **kwargs):
         calls.update(kwargs)
 
-    monkeypatch.setattr(_cli, "_run_all_sites", _fake_run_all_sites)
+    monkeypatch.setattr(_cli, "run_all_sites", _fake_run_all_sites)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sys, "argv",
                         ["sunstack", "run", "--site", "south-bend",
@@ -1444,12 +1487,12 @@ def test_attach_rejects_unlabeled_mmd():
 
     df = pd.DataFrame({"tan_dose_1h_j_m2": [1000.0]})
     with pytest.raises(ValueError, match="explicit basis"):
-        attach_personalization(df, personal_mmd_j_m2=2000.0)
+        _ = attach_personalization(df, personal_mmd_j_m2=2000.0)
     ok = attach_personalization(df, personal_mmd_j_m2=2000.0, basis="SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     assert ok.loc[0, "personal_mmd_fraction"] == 0.5
 
 
-def test_export_preserves_run_attached_fractions(tmp_path):
+def test_export_preserves_run_attached_fractions(tmp_path: Path):
     # Audit privacy fix: run tables never carry personal columns (cli strips
     # before write). Stale run-attached fractions must NOT leak into exports:
     # export without explicit MMD yields clean NaN; explicit MMD bakes fresh.
@@ -1466,19 +1509,19 @@ def test_export_preserves_run_attached_fractions(tmp_path):
     half["personal_mmd_fraction"] = 0.25
     half["personalization_basis"] = "SUNSTACK_EFFECTIVE_DOSE_MEASURED"
     half.to_parquet(half_path, index=False)
-    export_static_site(root, tmp_path / "kept")
+    _ = export_static_site(root, tmp_path / "kept")
     payload = _json.loads((tmp_path / "kept" / "data.json").read_text())
     assert {r["personal_mmd_fraction"] for r in payload["half_hour"]} == {None}, (
         "stale run-attached fractions must not leak into exports")
-    export_static_site(root, tmp_path / "pers", personal_mmd_j_m2=2000.0,
+    _ = export_static_site(root, tmp_path / "pers", personal_mmd_j_m2=2000.0,
                        personal_mmd_basis="SUNSTACK_EFFECTIVE_DOSE_MEASURED")
     payload = _json.loads((tmp_path / "pers" / "data.json").read_text())
     assert {r["personal_mmd_fraction"] for r in payload["half_hour"]} != {None}
     with pytest.raises(ValueError, match="explicit basis"):
-        export_static_site(root, tmp_path / "bad", personal_mmd_j_m2=2000.0)
+        _ = export_static_site(root, tmp_path / "bad", personal_mmd_j_m2=2000.0)
 
 
-def test_reference_builder_drops_missing_bands(tmp_path):
+def test_reference_builder_drops_missing_bands(tmp_path: Path):
     from sunstack.calibrate import build_local_reference
 
     stamps = pd.date_range("2020-06-01", periods=6, freq="h", tz="UTC")
@@ -1492,7 +1535,7 @@ def test_reference_builder_drops_missing_bands(tmp_path):
     })
     ref = build_local_reference(training, tmp_path)
     assert len(ref) == 5  # NaN-UVB row excluded, not zero-scored
-    assert ref["melanogenic_effective_irradiance_wm2"].notna().all()
+    assert num(ref, "melanogenic_effective_irradiance_wm2").notna().all()
 
 
 def test_rolling_integration_is_order_invariant():
@@ -1535,7 +1578,7 @@ def test_garbage_timestamp_isolates_to_its_row():
     assert good["tan_dose_1h_j_m2"] > 0
 
 
-def test_all_missing_bands_score_nan_loudly(tmp_path):
+def test_all_missing_bands_score_nan_loudly(tmp_path: Path):
     from sunstack.tanscore import score_forecast
     from sunstack.validation import validate_scored_hourly
 
@@ -1543,8 +1586,8 @@ def test_all_missing_bands_score_nan_loudly(tmp_path):
     broke["shortwave_radiation"] = float("nan")
     broke["uv_index"] = float("nan")
     out = score_forecast(broke, Path(tmp_path), None, _confidence())
-    assert out["tan_score_absolute_0_100"].isna().all()
-    assert out["erythemal_irradiance_wm2"].isna().all()
+    assert num(out, "tan_score_absolute_0_100").isna().all()
+    assert num(out, "erythemal_irradiance_wm2").isna().all()
     assert any(i.severity == "ERROR" for i in validate_scored_hourly(out))
 
 
@@ -1557,7 +1600,7 @@ def test_cams_cycle_labels_majority_cycle():
     assert (frame["cams_cycle"] == "2026-09-22T12:00Z").all()
 
 
-def test_training_drops_constant_features_loudly(tmp_path, caplog):
+def test_training_drops_constant_features_loudly(tmp_path: Path, caplog: pytest.LogCaptureFixture):
     import logging
 
     import numpy as np
@@ -1586,13 +1629,15 @@ def test_training_drops_constant_features_loudly(tmp_path, caplog):
     assert set(dropped_features) >= {"aod340", "ozone_du"}
     import joblib
 
-    bundle = joblib.load(tmp_path / "uva_uvb_models.joblib")
-    assert "aod340" not in bundle["features"]
+    loaded = joblib.load(tmp_path / "uva_uvb_models.joblib")
+    assert isinstance(loaded, dict), "bundle must be a mapping"
+    bundle = cast("dict[str, object]", loaded)
+    assert "aod340" not in cast("list[object]", bundle["features"])
     assert any("Calibration training without features" in r.message
                for r in caplog.records)
 
 
-def test_degraded_bundle_serves_predictions(tmp_path):
+def test_degraded_bundle_serves_predictions(tmp_path: Path):
     import numpy as np
     import pandas as pd
 
@@ -1614,7 +1659,7 @@ def test_degraded_bundle_serves_predictions(tmp_path):
         if feat not in training:
             training[feat] = np.nan
     caldir = tmp_path / "cal"
-    train_uv_models(training, caldir)
+    _ = train_uv_models(training, caldir)
     feats = pd.DataFrame([{
         "ghi": 700.0, "dni": 750.0, "dhi": 110.0, "clear_ghi": 1000.0,
         "kt": 0.7, "albedo": 0.2, "aod55": 0.1, "cloud": 10.0, "sza": 40.0,
@@ -1634,7 +1679,7 @@ def test_records_never_emit_browser_hostile_tokens():
 
     import pandas as pd
 
-    from sunstack.ui import _records
+    from sunstack.ui import records
 
     df = pd.DataFrame({
         "time": ["2026-09-15T12:00", "2026-09-15T13:00"],
@@ -1642,7 +1687,7 @@ def test_records_never_emit_browser_hostile_tokens():
         "tan_dose_1h_j_m2": [float("-inf"), float("nan")],
         "note": ["Infinity and NaN as words are fine", "so is -Infinity text"],
     })
-    rows = _records(df)
+    rows = records(df)
     text = _json.dumps(rows)
     stripped = _re.sub(r'"(?:[^"\\]|\\.)*"', '""', text)
     assert _re.findall(r"\b(Infinity|-Infinity|NaN)\b", stripped) == []
@@ -1737,7 +1782,7 @@ def test_calendar_marks_partial_doses_and_leaves_legacy_clean():
     assert "SED30 2.5" in flat and "SED30 2.5 (partial)" not in flat
 
 
-def test_invalid_skin_tilt_fails_loudly_in_scoring(tmp_path, monkeypatch, caplog):
+def test_invalid_skin_tilt_fails_loudly_in_scoring(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture):
     # Reviewer-flagged path: an impossible skin-plane configuration must log
     # the offending values and propagate (never silently score horizontal).
     import pytest
@@ -1748,7 +1793,7 @@ def test_invalid_skin_tilt_fails_loudly_in_scoring(tmp_path, monkeypatch, caplog
     monkeypatch.setattr(_config, "SKIN_TILT_DEG", 200.0)
     with (caplog.at_level("ERROR", logger="sunstack"),
           pytest.raises(ValueError, match="skin-plane")):
-        score_forecast(_best_air(), Path(tmp_path), None, _confidence())
+        _ = score_forecast(_best_air(), Path(tmp_path), None, _confidence())
     assert any("Skin-plane configuration invalid" in r.message
                for r in caplog.records)
 
@@ -1761,11 +1806,11 @@ def test_personalization_without_dose_column_is_nan_not_crash():
 
     out = attach_personalization(
         pd.DataFrame({"a": [1.0]}), 2000.0, "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
-    assert out["personal_mmd_fraction"].isna().all()
-    assert out["personalization_basis"].unique().tolist() == ["SUNSTACK_EFFECTIVE_DOSE_MEASURED"]
+    assert num(out, "personal_mmd_fraction").isna().all()
+    assert _text(out, "personalization_basis").unique().tolist() == ["SUNSTACK_EFFECTIVE_DOSE_MEASURED"]
 
 
-def test_cli_hourly_personalization_uses_interval_doses(tmp_path):
+def test_cli_hourly_personalization_uses_interval_doses(tmp_path: Path):
     from sunstack.doses import add_interval_doses
     from sunstack.opportunity import attach_personalization
     from sunstack.tanscore import score_forecast
@@ -1773,7 +1818,7 @@ def test_cli_hourly_personalization_uses_interval_doses(tmp_path):
     scored = score_forecast(_best_air(), Path(tmp_path), None, _confidence())
     dosed = add_interval_doses(scored)
     out = attach_personalization(dosed, 2000.0, "SUNSTACK_EFFECTIVE_DOSE_MEASURED")
-    assert out["personal_mmd_fraction"].notna().any()
+    assert num(out, "personal_mmd_fraction").notna().any()
 
 
 def test_validate_live_sources_counts_feeds():
@@ -1840,7 +1885,7 @@ def test_scored_hourly_empty_is_error():
                for i in validate_scored_hourly(pd.DataFrame()))
 
 
-def test_action_spectra_missing_files_are_errors(tmp_path, monkeypatch):
+def test_action_spectra_missing_files_are_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import sunstack.photobiology as pb
     from sunstack.validation import validate_action_spectra
 
@@ -1854,25 +1899,25 @@ def test_action_spectra_missing_files_are_errors(tmp_path, monkeypatch):
     assert any(i.severity == "ERROR" for i in issues)
 
 
-def test_photobiology_gate_rejects_bad_reference_and_missing_spectrum(tmp_path, monkeypatch):
+def test_photobiology_gate_rejects_bad_reference_and_missing_spectrum(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import pytest
 
     import sunstack.photobiology as pb
     from sunstack import config as _config
-    from sunstack.tanscore import _require_photobiology_or_fail
+    from sunstack.tanscore import require_photobiology_or_fail
 
     monkeypatch.setattr(_config, "GLOBAL_MELANOGENIC_REFERENCE_WM2", 0.0)
     with pytest.raises(RuntimeError, match="reference invalid"):
-        _require_photobiology_or_fail()
+        _ = require_photobiology_or_fail()
     monkeypatch.setattr(_config, "GLOBAL_MELANOGENIC_REFERENCE_WM2", 1.6)
     monkeypatch.setattr(pb, "load_action_spectrum",
                         lambda stem="x": (_ for _ in ()).throw(
                             FileNotFoundError("ERROR photobiology: gone")))
     with pytest.raises(RuntimeError, match="ERROR photobiology"):
-        _require_photobiology_or_fail()
+        _ = require_photobiology_or_fail()
 
 
-def test_score_forecast_canonical_gate_refuses_provisional(tmp_path, monkeypatch):
+def test_score_forecast_canonical_gate_refuses_provisional(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import pytest
 
     from sunstack import config as _config
@@ -1880,7 +1925,7 @@ def test_score_forecast_canonical_gate_refuses_provisional(tmp_path, monkeypatch
 
     monkeypatch.setattr(_config, "REQUIRE_CANONICAL_SPECTRUM", True)
     with pytest.raises(RuntimeError, match="canonical"):
-        score_forecast(_best_air(), Path(tmp_path), None, _confidence())
+        _ = score_forecast(_best_air(), Path(tmp_path), None, _confidence())
 
 
 def test_best_tan_windows_fallback_blend_without_overall():
@@ -1893,15 +1938,15 @@ def test_best_tan_windows_fallback_blend_without_overall():
         "tan_forecast_confidence_0_100": [50.0, 50.0],
     }))
     # 90/10 absolute/confidence blend ranks the stronger physics first.
-    assert out["tan_window_rank_value"].tolist() == [41.0, 23.0]
-    assert out["tan_score_absolute_0_100"].tolist() == [40.0, 20.0]
+    assert num(out, "tan_window_rank_value").tolist() == [41.0, 23.0]
+    assert num(out, "tan_score_absolute_0_100").tolist() == [40.0, 20.0]
 
 
 def test_cams_features_convert_ozone_and_split_bands():
     # Direct-CAMS propagation details that silently corrupt physics if wrong:
     # kg/m^2 ozone must convert to DU, absorption AOD must not match total
     # AOD columns, and clear-sky UVBED must not leak into the all-sky channel.
-    from sunstack.tanscore import _cams_features
+    from sunstack.tanscore import cams_features
 
     times = pd.date_range("2026-09-22 12:00", periods=3, freq="h", tz="UTC")
     cams = pd.DataFrame({
@@ -1913,16 +1958,16 @@ def test_cams_features_convert_ozone_and_split_bands():
         "cams_uv_biologically_effective_dose": [0.1] * 3,
         "cams_uv_biologically_effective_dose_clear_sky": [0.12] * 3,
     })
-    out = _cams_features(cams)
-    assert abs(out["ozone_du"].iloc[0] - 0.008 / 2.1415e-5) < 0.5
+    out = cams_features(cams)
+    assert abs(num(out, "ozone_du").iloc[0] - 0.008 / 2.1415e-5) < 0.5
     assert (out["cams_aod_340"] == 0.2).all()
     assert (out["cams_abs_aod_340"] == 0.02).all()
     assert (out["cams_erythemal_irradiance_wm2"] == 0.1).all()
     assert (out["cams_clear_sky_erythemal_irradiance_wm2"] == 0.12).all()
     assert (out["cams_uv_index"] == 4.0).all()
     du = pd.DataFrame({"time_utc": times, "total_column_ozone": [300.0] * 3})
-    assert _cams_features(du)["ozone_du"].tolist() == [300.0] * 3
-    assert list(_cams_features(None).columns)[:5] == [
+    assert cams_features(du)["ozone_du"].tolist() == [300.0] * 3
+    assert list(cams_features(None).columns)[:5] == [
         "time_utc", "ozone_du", "aod340", "aod380", "cams_forecast_albedo"]
 
 
@@ -1930,7 +1975,7 @@ def test_cams_accumulated_uv_differences_within_cycles_only():
     # Contract §5.7: partition by forecast cycle, sort by time, never
     # difference across cycles, negative increments are unknown (not
     # zero-clipped), and each cycle's first interval stays unfilled.
-    from sunstack.tanscore import _cams_features
+    from sunstack.tanscore import cams_features
 
     times = pd.to_datetime(
         ["2026-06-21 00:00", "2026-06-21 01:00", "2026-06-21 02:00",
@@ -1940,8 +1985,8 @@ def test_cams_accumulated_uv_differences_within_cycles_only():
         "cams_surface_downward_uv_radiation": [100.0, 3700.0, 200.0, 300.0, 500.0],
         "cams_cycle": ["a", "a", "a", "b", "b"],
     })
-    out = _cams_features(cams.iloc[[3, 1, 4, 0, 2]])  # unordered input rows
-    irr = out["cams_downward_surface_uv_wm2"].to_numpy(dtype=float)
+    out = cams_features(cams.iloc[[3, 1, 4, 0, 2]])  # unordered input rows
+    irr = num(out, "cams_downward_surface_uv_wm2").to_numpy(dtype=float)
     assert bool(np.isnan(irr[0]))  # 03:00 — first row of cycle b
     assert abs(irr[1] - 1.0) < 1e-9  # 01:00 — within cycle a
     assert abs(irr[2] - 200.0 / 3600.0) < 1e-9  # 04:00 — within cycle b
@@ -1949,42 +1994,42 @@ def test_cams_accumulated_uv_differences_within_cycles_only():
     assert bool(np.isnan(irr[4]))  # 02:00 — accumulation reset within cycle a
 
 
-def test_utc_parsing_handles_dst_fold_and_gap(monkeypatch):
+def test_utc_parsing_handles_dst_fold_and_gap(monkeypatch: pytest.MonkeyPatch):
     # Wall-clock DST transitions must not shift or collapse the UTC grid:
     # fall-back folds disambiguate by order, spring gaps shift forward.
     from sunstack import config as _config
-    from sunstack.tanscore import _to_utc_from_openmeteo
+    from sunstack.tanscore import to_utc_from_openmeteo
 
     monkeypatch.setattr(_config, "TIMEZONE", "America/Indiana/Indianapolis")
-    fold = _to_utc_from_openmeteo(pd.Series(
+    fold = to_utc_from_openmeteo(pd.Series(
         ["2026-11-01T01:00", "2026-11-01T01:30",
          "2026-11-01T01:00", "2026-11-01T02:00"]))
     assert fold.dt.tz is not None
     assert fold.tolist() == list(pd.to_datetime(
         ["2026-11-01 05:00", "2026-11-01 05:30",
          "2026-11-01 06:00", "2026-11-01 07:00"], utc=True))
-    gap = _to_utc_from_openmeteo(pd.Series(["2026-03-08T02:30"]))
+    gap = to_utc_from_openmeteo(pd.Series(["2026-03-08T02:30"]))
     assert gap.tolist() == list(pd.to_datetime(["2026-03-08 07:00"], utc=True))
-    aware = _to_utc_from_openmeteo(pd.Series(["2026-06-21T12:00Z"]))
+    aware = to_utc_from_openmeteo(pd.Series(["2026-06-21T12:00Z"]))
     assert aware.tolist() == list(pd.to_datetime(["2026-06-21 12:00"], utc=True))
     assert str(aware.dtype) == "datetime64[ns, UTC]"
 
 
 def test_cams_features_missing_ozone_is_nan():
-    from sunstack.tanscore import _cams_features
+    from sunstack.tanscore import cams_features
 
     times = pd.date_range("2026-09-22 12:00", periods=2, freq="h", tz="UTC")
-    out = _cams_features(pd.DataFrame({
+    out = cams_features(pd.DataFrame({
         "time_utc": times, "aerosol_optical_depth_340": [0.2, 0.21]}))
-    assert out["ozone_du"].isna().all()
-    assert out["cams_ozone_du"].isna().all()
+    assert num(out, "ozone_du").isna().all()
+    assert num(out, "cams_ozone_du").isna().all()
 
 
 def test_feature_frame_empty_and_fallbacks():
-    from sunstack.tanscore import _percentile, build_live_feature_frame
+    from sunstack.tanscore import build_live_feature_frame, percentile
 
     assert build_live_feature_frame(pd.DataFrame()).empty
-    assert pd.isna(_percentile(pd.Series([], dtype=float), 5.0))
+    assert pd.isna(percentile(pd.Series([], dtype=float), 5.0))
     base = pd.DataFrame({
         "time": ["2026-06-21T12:00", "2026-06-21T13:00"],
         "elevation_m": [float("nan"), float("nan")],
@@ -1996,33 +2041,35 @@ def test_feature_frame_empty_and_fallbacks():
         "temperature_2m": [80.0, 81.0],
     })
     out = build_live_feature_frame(base, None)
-    assert out["aod55"].tolist() == [0.15, 0.16]
-    assert out["cams_cycle"].isna().all()
+    assert num(out, "aod55").tolist() == [0.15, 0.16]
+    assert _text(out, "cams_cycle").isna().all()
 
 
-def test_score_forecast_empty_input_is_empty(tmp_path):
+def test_score_forecast_empty_input_is_empty(tmp_path: Path):
     from sunstack.tanscore import score_forecast
 
     assert score_forecast(pd.DataFrame(), Path(tmp_path), None, None).empty
 
 
-def test_tierB_manifest_present_but_invalid_fails(tmp_path, monkeypatch):
+def test_tierB_manifest_present_but_invalid_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import pytest
 
     import sunstack.spectral as _spectral
     from sunstack import config as _config
     from sunstack.tanscore import score_forecast
 
-    monkeypatch.setattr(_spectral, "spectral_tier_for_row",
-                        lambda *a, **k: "B")
+    def _tier_b(*_args: object, **_kwargs: object) -> str:
+        return "B"
+
+    monkeypatch.setattr(_spectral, "spectral_tier_for_row", _tier_b)
     bad = tmp_path / "manifest.json"
-    bad.write_text("{}", encoding="utf-8")
+    _ = bad.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(_config, "TIERB_MANIFEST_PATH", str(bad))
     with pytest.raises(ValueError, match="Tier-B manifest"):
-        score_forecast(_best_air(), Path(tmp_path), None, _confidence())
+        _ = score_forecast(_best_air(), Path(tmp_path), None, _confidence())
 
 
-def test_pigment_channel_failure_is_loud(tmp_path, monkeypatch):
+def test_pigment_channel_failure_is_loud(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import pytest
 
     import sunstack.spectral as _spectral
@@ -2033,26 +2080,26 @@ def test_pigment_channel_failure_is_loud(tmp_path, monkeypatch):
 
     monkeypatch.setattr(_spectral, "pigment_darkening_from_broadband", _boom)
     with pytest.raises(RuntimeError, match="ERROR photobiology"):
-        score_forecast(_best_air(), Path(tmp_path), None, _confidence())
+        _ = score_forecast(_best_air(), Path(tmp_path), None, _confidence())
 
 
-def test_corrupt_version_file_stays_stale(tmp_path):
+def test_corrupt_version_file_stays_stale(tmp_path: Path):
     from sunstack.tanscore import score_forecast
 
-    (tmp_path / "local_reference_version.json").write_text(
+    _ = (tmp_path / "local_reference_version.json").write_text(
         "not json{{", encoding="utf-8")
     out = score_forecast(_best_air(), Path(tmp_path), None, _confidence())
-    assert out["local_reference_stale"].all()
+    assert num(out, "local_reference_stale").all()
 
 
-def test_no_confidence_input_is_nan(tmp_path):
+def test_no_confidence_input_is_nan(tmp_path: Path):
     from sunstack.tanscore import score_forecast
 
     # v5: confidence comes from the calibrated error model (always defined
     # from source count/spread/regime), while ensemble strong-sun support
     # stays NaN without its input frame.
     out = score_forecast(_best_air(), Path(tmp_path), None, None)
-    assert out["tan_forecast_confidence_0_100"].notna().all()
+    assert num(out, "tan_forecast_confidence_0_100").notna().all()
     assert "strong_sun_probability_0_100" in out.columns
 
 
@@ -2064,7 +2111,7 @@ def test_best_tan_windows_ranks_by_overall_when_present():
         "overall_tan_opportunity_0_100": [10.0, 60.0, 30.0],
         "tan_score_absolute_0_100": [5.0, 50.0, 25.0],
     }))
-    assert out["tan_window_rank_value"].tolist() == [60.0, 30.0, 10.0]
+    assert num(out, "tan_window_rank_value").tolist() == [60.0, 30.0, 10.0]
 
 def _split_frame() -> pd.DataFrame:
     """Thursday-style UVI split: OM/GFS low vs CAMS high vs EPA mid."""
@@ -2075,25 +2122,25 @@ def _split_frame() -> pd.DataFrame:
     return frame
 
 
-def test_uvi_consensus_resists_single_bad_source(tmp_path):
+def test_uvi_consensus_resists_single_bad_source(tmp_path: Path):
     # Bias-corrected inverse-error weights (OM 0.674 / CAMS 0.142 / EPA 0.184):
     # [2.6, 5.6, 5.0] -> 0.674*2.71 + 0.142*6.63 + 0.184*5.0 = 3.69 (OM skill
     # dominates the low outlier, bias correction lifts; no source is trusted
     # blindly). Spread names the disagreement width; source count is exact.
     # Matches state.fuse_uvi_unique_count on identical inputs.
     out = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
-    assert np.allclose(out["uvi_consensus"].to_numpy(), [3.69, 3.352], atol=0.01)
-    assert (out["uvi_consensus_sources"].to_numpy() == 3).all()
-    assert np.allclose(out["uvi_source_spread"].to_numpy(), [3.0, 3.46])
-    assert np.allclose(out["uvi_sunny"].to_numpy(), [5.6, 5.56])
-    assert np.allclose(out["uvi_cloudy"].to_numpy(), [2.6, 2.1])
+    assert np.allclose(num(out, "uvi_consensus").to_numpy(), [3.69, 3.352], atol=0.01)
+    assert num(out, "uvi_consensus_sources").tolist() == [3.0, 3.0]
+    assert np.allclose(num(out, "uvi_source_spread").to_numpy(), [3.0, 3.46])
+    assert np.allclose(num(out, "uvi_sunny").to_numpy(), [5.6, 5.56])
+    assert np.allclose(num(out, "uvi_cloudy").to_numpy(), [2.6, 2.1])
 
 
-def test_sed_integrates_consensus_not_raw_om(tmp_path):
+def test_sed_integrates_consensus_not_raw_om(tmp_path: Path):
     # SED's erythemal input is consensus-derived: a bad OM UVI must not drag
     # the erythemal channel down while the other sources agree.
     out = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
-    assert np.allclose(out["erythemal_irradiance_wm2"].to_numpy(), [0.09215, 0.08358], atol=1e-4)
+    assert np.allclose(num(out, "erythemal_irradiance_wm2").to_numpy(), [0.09215, 0.08358], atol=1e-4)
 
 
 def test_sed_fallback_prefers_consensus_marks_degraded_om():
@@ -2114,26 +2161,26 @@ def test_sed_fallback_prefers_consensus_marks_degraded_om():
     frame["erythemal_irradiance_wm2"] = [0.125, float("nan"), float("nan")]
     out = add_interval_doses(frame)
     # Row 2: consensus hole filled from raw OM, marked degraded.
-    assert out["sed_uvi_source"].tolist()[1] == "degraded_om"
-    assert out["sed_uvi_source"].tolist()[0] == "final"
-    assert out["sed_uvi_source"].tolist()[2] == "missing"
+    assert _text(out, "sed_uvi_source").tolist()[1] == "degraded_om"
+    assert _text(out, "sed_uvi_source").tolist()[0] == "final"
+    assert _text(out, "sed_uvi_source").tolist()[2] == "missing"
 
-def test_consensus_degrades_with_missing_sources(tmp_path):
+def test_consensus_degrades_with_missing_sources(tmp_path: Path):
     # Source-less rows reweight what remains: OM/CAMS-only rows trust OM
     # (0.827/0.173) after bias correction; OM itself when lone. NaN never zero.
     two = _split_frame().drop(columns=["uvi_epa"])
     out = score_forecast(two, Path(tmp_path), None, _confidence())
-    assert np.allclose(out["uvi_consensus"].to_numpy(), [3.39, 2.97], atol=0.01)
-    assert (out["uvi_consensus_sources"].to_numpy() == 2).all()
+    assert np.allclose(num(out, "uvi_consensus").to_numpy(), [3.39, 2.97], atol=0.01)
+    assert num(out, "uvi_consensus_sources").tolist() == [2.0, 2.0]
     one = _best_air().iloc[:1].copy()
     solo = score_forecast(one, Path(tmp_path), None, _confidence())
     # Lone OM row: consensus equals the lone source (convex fusion clamps
     # the +0.11 bias correction into the observed range; audit 2026-10-05:
     # unclamped night fusion invented 0.22 out of [0,0]).
-    assert np.allclose(solo["uvi_consensus"].to_numpy(), solo["uvi_openmeteo"].to_numpy())
+    assert np.allclose(num(solo, "uvi_consensus").to_numpy(), num(solo, "uvi_openmeteo").to_numpy())
 
 
-def test_daily_peak_uv_uses_consensus(tmp_path):
+def test_daily_peak_uv_uses_consensus(tmp_path: Path):
     # Day-card peak UVI is the TRUE daylight maximum of the consensus column
     # (audit: it used to be the value at the opportunity-peak row). A
     # split-source day never publishes the outlier as the headline.
@@ -2143,8 +2190,8 @@ def test_daily_peak_uv_uses_consensus(tmp_path):
     half = build_30min_forecast(scored, None)
     daily = build_daily_summary(half)
     # Daily peak rounds the consensus max to 2dp for the day card.
-    assert np.allclose(daily["peak_uv_index"].to_numpy(),
-                       [round(float(half["uvi_consensus"].max()), 2)])
+    assert np.allclose(num(daily, "peak_uv_index").to_numpy(),
+                       [round(float(num(half, "uvi_consensus").max()), 2)])
 
 
 def test_epa_normalizers_parse_live_shape():
@@ -2156,18 +2203,18 @@ def test_epa_normalizers_parse_live_shape():
         {"DATE_TIME": "Sep/23/2026 01 PM", "UV_VALUE": 2},
         {"DATE_TIME": "junk", "UV_VALUE": "x"},
     ])
-    assert hourly["uvi_epa"].tolist() == [2.0]
-    assert hourly["time"].tolist() == ["2026-09-23T13:00"]
+    assert num(hourly, "uvi_epa").tolist() == [2.0]
+    assert _text(hourly, "time").tolist() == ["2026-09-23T13:00"]
     daily = normalize_epa_daily([
         {"DATE": "Sep/24/2026", "UV_INDEX": "2", "ZIP_CODE": "46556"},
         {"DATE": "junk", "UV_INDEX": "x"},
     ])
-    assert daily["uvi_epa_daily_peak"].tolist() == [2.0]
+    assert num(daily, "uvi_epa_daily_peak").tolist() == [2.0]
     assert normalize_epa_hourly("nope").empty
     assert normalize_epa_daily(None).empty
 
 
-def test_registry_zip_parses_and_intake_accepts_zip(tmp_path):
+def test_registry_zip_parses_and_intake_accepts_zip(tmp_path: Path):
     # ZIP is optional registry metadata for the EPA feed; the intake parser
     # threads it through only when the issue supplies it.
     import sys

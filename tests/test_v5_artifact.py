@@ -32,6 +32,24 @@ def _load_validator() -> _ValidatorModule:
     spec.loader.exec_module(raw)
     return cast(_ValidatorModule, cast(object, raw))
 
+
+def _floats(frame: pd.DataFrame, name: str) -> list[float]:
+    return cast("list[float]", frame[name].tolist())
+
+
+def _bools(frame: pd.DataFrame, name: str) -> list[bool]:
+    return cast("list[bool]", frame[name].tolist())
+
+
+def _counts(manifest: dict[str, object]) -> dict[str, int]:
+    raw = cast(dict[str, object], manifest["row_counts"])
+    out: dict[str, int] = {}
+    for key, value in raw.items():
+        assert isinstance(value, int)
+        out[key] = value
+    return out
+
+
 _TIMES = ("2026-06-21T12:00", "2026-06-21T12:30", "2026-06-21T13:00")
 _E_MEL = (0.4, 0.6, 0.5)
 _UVI = (4.0, 6.0, 5.0)
@@ -365,26 +383,23 @@ def test_serving_reference_preferred_by_forecast_lead(tmp_path: Path) -> None:
     manifest = cast(dict[str, object], json.loads(
         (calibration_dir / "lead_reference_manifest.json").read_text(encoding="utf-8")
     ))
-    bands = manifest["bands"]
-    row_counts = manifest["row_counts"]
-    assert isinstance(bands, list)
-    assert isinstance(row_counts, dict)
-    assert set(cast(list[str], bands)) == set(refs)
-    assert all(
-        isinstance(row_counts.get(band), int) and row_counts[band] > 0
-        for band in refs
-    )
+    bands_raw = cast(list[object], manifest["bands"])
+    assert all(isinstance(b, str) for b in bands_raw)
+    bands = cast(list[str], bands_raw)
+    row_counts = _counts(manifest)
+    assert set(bands) == set(refs)
+    assert all(band in row_counts and row_counts[band] > 0 for band in refs)
     assert all(
         (calibration_dir / f"local_reference_serving_{band}.parquet").exists()
         for band in refs
     )
 
     out = score_forecast(_reference_forecast(169), calibration_dir)
-    assert not bool(out["local_reference_fallback"].iloc[0])
-    assert not bool(out["local_reference_fallback"].iloc[24])
-    assert bool(out["local_reference_fallback"].iloc[168])
-    assert out["local_tan_score_0_100"].iloc[0] == 100.0
-    assert out["local_tan_score_0_100"].iloc[24] == 0.0
+    assert not _bools(out, "local_reference_fallback")[0]
+    assert not _bools(out, "local_reference_fallback")[24]
+    assert _bools(out, "local_reference_fallback")[168]
+    assert _floats(out, "local_tan_score_0_100")[0] == 100.0
+    assert _floats(out, "local_tan_score_0_100")[24] == 0.0
 
 
 def test_serving_reference_absence_falls_back_to_legacy(
@@ -397,6 +412,6 @@ def test_serving_reference_absence_falls_back_to_legacy(
     _write_legacy_reference(calibration_dir)
 
     out = score_forecast(_reference_forecast(1), calibration_dir)
-    assert bool(out["local_reference_fallback"].iloc[0])
-    assert out["local_tan_score_0_100"].iloc[0] == 100.0
+    assert _bools(out, "local_reference_fallback")[0]
+    assert _floats(out, "local_tan_score_0_100")[0] == 100.0
     assert "Serving local references unavailable" in caplog.text

@@ -2,8 +2,19 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
 import pandas as pd
+
+
+def _num(frame: pd.DataFrame, name: str, i: int = 0) -> float:
+    vals = cast("list[float]", frame[name].tolist())
+    return vals[i]
+
+
+def _texts(frame: pd.DataFrame, name: str) -> list[str]:
+    return cast("list[str]", frame[name].tolist())
 
 
 def _env_frame() -> pd.DataFrame:
@@ -94,8 +105,8 @@ def test_local_surface_never_changes_horizontal_environment() -> None:
         assert grass[col].tolist() == base[col].tolist()
         assert sand[col].tolist() == base[col].tolist()
     # Reflected component DOES move with surface on a tilted plane.
-    g = float(grass["skin_plane_ground_reflected_delayed_pigmentation_wm2"].iloc[0])
-    s = float(sand["skin_plane_ground_reflected_delayed_pigmentation_wm2"].iloc[0])
+    g = _num(grass, "skin_plane_ground_reflected_delayed_pigmentation_wm2")
+    s = _num(sand, "skin_plane_ground_reflected_delayed_pigmentation_wm2")
     assert s > g > 0
 
 
@@ -105,16 +116,16 @@ def test_flat_plane_zero_ground_view() -> None:
 
     assert lambertian_ground_view_factor(0.0) == 0.0
     out = apply_skin_plane(_env_frame(), 0.0, 180.0, surface_slug="fresh_snow")
-    assert float(out["skin_plane_ground_reflected_delayed_pigmentation_wm2"].iloc[0]) == 0.0
+    assert _num(out, "skin_plane_ground_reflected_delayed_pigmentation_wm2") == 0.0
 
 
 def test_tilted_plane_monotonic_in_reflectance() -> None:
     from sunstack.spectral import apply_skin_plane
 
-    vals = []
+    vals: list[float] = []
     for slug in ("grass_summer", "wet_beach_sand", "dry_beach_sand", "fresh_snow"):
         out = apply_skin_plane(_env_frame(), 60.0, 180.0, surface_slug=slug)
-        vals.append(float(out["skin_plane_ground_reflected_delayed_pigmentation_wm2"].iloc[0]))
+        vals.append(_num(out, "skin_plane_ground_reflected_delayed_pigmentation_wm2"))
     assert vals == sorted(vals)
 
 

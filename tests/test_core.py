@@ -1,25 +1,132 @@
 from __future__ import annotations
 
+import time
+from collections.abc import Iterator
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Required, TypedDict, cast, override
 
 import numpy as np
 import pandas as pd
+import pytest
+import yaml
 
-from sunstack import tanscore
 from sunstack.calibrate import absolute_tan_score, prepare_nasa_training, solar_features
-from sunstack.history import _candidate_cams_cycles, normalize_nasa_power
-from sunstack.opportunity import _best_contiguous_window
+from sunstack.frame import num
+from sunstack.history import candidate_cams_cycles, normalize_nasa_power
+from sunstack.opportunity import best_contiguous_window
 from sunstack.tanscore import (
-    _circular_doy_distance,
     add_local_scores,
     build_live_feature_frame,
+    circular_doy_distance,
     predict_uva_uvb,
 )
 
 
+def _text(frame: pd.DataFrame, name: str) -> pd.Series[str]:
+    """Text-column read.
+
+    The pandas stubs type ``frame[name]`` as ``Any``, which erases the whole
+    expression that consumes it; the tests read text columns by contract.
+    """
+    return cast("pd.Series[str]", frame[name])
+
+
+# `with` is a Python keyword, so the step document type is declared
+# functionally instead of as a class.
+_WorkflowStep = TypedDict(
+    "_WorkflowStep",
+    {
+        "name": str,
+        "uses": str,
+        "run": str,
+        "env": dict[str, str],
+        "with": dict[str, str],
+    },
+    total=False,
+)
+
+
+class _WorkflowJob(TypedDict):
+    steps: list[_WorkflowStep]
+
+
+class _WorkflowOn(TypedDict, total=False):
+    """Trigger block; only the keys these tests read are modelled."""
+
+    schedule: Required[list[dict[str, str]]]
+    push: dict[str, list[str]]
+    pull_request: dict[str, list[str]]
+    workflow_run: dict[str, list[str]]
+    issues: dict[str, list[str]]
+    workflow_dispatch: object
+    pull_request_target: object
+
+
+class _Workflow(TypedDict, total=False):
+    name: str
+    on: Required[_WorkflowOn]
+    permissions: dict[str, str]
+    jobs: Required[dict[str, _WorkflowJob]]
+
+
+class _Pyproject(TypedDict):
+    project: dict[str, object]
+    tool: dict[str, dict[str, object]]
+
+
+class _IssueChooser(TypedDict):
+    blank_issues_enabled: bool
+
+
+class _IssueFormAttributes(TypedDict, total=False):
+    label: str
+    options: list[str | dict[str, str]]
+
+
+class _IssueFormField(TypedDict, total=False):
+    type: Required[str]
+    id: str
+    attributes: Required[_IssueFormAttributes]
+
+
+class _IssueForm(TypedDict, total=False):
+    name: Required[str]
+    description: Required[str]
+    body: Required[list[_IssueFormField]]
+    labels: list[str]
+
+
+class _SitePayload(TypedDict):
+    """The static-export payload (data.json) these tests assert on.
+
+    Every key is written unconditionally by the export and the `/api/data`
+    route, so none of them is optional: typing them as optional would let a
+    regression drop one and only fail at the assertion, far from the cause.
+    """
+
+    run: str
+    daily: list[dict[str, object]]
+    hourly: list[dict[str, object]]
+    half_hour: list[dict[str, object]]
+    summary: dict[str, object]
+    build_sha: str
+
+
+class _LocationsDoc(TypedDict):
+    locations: list[dict[str, object]]
+
+
+def _load_yaml(path: Path) -> object:
+    """Parsed YAML document.
+
+    ``yaml.safe_load`` is untyped, so the parse is widened to ``object`` here
+    and each document is cast to the shape the test actually reads.
+    """
+    return cast(object, yaml.safe_load(path.read_text(encoding="utf-8")))
+
 def test_nasa_power_hourly_parser_uses_utc_and_preserves_uv():
-    payload = {
+    payload: dict[str, object] = {
         "properties": {
             "parameter": {
                 "ALLSKY_SFC_UVA": {"2026010112": 34.2, "2026010113": 36.1},
@@ -30,7 +137,8 @@ def test_nasa_power_hourly_parser_uses_utc_and_preserves_uv():
     }
     out = normalize_nasa_power(payload)
     assert len(out) == 2
-    assert out["time_utc"].dt.tz is not None
+    utc = cast("pd.Series[pd.Timestamp]", out["time_utc"])
+    assert utc.dt.tz is not None
     assert out.loc[0, "ALLSKY_SFC_UVA"] == 34.2
     assert out.loc[1, "ALLSKY_SFC_UVB"] == 0.46
 
@@ -78,8 +186,9 @@ from sunstack.opportunity import (
 )
 
 
-def _opportunity_row(**overrides):
-    row = {
+def _opportunity_row(**overrides: object) -> pd.DataFrame:
+    """One plausible daylight outdoor row; overrides break a single field."""
+    row: dict[str, object] = {
         "tan_score_absolute_0_100": 44.0,
         "local_tan_score_0_100": 97.0,
         "atmospheric_quality_percentile_0_100": 94.0,
@@ -101,7 +210,7 @@ def _opportunity_row(**overrides):
 
 def test_overall_merges_context_without_erasing_absolute_scale():
     out = apply_outdoor_feasibility(_opportunity_row())
-    overall = out["overall_tan_opportunity_0_100"].iloc[0]
+    overall = num(out, "overall_tan_opportunity_0_100").iloc[0]
     assert 50 < overall < 65
     assert overall <= 64  # absolute + configured 20-point headroom
     assert out.loc[0, "outdoor_feasibility_0_100"] == 100
@@ -221,8 +330,8 @@ def test_train_and_serve_share_clear_sky():
     )
     train = prepare_nasa_training(nasa, None)
     live = solar_features(pd.Series(stamp))
-    assert float(train["clear_ghi"].iloc[0]) > 500.0
-    assert float(train["clear_ghi"].iloc[0]) == float(live["clear_ghi"].iloc[0])
+    assert float(num(train, "clear_ghi").iloc[0]) > 500.0
+    assert float(num(train, "clear_ghi").iloc[0]) == float(num(live, "clear_ghi").iloc[0])
 
 
 def test_best_window_end_is_exclusive_for_hourly_highlight():
@@ -237,7 +346,7 @@ def test_best_window_end_is_exclusive_for_hourly_highlight():
             "outdoor_blocked": [False] * 6,
         }
     )
-    window = _best_contiguous_window(day)
+    window = best_contiguous_window(day)
     assert window is not None
     start, end, _ = window
     assert start == dts[0] and end == dts[3] + pd.Timedelta(minutes=30)
@@ -346,7 +455,7 @@ def test_30min_keeps_object_typed_radiation_split():
     flat = apply_skin_plane(out.copy(), None, None, "unknown", "local")
     tilted = apply_skin_plane(out.copy(), 45.0, 180.0, "dry_beach_sand", "local")
     assert (flat["skin_plane_factor"] == 1.0).all(), "flat plane is the reference"
-    factors = pd.to_numeric(tilted["skin_plane_factor"], errors="coerce")
+    factors = num(tilted, "skin_plane_factor")
     assert ((factors - 1.0).abs() > 1e-6).any(), (
         "a 45 deg tilt must move the plane factor off the horizontal reference "
         "once the beam/diffuse split is present")
@@ -394,12 +503,12 @@ def test_30min_keeps_object_typed_weather_and_feasibility_agrees():
         on="time", how="left",
     )
     assert (merged["temperature_2m"].notna()).all()
-    assert abs(merged.iloc[0]["overall_tan_opportunity_0_100"]
-               - merged.iloc[0]["hourly_overall"]) < 0.5
+    assert abs(num(merged, "overall_tan_opportunity_0_100").iloc[0]
+               - num(merged, "hourly_overall").iloc[0]) < 0.5
 
 
 def test_circular_doy_distance_wraps_year_boundary():
-    dist = _circular_doy_distance(pd.Series([1.0, 2.0, 180.0, 364.0, 365.0]), 1)
+    dist = circular_doy_distance(pd.Series([1.0, 2.0, 180.0, 364.0, 365.0]), 1)
     assert dist.tolist() == [0.0, 1.0, 179.0, 3.0, 2.0]
 
 
@@ -407,32 +516,63 @@ def test_cams_cycle_candidates_run_newest_first():
     # Candidates start from the latest safe cycle (unpublished newest skipped):
     # at 03:20 the safe cycle is 9/13 12z; at 12:00 exactly, 12z just started
     # so the safe cycle is still 00z.
-    got = _candidate_cams_cycles(datetime(2026, 9, 14, 3, 20, tzinfo=UTC))
+    got = candidate_cams_cycles(datetime(2026, 9, 14, 3, 20, tzinfo=UTC))
     assert got[0] == (date(2026, 9, 13), "12:00")
     assert got[1] == (date(2026, 9, 13), "00:00")
     assert len(got) == 4
-    got = _candidate_cams_cycles(datetime(2026, 9, 14, 12, 0, tzinfo=UTC))
+    got = candidate_cams_cycles(datetime(2026, 9, 14, 12, 0, tzinfo=UTC))
     assert got[0] == (date(2026, 9, 14), "00:00")
-def test_cams_group_unpublished_skips_single_retries(monkeypatch):
+def test_cams_group_unpublished_skips_single_retries(monkeypatch: pytest.MonkeyPatch):
     # A 400 'not a valid combination' on a group means the cycle isn't
     # published: skip per-variable retries (wasted ADS calls), keep the
     # genuine-failure path (unknown 400 still retries each variable).
     from sunstack import history
 
-    calls = []
+    calls: list[str | list[str]] = []
 
-    def fake_retrieve(client, dataset, request, target):
-        calls.append(request["variable"])
+    def fake_retrieve(
+        _client: object, _dataset: str, request: dict[str, object], _target: Path
+    ) -> None:
+        variable = request["variable"]
+        # `list[str]` is a parameterized generic and cannot be passed to
+        # isinstance; check the container and its members directly.
+        assert isinstance(variable, str) or (
+            isinstance(variable, list)
+            and all(isinstance(v, str) for v in cast("list[object]", variable))
+        )
+        calls.append(cast("str | list[str]", variable))
         raise RuntimeError(
             "400 Client Error: Request has not produced a valid combination of values"
         )
 
-    monkeypatch.setattr(history, "_retrieve_cams", fake_retrieve)
-    monkeypatch.setattr(history, "normalize_cams_netcdf_zip", lambda *a: __import__("pandas").DataFrame())
+    monkeypatch.setattr(history, "retrieve_cams", fake_retrieve)
+    def _skip_zip_normalize(*_args: object) -> pd.DataFrame:
+        """The archive never parses here; the fake returns an empty frame."""
+        return pd.DataFrame()
+
+    monkeypatch.setattr(history, "normalize_cams_netcdf_zip", _skip_zip_normalize)
+    class InertJob:
+        """Structural stand-in for a submitted ADS job (never polled here)."""
+
+        def __init__(self) -> None:
+            self.reply: dict[str, object] = {}
+
+        def update(self) -> None:
+            raise AssertionError("the inert job is never polled")
+
+        def download(self, target: str) -> None:
+            raise AssertionError(f"the inert job is never downloaded: {target}")
+
+    class InertClient:
+        """Stand-in ADS client: `retrieve_cams` is patched, so nothing is sent."""
+
+        def retrieve(self, dataset: str, request: dict[str, object]) -> InertJob:
+            raise AssertionError(f"unexpected live retrieve: {dataset} {request}")
+
     manifest: list[dict[str, object]] = []
-    frames, complete = history._fetch_cams_cycle(
-        __import__("pathlib").Path("/tmp/nonexistent-cams-test"),
-        object(), manifest, __import__("datetime").date(2026, 9, 24), "12:00", True,
+    frames, complete = history.fetch_cams_cycle(
+        Path("/tmp/nonexistent-cams-test"),
+        InertClient(), manifest, date(2026, 9, 24), "12:00", True,
     )
     group_calls = [c for c in calls if len(c) > 1]
     single_calls = [c for c in calls if len(c) == 1]
@@ -441,12 +581,15 @@ def test_cams_group_unpublished_skips_single_retries(monkeypatch):
     assert frames == [] and complete is False
 
 
-def test_cams_forecast_falls_back_to_older_cycle(monkeypatch, tmp_path):
+def test_cams_forecast_falls_back_to_older_cycle(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     from sunstack import history
 
-    calls = []
+    calls: list[tuple[str, str]] = []
 
-    def fake_fetch(raw_dir, client, manifest, cycle_date, cycle, force):
+    def fake_fetch(
+        _raw_dir: Path, _client: object, manifest: list[dict[str, object]],
+        cycle_date: date, cycle: str, _force: bool,
+    ) -> tuple[list[pd.DataFrame], bool]:
         calls.append((cycle_date.isoformat(), cycle))
         if len(calls) == 1:
             manifest.append(
@@ -469,7 +612,7 @@ def test_cams_forecast_falls_back_to_older_cycle(monkeypatch, tmp_path):
         )
         return [frame], True
 
-    monkeypatch.setattr(history, "_fetch_cams_cycle", fake_fetch)
+    monkeypatch.setattr(history, "fetch_cams_cycle", fake_fetch)
     monkeypatch.setattr(history, "cds_credentials_present", lambda: True)
     monkeypatch.setattr(history, "_cds_client", lambda: object())
     out = history.fetch_cams_forecast(tmp_path)
@@ -478,7 +621,7 @@ def test_cams_forecast_falls_back_to_older_cycle(monkeypatch, tmp_path):
     assert out["cams_cycle"].iloc[0] == f"{calls[1][0]}T{calls[1][1]}Z"
 
 
-def test_predicted_uv_is_zero_below_horizon(tmp_path):
+def test_predicted_uv_is_zero_below_horizon(tmp_path: Path):
     features = pd.DataFrame(
         {
             "ghi": [100.0, 100.0],
@@ -491,28 +634,32 @@ def test_predicted_uv_is_zero_below_horizon(tmp_path):
     assert uva[1] == 0 and uvb[1] == 0
 
 
-def test_cams_retrieve_abandons_stalled_request(tmp_path, monkeypatch):
+def test_cams_retrieve_abandons_stalled_request(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from sunstack import history
 
-    monkeypatch.setattr(history.time, "sleep", lambda s: None)
+    def _no_sleep(_secs: float) -> None:
+        """The fake job state advances on its own; never really wait."""
+
+    monkeypatch.setattr(time, "sleep", _no_sleep)
 
     class Stuck:
-        def __init__(self):
-            self.reply = {"state": "queued", "request_id": "r1"}
+        def __init__(self) -> None:
+            self.reply: dict[str, object] = {"state": "queued", "request_id": "r1"}
 
-        def update(self):
+        def update(self) -> None:
             pass
 
-        def download(self, target):
-            raise AssertionError("must not download a stalled job")
+        def download(self, target: str) -> None:
+            raise AssertionError(f"must not download a stalled job to {target}")
 
     class Client:
-        def retrieve(self, dataset, request):
+        def retrieve(self, dataset: str, request: dict[str, object]) -> Stuck:
+            assert dataset == "ds" and "data_format" in request
             return Stuck()
 
     target = tmp_path / "out.zip"
     try:
-        history._retrieve_cams(
+        history.retrieve_cams(
             Client(), "ds", {"data_format": "netcdf_zip"}, target, timeout_s=0
         )
     except TimeoutError as exc:
@@ -525,115 +672,143 @@ def test_request_diagnoses_empty_and_garbled_bodies():
     from sunstack import fetch
 
     class Resp:
-        status_code = 200
-        content = b""
-        text = ""
+        status_code: int = 200
+        content: bytes = b""
+        text: str = ""
 
-        def raise_for_status(self):
+        def raise_for_status(self) -> None:
             pass
 
+        def json(self) -> object:
+            raise ValueError("no JSON in an empty body")
+
     class Sess:
-        def get(self, *a, **k):
+        """Stand-in requests session; records what the helper asked for."""
+
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict[str, object], int]] = []
+
+        def get(self, endpoint: str, params: dict[str, object], timeout: int) -> Resp:
+            self.calls.append((endpoint, params, timeout))
             return Resp()
 
-    r = fetch._request(Sess(), "x", "https://example.com", {})
+    session = Sess()
+    r = fetch.request(session, "x", "https://example.com", {})
+    assert session.calls == [("https://example.com", {}, 120)]
     assert r.payload is None and "empty body" in (r.error or "")
 
     class Garbled(Resp):
-        content = b"<html>maintenance</html>"
-        text = "<html>maintenance</html>"
+        content: bytes = b"<html>maintenance</html>"
+        text: str = "<html>maintenance</html>"
 
-        def json(self):
+        @override
+        def json(self) -> object:
             raise ValueError("Expecting value: line 1 column 1 (char 0)")
 
     class Sess2:
-        def get(self, *a, **k):
+        """Same stand-in, but every response body is unparseable HTML."""
+
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict[str, object], int]] = []
+
+        def get(self, endpoint: str, params: dict[str, object], timeout: int) -> Resp:
+            self.calls.append((endpoint, params, timeout))
             return Garbled()
 
-    r2 = fetch._request(Sess2(), "y", "https://example.com", {})
+    session2 = Sess2()
+    r2 = fetch.request(session2, "y", "https://example.com", {})
+    assert session2.calls == [("https://example.com", {}, 120)]
     assert r2.payload is None
     assert "200" in (r2.error or "") and "maintenance" in (r2.error or "")
 
 
-def test_cams_retrieve_polls_to_completion(tmp_path, monkeypatch):
+def test_cams_retrieve_polls_to_completion(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from sunstack import history
 
-    monkeypatch.setattr(history.time, "sleep", lambda s: None)
-    seen = []
+    def _no_sleep(_secs: float) -> None:
+        """The fake job state advances on its own; never really wait."""
+
+    monkeypatch.setattr(time, "sleep", _no_sleep)
+    seen: list[str] = []
 
     class Flowing:
-        def __init__(self):
-            self.reply = {"state": "accepted", "request_id": "r2"}
-            self.states = iter(["queued", "running", "completed"])
+        def __init__(self) -> None:
+            self.reply: dict[str, object] = {"state": "accepted", "request_id": "r2"}
+            self.states: Iterator[str] = iter(["queued", "running", "completed"])
 
-        def update(self):
+        def update(self) -> None:
             self.reply = {"state": next(self.states), "request_id": "r2"}
 
-        def download(self, target):
+        def download(self, target: str) -> None:
             seen.append(target)
-            Path(target).write_bytes(b"ok")
-
-    from pathlib import Path
+            _ = Path(target).write_bytes(b"ok")
 
     class Client:
-        def retrieve(self, dataset, request):
+        def retrieve(self, dataset: str, request: dict[str, object]) -> Flowing:
+            assert dataset == "ds" and "data_format" in request
             return Flowing()
 
     target = tmp_path / "out.zip"
-    history._retrieve_cams(
+    history.retrieve_cams(
         Client(), "ds", {"data_format": "netcdf_zip"}, target, timeout_s=60
     )
     assert Path(seen[0]).read_bytes() == b"ok"
 
 
-def test_cams_retrieve_falls_back_on_format_rejection(tmp_path, monkeypatch):
+def test_cams_retrieve_falls_back_on_format_rejection(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from sunstack import history
 
-    monkeypatch.setattr(history.time, "sleep", lambda s: None)
-    calls = []
+    def _no_sleep(_secs: float) -> None:
+        """The fake job state advances on its own; never really wait."""
+
+    monkeypatch.setattr(time, "sleep", _no_sleep)
+    calls: list[dict[str, object]] = []
 
     class Done:
-        def __init__(self):
-            self.reply = {"state": "completed", "request_id": "r3"}
+        def __init__(self) -> None:
+            self.reply: dict[str, object] = {"state": "completed", "request_id": "r3"}
 
-        def update(self):
+        def update(self) -> None:
             pass
 
-        def download(self, target):
-            from pathlib import Path
-
-            Path(target).write_bytes(b"ok")
+        def download(self, target: str) -> None:
+            _ = Path(target).write_bytes(b"ok")
 
     class Client:
-        def retrieve(self, dataset, request):
+        def retrieve(self, dataset: str, request: dict[str, object]) -> Done:
+            assert dataset == "ds"
             calls.append(dict(request))
             if "data_format" in request:
                 raise RuntimeError("400 invalid")
             return Done()
 
     target = tmp_path / "out.zip"
-    history._retrieve_cams(
+    history.retrieve_cams(
         Client(), "ds", {"data_format": "netcdf_zip"}, target, timeout_s=60
     )
     assert "data_format" in calls[0] and "format" in calls[1]
     assert target.read_bytes() == b"ok"
 
 
-def test_cams_manifest_records_failed_attempts(tmp_path, monkeypatch):
+def test_cams_manifest_records_failed_attempts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import json
 
     from sunstack import history
 
-    def boom(client, dataset, request, target, timeout_s=None):
+    def boom(
+        _client: object, _dataset: str, _request: dict[str, object], _target: Path,
+        _timeout_s: int | None = None,
+    ) -> None:
         raise RuntimeError("simulated ADS outage")
 
-    monkeypatch.setattr(history, "_retrieve_cams", boom)
+    monkeypatch.setattr(history, "retrieve_cams", boom)
     monkeypatch.setattr(history, "cds_credentials_present", lambda: True)
     monkeypatch.setattr(history, "_cds_client", lambda: object())
     out = history.fetch_cams_forecast(tmp_path, force=True)
     assert out.empty
-    manifest = json.loads(
-        (tmp_path / "raw" / "cams_forecast" / "manifest.json").read_text()
+    manifest = cast(
+        "dict[str, list[dict[str, object]]]",
+        json.loads((tmp_path / "raw" / "cams_forecast" / "manifest.json").read_text()),
     )
     assert len(manifest["requests"]) > 0
     assert all(not r["ok"] for r in manifest["requests"])
@@ -722,7 +897,7 @@ def test_30min_handles_fall_back_duplicate_hours():
     assert bool((out["time"] == "2026-11-01T12:00").any())
 
 
-def test_export_static_site_publishes_data_and_calendar(tmp_path):
+def test_export_static_site_publishes_data_and_calendar(tmp_path: Path):
     from sunstack.output import export_static_site
 
     latest = tmp_path / "latest"
@@ -768,7 +943,7 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path):
     )
     hourly.to_parquet(latest / "tables" / "tan_forecast_hourly.parquet", index=False)
     half.to_parquet(latest / "tables" / "tan_forecast_30min.parquet", index=False)
-    (latest / "summary.json").write_text(
+    _ = (latest / "summary.json").write_text(
         '{"run": "test123", "created_at": "2026-09-15T00:00:00-04:00"}'
     )
     import json as _json
@@ -780,7 +955,10 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path):
     assert "build_sha" in html and "build=" in html, (
         "runline shows SHA and console logs it"
     )
-    payload = _json.loads((tmp_path / "site" / "data.json").read_text())
+    payload = cast(
+        _SitePayload,
+        _json.loads((tmp_path / "site" / "data.json").read_text()),
+    )
     assert payload["build_sha"], "data.json must carry the code SHA"
     assert [row["time"] for row in payload["hourly"]] == [
         "2026-09-15T12:00",
@@ -802,15 +980,24 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path):
     assert "locations.json" in html, (
         "static picker must read locations.json before /api/locations"
     )
-    locs = _json.loads((tmp_path / "site" / "locations.json").read_text())["locations"]
+    locs = cast(
+        _LocationsDoc,
+        _json.loads((tmp_path / "site" / "locations.json").read_text()),
+    )["locations"]
     assert {e["slug"] for e in locs} >= {"south-bend", "pacific-palisades"}
     assert any(e.get("url") for e in locs), "non-current sites need nav urls"
     assert "data-url" in html, "picker options must carry per-page urls"
 
-    skin = _json.loads((tmp_path / "site" / "skin.json").read_text())
+    skin = cast(
+        "dict[str, dict[str, str]]",
+        _json.loads((tmp_path / "site" / "skin.json").read_text()),
+    )
     assert sorted(skin) == ["1", "2", "3", "4", "5", "6"]
     assert "may burn" in skin["3"]["fitzpatrick_label"]
-    surfaces = _json.loads((tmp_path / "site" / "surfaces.json").read_text())
+    surfaces = cast(
+        "dict[str, dict[str, object]]",
+        _json.loads((tmp_path / "site" / "surfaces.json").read_text()),
+    )
     assert set(surfaces["grass_summer"]) == {
         "display_name", "proxy_reflectance", "reflectance_low",
         "reflectance_high", "spectral_quality", "optical_model",
@@ -845,18 +1032,21 @@ def test_fusion_recomputed_after_subhour_correction():
         }
     )
     out = build_30min_forecast(hourly, None)
-    for _, r in out.iterrows():
-        vs = [v for v in (r.get("uv_index"), r.get("uvi_cams"), r.get("uvi_epa"))
-              if pd.notna(v)]
-        if len(vs) >= 2 and pd.notna(r.get("uvi_consensus")):
-            assert min(vs) - 0.01 <= r["uvi_consensus"] <= max(vs) + 0.01, (
-                f"consensus {r['uvi_consensus']} outside sources {vs} at {r['time']}")
-        if pd.notna(r.get("uvi_source_spread")) and len(vs) >= 2:
-            assert abs(r["uvi_source_spread"] - (max(vs) - min(vs))) < 0.02, (
-                f"spread {r['uvi_source_spread']} != range at {r['time']}")
+    sources = {name: num(out, name) for name in ("uv_index", "uvi_cams", "uvi_epa")}
+    consensus = num(out, "uvi_consensus")
+    spread = num(out, "uvi_source_spread")
+    stamps = _text(out, "time")
+    for i in range(len(out)):
+        vs = [s.iloc[i] for s in sources.values() if not pd.isna(s.iloc[i])]
+        if len(vs) >= 2 and not pd.isna(consensus.iloc[i]):
+            assert min(vs) - 0.01 <= consensus.iloc[i] <= max(vs) + 0.01, (
+                f"consensus {consensus.iloc[i]} outside sources {vs} at {stamps.iloc[i]}")
+        if not pd.isna(spread.iloc[i]) and len(vs) >= 2:
+            assert abs(spread.iloc[i] - (max(vs) - min(vs))) < 0.02, (
+                f"spread {spread.iloc[i]} != range at {stamps.iloc[i]}")
 
 
-def test_reskin_never_rewrites_forecast_identity(tmp_path):
+def test_reskin_never_rewrites_forecast_identity(tmp_path: Path):
     # P0 regression: reskin_static_dir must update renderer identity only.
     # Pre-fix it overwrote build_sha, stamping new code onto old rows.
     import json as _json
@@ -890,15 +1080,19 @@ def test_reskin_never_rewrites_forecast_identity(tmp_path):
     )
     hourly.to_parquet(latest / "tables" / "tan_forecast_hourly.parquet", index=False)
     half.to_parquet(latest / "tables" / "tan_forecast_30min.parquet", index=False)
-    (latest / "summary.json").write_text(
+    _ = (latest / "summary.json").write_text(
         '{"run": "oldrun", "created_at": "2026-09-15T00:00:00-04:00",'
-        ' "forecast_code_sha": "aaa1111"}'
+        + ' "forecast_code_sha": "aaa1111"}'
     )
-    export_static_site(tmp_path, tmp_path / "site")
-    before = _json.loads((tmp_path / "site" / "data.json").read_text())
+    _ = export_static_site(tmp_path, tmp_path / "site")
+    before = cast(
+        _SitePayload, _json.loads((tmp_path / "site" / "data.json").read_text())
+    )
     assert before["summary"]["forecast_code_sha"] == "aaa1111"
-    reskin_static_dir(tmp_path / "site")
-    after = _json.loads((tmp_path / "site" / "data.json").read_text())
+    _ = reskin_static_dir(tmp_path / "site")
+    after = cast(
+        _SitePayload, _json.loads((tmp_path / "site" / "data.json").read_text())
+    )
     assert after["summary"]["forecast_code_sha"] == "aaa1111", (
         "reskin must never rewrite forecast identity")
     assert after["summary"].get("renderer_code_sha"), "reskin stamps renderer"
@@ -906,14 +1100,14 @@ def test_reskin_never_rewrites_forecast_identity(tmp_path):
 
 
 
-def test_reskin_static_dir_needs_no_run_data(tmp_path):
+def test_reskin_static_dir_needs_no_run_data(tmp_path: Path):
     import json as _json
 
     from sunstack.output import reskin_static_dir
 
     page = tmp_path / "page"
     page.mkdir()
-    (page / "data.json").write_text(
+    _ = (page / "data.json").write_text(
         _json.dumps(
             {
                 "run": "data/latest",
@@ -928,9 +1122,9 @@ def test_reskin_static_dir_needs_no_run_data(tmp_path):
         ),
         encoding="utf-8",
     )
-    (page / "index.html").write_text("STALE", encoding="utf-8")
-    (page / "locations.json").write_text("{}", encoding="utf-8")
-    (page / "skin.json").write_text("{}", encoding="utf-8")
+    _ = (page / "index.html").write_text("STALE", encoding="utf-8")
+    _ = (page / "locations.json").write_text("{}", encoding="utf-8")
+    _ = (page / "skin.json").write_text("{}", encoding="utf-8")
     info = reskin_static_dir(page)
     assert info["run"] == "20260922_173542", "reskin keeps the committed run tag"
     assert info["build_sha"], "reskin stamps the current code SHA"
@@ -1007,21 +1201,23 @@ def test_30min_kills_pre_sunrise_ghost_light():
         }
     )
     out = build_30min_forecast(hourly, None)
-    slot = out.loc[out["time"] == "2026-09-15T06:30"].iloc[0]
-    assert float(slot["shortwave_radiation_instant"]) == 0.0
-    assert float(slot["predicted_uva_wm2"]) == 0.0
+    slot = out.loc[_text(out, "time") == "2026-09-15T06:30"]
+    assert float(num(slot, "shortwave_radiation_instant").iloc[0]) == 0.0
+    assert float(num(slot, "predicted_uva_wm2").iloc[0]) == 0.0
 
 
-def test_30min_uses_clear_sky_index_not_linear_blend(monkeypatch):
+def test_30min_uses_clear_sky_index_not_linear_blend(monkeypatch: pytest.MonkeyPatch):
     # With TOA mocked nonlinear in wall time, constant-kt input must come
     # back exact; a linear GHI blend would give 250.0 instead of 312.5.
     import numpy as np
 
     import sunstack.opportunity as opp
 
-    def fake_toa(times_utc):
-        minute = pd.to_datetime(times_utc).dt.minute.to_numpy()
-        return np.where(minute == 0, 100.0, 250.0)
+    def fake_toa(times_utc: pd.Series) -> np.ndarray:
+        minutes = pd.to_datetime(times_utc).dt.minute.to_numpy()
+        toa = np.full(minutes.shape, 250.0)
+        toa[minutes == 0] = 100.0
+        return toa
 
     monkeypatch.setattr(opp, "_toa_wm2", fake_toa)
     hourly = pd.DataFrame(
@@ -1036,9 +1232,9 @@ def test_30min_uses_clear_sky_index_not_linear_blend(monkeypatch):
         }
     )
     out = opp.build_30min_forecast(hourly, None)
-    slot = out.loc[out["time"] == "2026-09-15T06:30"].iloc[0]
-    assert float(slot["shortwave_radiation_instant"]) == 312.5
-    assert float(slot["predicted_uva_wm2"]) == 31.25
+    slot = out.loc[_text(out, "time") == "2026-09-15T06:30"]
+    assert float(num(slot, "shortwave_radiation_instant").iloc[0]) == 312.5
+    assert float(num(slot, "predicted_uva_wm2").iloc[0]) == 31.25
 
 
 def test_30min_broadband_corrections_recompute_pigment_channel():
@@ -1071,18 +1267,19 @@ def test_30min_broadband_corrections_recompute_pigment_channel():
     )
     out = opp.build_30min_forecast(hourly, hrrr15)
     native = out.loc[
-        out["subhour_source"].str.startswith("native_HRRR", na=False)
+        _text(out, "subhour_source").str.startswith("native_HRRR", na=False)
     ]
     assert len(native) > 0
-    assert (native["predicted_uva_wm2"].to_numpy(dtype=float) != 40.0).any()
+    uva = num(native, "predicted_uva_wm2").to_numpy(dtype=float)
+    assert bool(np.any(np.not_equal(uva, 40.0)))
     expected = np.round(
         pigment_darkening_from_broadband(
-            native["predicted_uva_wm2"].to_numpy(dtype=float),
-            native["predicted_uvb_wm2"].to_numpy(dtype=float),
+            num(native, "predicted_uva_wm2").to_numpy(dtype=float),
+            num(native, "predicted_uvb_wm2").to_numpy(dtype=float),
         ),
         5,
     )
-    got = native["pigment_darkening_effective_irradiance"].to_numpy(dtype=float)
+    got = num(native, "pigment_darkening_effective_irradiance").to_numpy(dtype=float)
     assert np.allclose(np.asarray(expected, dtype=float), got, rtol=0, atol=1e-9)
 
 
@@ -1105,8 +1302,8 @@ def test_30min_survives_non_numeric_ghi_dtype():
     )
     assert not pd.api.types.is_numeric_dtype(hourly["shortwave_radiation_instant"])
     out = build_30min_forecast(hourly, None)
-    slot = out.loc[out["time"] == "2026-09-15T12:30"].iloc[0]
-    assert float(slot["shortwave_radiation_instant"]) > 0.0
+    slot = out.loc[_text(out, "time") == "2026-09-15T12:30"]
+    assert float(num(slot, "shortwave_radiation_instant").iloc[0]) > 0.0
 
 
 def test_30min_keeps_string_dtype_uv_index():
@@ -1127,9 +1324,9 @@ def test_30min_keeps_string_dtype_uv_index():
         }
     )
     out = build_30min_forecast(hourly, None)
-    slot = out.loc[out["time"] == "2026-09-15T12:30"].iloc[0]
+    slot = out.loc[_text(out, "time") == "2026-09-15T12:30"]
     # Linear would give 4.5; the bounded geometry correction stays near it.
-    assert 3.0 < float(slot["uv_index"]) < 6.0
+    assert 3.0 < float(num(slot, "uv_index").iloc[0]) < 6.0
 
 
 def test_overnight_rows_score_zero_opportunity_not_residual():
@@ -1179,8 +1376,8 @@ def test_hrrr_correction_stays_bounded_against_kt_baseline():
     plain = build_30min_forecast(hourly, None)
     fixed = build_30min_forecast(hourly, hrrr)
     for stamp in ("2026-09-15T12:00", "2026-09-15T12:30", "2026-09-15T13:00"):
-        a = float(plain.loc[plain["time"] == stamp, "predicted_uva_wm2"].iloc[0])
-        b = float(fixed.loc[fixed["time"] == stamp, "predicted_uva_wm2"].iloc[0])
+        a = float(num(plain.loc[_text(plain, "time") == stamp], "predicted_uva_wm2").iloc[0])
+        b = float(num(fixed.loc[_text(fixed, "time") == stamp], "predicted_uva_wm2").iloc[0])
         assert 0.3 * a <= b <= 2.1 * a
 
 
@@ -1188,9 +1385,7 @@ def test_scheduled_workflow_is_complete_and_wired():
     # Every Actions failure this week was a workflow edit that dropped a
     # step or an env key (missing export step, missing CDSAPI_KEY) and only
     # failed 15 minutes into a CI run. Pin the load-bearing surface here.
-    import yaml
-
-    wf = yaml.safe_load(Path(".github/workflows/run.yml").read_text(encoding="utf-8"))
+    wf = cast(_Workflow, _load_yaml(Path(".github/workflows/run.yml")))
     steps = wf["jobs"]["run"]["steps"]
     by_name = {s.get("uses", s.get("name")): s for s in steps}
     assert "actions/checkout@v7.0.1" in by_name
@@ -1216,7 +1411,7 @@ def test_scheduled_workflow_is_complete_and_wired():
     )
     install = by_name["Install dependencies"]
     step = by_name["Forecast + export + publish, one site at a time"]
-    assert "uv run sunstack run" in step["run"], (
+    assert "uv run sunstack run" in step.get("run", ""), (
         "single step runs, exports, and publishes per site"
     )
     assert "--locked" in install.get("run", ""), (
@@ -1226,13 +1421,14 @@ def test_scheduled_workflow_is_complete_and_wired():
 
     from sunstack import cli as _cli
 
-    pub_src = _inspect.getsource(_cli._publish_site)
+    pub_src = _inspect.getsource(_cli.publish_site)
     assert "uv.lock" in pub_src, "publish must discard uv.lock churn before rebasing"
     assert "theirs" in pub_src, (
         "publish must recover from mid-run local pushes instead of exit 128"
     )
     forecast = by_name["Forecast + export + publish, one site at a time"]
-    assert "CDSAPI_URL" in forecast["env"] and "CDSAPI_KEY" in forecast["env"]
+    env = forecast.get("env", {})
+    assert "CDSAPI_URL" in env and "CDSAPI_KEY" in env
     schedules = wf["on"]["schedule"]
     assert any("0,9,12,21" in s["cron"] for s in schedules)
     assert all(s.get("timezone") == "America/Indiana/Indianapolis" for s in schedules)
@@ -1240,7 +1436,7 @@ def test_scheduled_workflow_is_complete_and_wired():
     import tomllib
 
     with open("pyproject.toml", "rb") as f:
-        proj = tomllib.load(f)
+        proj = cast("_Pyproject", cast(object, tomllib.load(f)))
     assert proj["project"].get("requires-python"), (
         "requires-python must survive metadata edits"
     )
@@ -1250,18 +1446,12 @@ def test_scheduled_workflow_is_complete_and_wired():
 
 
 def test_location_calibrate_workflow_is_post_merge_only():
-    import yaml
-
-    wf = yaml.safe_load(
-        Path(".github/workflows/location-calibrate.yml").read_text(encoding="utf-8")
-    )
-    on = wf.get("on", {})
+    wf = cast(_Workflow, _load_yaml(Path(".github/workflows/location-calibrate.yml")))
+    on = wf["on"]
     assert "pull_request_target" not in on, (
         "calibration must never run on unapproved proposals"
     )
-    push_paths = (
-        (on.get("push", {}) or {}).get("paths", []) if isinstance(on, dict) else []
-    )
+    push_paths = (on.get("push", {}) or {}).get("paths", [])
     assert "locations.yaml" in push_paths, "calibration triggers on registry merge"
     perms = wf.get("permissions", {})
     assert "pull-requests" not in perms, "calibrate job needs no PR write scope"
@@ -1276,18 +1466,14 @@ def test_location_calibrate_workflow_is_post_merge_only():
 
 
 def test_location_intake_workflow_holds_no_secrets():
-    import yaml
-
-    wf = yaml.safe_load(
-        Path(".github/workflows/location-intake.yml").read_text(encoding="utf-8")
-    )
+    wf = cast(_Workflow, _load_yaml(Path(".github/workflows/location-intake.yml")))
     text = Path(".github/workflows/location-intake.yml").read_text(encoding="utf-8")
     scrubbed = text.replace("nobody gets secrets", "")
     assert "secrets." not in scrubbed, "intake must never read any GitHub secret"
     assert "CDSAPI_URL" not in text and "CDSAPI_KEY" not in text, (
         "intake must never touch CAMS credentials"
     )
-    assert "pull_request_target" in wf.get("on", {}), (
+    assert "pull_request_target" in wf["on"], (
         "intake validates unapproved proposals"
     )
     perms = wf.get("permissions", {})
@@ -1295,11 +1481,9 @@ def test_location_intake_workflow_holds_no_secrets():
 
 
 def test_location_propose_workflow_is_issue_triggered_and_secret_free():
-    import yaml
-
     text = Path(".github/workflows/location-propose.yml").read_text(encoding="utf-8")
-    wf = yaml.safe_load(text)
-    on = wf.get("on", {})
+    wf = cast(_Workflow, _load_yaml(Path(".github/workflows/location-propose.yml")))
+    on = wf["on"]
     assert "issues" in on, "propose triggers on [Location] issues"
     scrubbed = text.replace("nobody gets secrets", "")
     assert "secrets." not in scrubbed, "propose must never read any GitHub secret"
@@ -1335,7 +1519,7 @@ def test_location_propose_workflow_is_issue_triggered_and_secret_free():
     assert "getFullYear" in ui, "default day is today, not best day"
 
 
-def test_issue_location_parser_round_trips_registry_append(tmp_path):
+def test_issue_location_parser_round_trips_registry_append(tmp_path: Path):
     import subprocess
     import sys
 
@@ -1348,7 +1532,7 @@ def test_issue_location_parser_round_trips_registry_append(tmp_path):
         "### Longitude\n\n-68.89\n\n"
         "### Timezone\n\nAmerica/Santo_Domingo\n"
     )
-    (tmp_path / "body.md").write_text(body, encoding="utf-8")
+    _ = (tmp_path / "body.md").write_text(body, encoding="utf-8")
     out = tmp_path / "proposed.yaml"
     proc = subprocess.run(
         [
@@ -1363,19 +1547,22 @@ def test_issue_location_parser_round_trips_registry_append(tmp_path):
         check=False,
     )
     assert proc.returncode == 0, proc.stderr or proc.stdout
-    proposed = yaml.safe_load(out.read_text(encoding="utf-8"))
-    base = yaml.safe_load(Path("locations.yaml").read_text(encoding="utf-8"))
+    proposed = cast("list[dict[str, object]]", yaml.safe_load(out.read_text(encoding="utf-8")))
+    base = cast(
+        "list[dict[str, object]]",
+        yaml.safe_load(Path("locations.yaml").read_text(encoding="utf-8")),
+    )
     assert len(proposed) == len(base) + 1, "propose appends exactly one entry"
     assert proposed[-1]["slug"] == "casa-de-campo"
     assert proposed[:-1] == base, "existing entries untouched"
 
 
-def test_run_one_site_skips_cold_calibration_without_failing(tmp_path, monkeypatch):
+def test_run_one_site_skips_cold_calibration_without_failing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import yaml
 
     from sunstack import cli, config
 
-    (tmp_path / "locations.yaml").write_text(
+    _ = (tmp_path / "locations.yaml").write_text(
         yaml.safe_dump(
             [
                 {
@@ -1406,25 +1593,23 @@ def test_run_one_site_skips_cold_calibration_without_failing(tmp_path, monkeypat
     )
     import pytest
 
-    with pytest.raises(cli._SiteSkipped):
-        cli.run_one_site(tmp_path / "data", cold)
+    with pytest.raises(cli.SiteSkipped):
+        _ = cli.run_one_site(tmp_path / "data", cold)
     # South Bend path resolution never touches the cold site.
     sb = next(
         s
         for s in config.load_sites(tmp_path / "locations.yaml")
         if s.slug == "south-bend"
     )
-    _, cal_dir, _ = cli._calibration_paths(tmp_path / "data", None)
+    _, cal_dir, _ = cli.calibration_paths(tmp_path / "data", None)
     assert cal_dir == tmp_path / "data" / "calibration"
     assert sb.slug == "south-bend"
 
 
 def test_site_refresh_workflow_is_ui_only_and_secret_free():
-    import yaml
-
     text = Path(".github/workflows/site-refresh.yml").read_text(encoding="utf-8")
-    wf = yaml.safe_load(text)
-    on = wf.get("on", {})
+    wf = cast(_Workflow, _load_yaml(Path(".github/workflows/site-refresh.yml")))
+    on = wf["on"]
     assert "workflow_dispatch" in on, "refresh stays manually runnable"
     assert "workflow_run" in on, "refresh fires after each forecast run"
     assert (on.get("workflow_run", {}) or {}).get("workflows") == ["forecast-run"]
@@ -1447,31 +1632,31 @@ def test_site_refresh_workflow_is_ui_only_and_secret_free():
     )
 
 
-def test_run_alternates_publish_per_site(tmp_path):
+def test_run_alternates_publish_per_site():
     import inspect
 
     from sunstack import cli
 
     # run→publish per site (not run-all→publish-all): one slow site can never
     # take down the other's fresh data.
-    src = inspect.getsource(cli._run_one_site_locked)
-    assert "run_live" in src and "export_static_site" in src and "_publish_site" in src
+    src = inspect.getsource(cli.run_one_site_locked)
+    assert "run_live" in src and "export_static_site" in src and "publish_site" in src
     assert "site_lock" in inspect.getsource(cli.run_one_site), (
         "per-site runs serialize under the site lock (audit: globals unsafe)")
     # Cold sites skip without failing: calibrate workflow owns bootstrap.
-    assert "_SiteSkipped" in inspect.getsource(cli._run_all_sites)
+    assert "SiteSkipped" in inspect.getsource(cli.run_all_sites)
     # Run dirs are ephemeral CI state (artifact carries them); only docs +
     # calibration outputs commit, so git never grows 40MB/run.
-    pub = inspect.getsource(cli._publish_site)
+    pub = inspect.getsource(cli.publish_site)
     assert "calibration" in pub, "calibration models still publish for fresh clones"
     assert "/latest" not in pub and "/runs" not in pub, "run dirs must not commit"
 
 
 def test_uv_ghi_disagreement_flags_only_strong_daytime_mismatch():
-    from sunstack.tanscore import _uv_ghi_disagree, apply_disagreement_penalty
+    from sunstack.tanscore import apply_disagreement_penalty, uv_ghi_disagree
 
-    def flag(**kw):
-        base = {
+    def flag(**kw: float) -> bool:
+        base: dict[str, float] = {
             "ghi": np.nan,
             "terrestrial_radiation": np.nan,
             "uv_index": np.nan,
@@ -1479,7 +1664,7 @@ def test_uv_ghi_disagreement_flags_only_strong_daytime_mismatch():
             "sza": np.nan,
         }
         base.update(kw)
-        return bool(_uv_ghi_disagree(pd.DataFrame([base])).iloc[0])
+        return bool(uv_ghi_disagree(pd.DataFrame([base])).iloc[0])
 
     # Sep-16 case: bright broadband, dark UV, high sun.
     assert flag(
@@ -1553,9 +1738,9 @@ def test_disagreement_flag_forward_fills_to_half_hours():
         }
     )
     out = build_30min_forecast(hourly, None)
-    half = out.loc[out["time"] == "2026-09-15T13:30"]
+    half = out.loc[_text(out, "time") == "2026-09-15T13:30"]
     assert len(half) == 1
-    assert bool(half["uv_input_disagree"].iloc[0]) is True
+    assert bool(num(half, "uv_input_disagree").iloc[0]) is True
 
 
 def test_sun_posture_guidance_is_geometry_not_scoring():
@@ -1612,16 +1797,16 @@ def test_posture_labels_recomputed_at_half_hours():
         }
     )
     out = build_30min_forecast(hourly, None)
-    half = out.loc[out["time"] == "2026-09-15T13:30"]
+    half = out.loc[_text(out, "time") == "2026-09-15T13:30"]
     assert len(half) == 1
     # 13:30 geometry is exact pvlib (audit: was interpolated midpoint):
     # elev ~51.0, azim ~172 → S, not SSE; lift = 90 - elev.
-    assert half["sun_compass"].iloc[0] == "S"
-    assert "S" in half["sun_posture_guidance"].iloc[0]
-    assert 38.0 < float(half["torso_lift_deg"].iloc[0]) < 42.0
+    assert _text(half, "sun_compass").iloc[0] == "S"
+    assert "S" in _text(half, "sun_posture_guidance").iloc[0]
+    assert 38.0 < float(num(half, "torso_lift_deg").iloc[0]) < 42.0
 
 
-def test_location_registry_loads_south_bend_default(tmp_path):
+def test_location_registry_loads_south_bend_default(tmp_path: Path):
     from sunstack.config import active_sites, default_site, load_sites
 
     sites = load_sites()
@@ -1633,19 +1818,19 @@ def test_location_registry_loads_south_bend_default(tmp_path):
     assert load_sites(tmp_path / "nope.yaml")[0].default is True
 
 
-def test_location_registry_rejects_bad_entries(tmp_path):
+def test_location_registry_rejects_bad_entries(tmp_path: Path):
     import pytest
     import yaml
 
     from sunstack.config import load_sites
 
-    def write(rows):
+    def write(rows: list[dict[str, object]]) -> Path:
         p = tmp_path / "loc.yaml"
-        p.write_text(yaml.safe_dump(rows), encoding="utf-8")
+        _ = p.write_text(yaml.safe_dump(rows), encoding="utf-8")
         return p
 
     with pytest.raises((TypeError, ValueError)):
-        load_sites(
+        _ = load_sites(
             write(
                 [
                     {
@@ -1660,13 +1845,13 @@ def test_location_registry_rejects_bad_entries(tmp_path):
             )
         )
     with pytest.raises((TypeError, ValueError)):
-        load_sites(
+        _ = load_sites(
             write(
                 [{"slug": "x", "lat": 91, "lon": 0, "timezone": "UTC", "default": True}]
             )
         )
     with pytest.raises(ValueError):
-        load_sites(
+        _ = load_sites(
             write(
                 [
                     {
@@ -1680,7 +1865,7 @@ def test_location_registry_rejects_bad_entries(tmp_path):
             )
         )
     with pytest.raises((TypeError, ValueError)):
-        load_sites(write([{"slug": "x", "lat": 0, "lon": 0, "timezone": "UTC"}]))
+        _ = load_sites(write([{"slug": "x", "lat": 0, "lon": 0, "timezone": "UTC"}]))
 
 
 def test_use_site_scopes_coordinates_without_leak():
@@ -1699,30 +1884,28 @@ def test_use_site_scopes_coordinates_without_leak():
     assert config.current_site() is None
 
 
-def test_site_paths_namespace_non_default_only(tmp_path):
-    from sunstack.cli import _calibration_paths
+def test_site_paths_namespace_non_default_only(tmp_path: Path):
+    from sunstack.cli import calibration_paths
 
-    default_root, default_cal, _ = _calibration_paths(tmp_path)
+    default_root, default_cal, _ = calibration_paths(tmp_path)
     assert default_root == tmp_path / "calibration_sources"
     assert default_cal == tmp_path / "calibration"
-    pal_root, pal_cal, _ = _calibration_paths(tmp_path, "pacific-palisades")
+    pal_root, pal_cal, _ = calibration_paths(tmp_path, "pacific-palisades")
     assert pal_root == tmp_path / "sites" / "pacific-palisades" / "calibration_sources"
     assert pal_cal == tmp_path / "sites" / "pacific-palisades" / "calibration"
 
 
 def test_issue_forms_are_valid_and_secret_free():
-    import yaml
-
     tpl = Path(".github/ISSUE_TEMPLATE")
     assert not list(tpl.glob("*.md")), "legacy markdown templates must stay retired"
     forms = sorted(tpl.glob("[0-9]-*.yml"))
     assert len(forms) == 3, "bug + feature + location forms, ordered by numeric prefix"
-    cfg = yaml.safe_load((tpl / "config.yml").read_text(encoding="utf-8"))
+    cfg = cast(_IssueChooser, _load_yaml(tpl / "config.yml"))
     assert cfg.get("blank_issues_enabled") is False, "chooser forces structured forms"
 
     forbidden = ("password",)
     for form in forms:
-        wf = yaml.safe_load(form.read_text(encoding="utf-8"))
+        wf = cast(_IssueForm, _load_yaml(form))
         assert len(wf["name"]) > 3 and wf["description"], (
             f"{form.name} needs name + description"
         )
@@ -1733,7 +1916,11 @@ def test_issue_forms_are_valid_and_secret_free():
         )
         ids = [b["id"] for b in body if "id" in b]
         assert len(ids) == len(set(ids)), f"{form.name} ids must be unique"
-        labels = [b["attributes"]["label"] for b in body if b.get("type") != "markdown"]
+        labels = [
+            b["attributes"].get("label", "")
+            for b in body
+            if b.get("type") != "markdown"
+        ]
         assert len(labels) == len(set(labels)), f"{form.name} labels must be unique"
         for b in body:
             assert b.get("type") in {
@@ -1761,14 +1948,14 @@ def test_issue_forms_are_valid_and_secret_free():
             f"{form.name} must never touch credentials"
         )
 
-    loc = yaml.safe_load((tpl / "3-location-request.yml").read_text(encoding="utf-8"))
+    loc = cast(_IssueForm, _load_yaml(tpl / "3-location-request.yml"))
     loc_ids = {b.get("id") for b in loc["body"]}
     assert {"latitude", "longitude", "timezone", "slug", "location-name"} <= loc_ids, (
         "location form must capture registry fields explicitly"
     )
 
 
-def test_debug_photobiology_reports_full_stack(tmp_path, capsys):
+def test_debug_photobiology_reports_full_stack(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     # --photobiology debug must expose spectra, weights, reference, and the
     # latest hourly v4 columns; a silent or partial dump would hide the
     # internals the loud-failure contract relies on operators seeing.
@@ -1812,7 +1999,7 @@ def test_debug_photobiology_reports_full_stack(tmp_path, capsys):
     assert "MISSING columns" not in out
 
 
-def test_debug_photobiology_without_latest_is_graceful(tmp_path, capsys):
+def test_debug_photobiology_without_latest_is_graceful(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     from sunstack.cli import debug_photobiology
 
     debug_photobiology(tmp_path)
@@ -1827,7 +2014,7 @@ def test_env_example_documents_every_src_env_var():
     from pathlib import Path
 
     env = (Path(".env.example")).read_text(encoding="utf-8")
-    seen = set()
+    seen: set[str] = set()
     for src in Path("src/sunstack").glob("*.py"):
         seen |= set(re.findall(r'os\.getenv\("([A-Z0-9_]+)"', src.read_text()))
     assert seen, "no env vars found — scanner broken"
@@ -1848,12 +2035,12 @@ def test_dose_row_marks_partial_window_and_day_doses():
         assert "pc(d." + flag + ")" in HTML.replace(" ", ""), flag
 
 
-def test_show_config_exposes_photobiology_model(capsys):
+def test_show_config_exposes_photobiology_model(capsys: pytest.CaptureFixture[str]):
     # Operators must see which model/reference/tier scoring uses; a config
     # dump without the v4 block hides the most consequential settings.
-    from sunstack.cli import _print_config
+    from sunstack.cli import print_config
 
-    _print_config()
+    print_config()
     out = capsys.readouterr().out
     for token in ("Photobiology model", "tan_score_model=action-spectrum-v2",
                   "global-mel-ref-v2", "tierC-broadband-proxy-v2",
@@ -1867,28 +2054,28 @@ def test_swap_once_fails_loudly_on_anchor_drift():
     # broken page) when an anchor is missing or ambiguous.
     import pytest
 
-    from sunstack.output import _swap_once
+    from sunstack.output import swap_once
 
-    assert _swap_once("ab", "b", "c") == "ac"
+    assert swap_once("ab", "b", "c") == "ac"
     with pytest.raises(RuntimeError, match="anchor drifted"):
-        _swap_once("ab", "z", "c")
+        _ = swap_once("ab", "z", "c")
     with pytest.raises(RuntimeError, match="anchor drifted"):
-        _swap_once("bb", "b", "c")
+        _ = swap_once("bb", "b", "c")
 
 
 def test_scol_rejects_duplicate_columns_loudly():
     import pytest
 
-    from sunstack.calibrate import scol
+    from sunstack.frame import scol
 
     dup = pd.DataFrame([[1.0, 2.0]], columns=["uva", "uva"])
     with pytest.raises(TypeError, match="unique Series"):
-        scol(dup, "uva")
+        _ = scol(dup, "uva")
     assert scol(pd.DataFrame({"uva": [1.0]}), "uva").tolist() == [1.0]
 
 
 def test_num_missing_column_is_nan_not_crash():
-    from sunstack.calibrate import num
+    from sunstack.frame import num
 
     frame = pd.DataFrame({"a": [1.0, 2.0]})
     out = num(frame, "nope")
@@ -1896,22 +2083,22 @@ def test_num_missing_column_is_nan_not_crash():
     assert len(out) == 2
 
 
-def test_build_local_reference_empty_is_empty(tmp_path):
+def test_build_local_reference_empty_is_empty(tmp_path: Path):
     from sunstack.calibrate import build_local_reference
 
     assert build_local_reference(pd.DataFrame(), tmp_path).empty
 
 
-def test_train_uv_models_empty_raises_loudly(tmp_path):
+def test_train_uv_models_empty_raises_loudly(tmp_path: Path):
     import pytest
 
     from sunstack.calibrate import train_uv_models
 
     with pytest.raises(RuntimeError, match="empty"):
-        train_uv_models(pd.DataFrame(), tmp_path)
+        _ = train_uv_models(pd.DataFrame(), tmp_path)
 
 
-def test_build_local_reference_without_uvb_uses_uvi_fallback(tmp_path):
+def test_build_local_reference_without_uvb_uses_uvi_fallback(tmp_path: Path):
     # No measured UVB band: the uvi*0.15 fallback keeps E_mel defined and
     # version-stamped instead of failing the rebuild.
     from sunstack.calibrate import build_local_reference
@@ -1929,7 +2116,7 @@ def test_build_local_reference_without_uvb_uses_uvi_fallback(tmp_path):
     assert (ref["tan_score_model_version"] == "action-spectrum-v2").all()
 
 
-def test_output_helpers_fail_loud_or_noop(tmp_path):
+def test_output_helpers_fail_loud_or_noop(tmp_path: Path):
     # Unknown locations and missing runs must fail with actionable errors
     # (never the wrong site or a bare crash); empty frames are no-ops.
     import importlib.util
@@ -1937,13 +2124,13 @@ def test_output_helpers_fail_loud_or_noop(tmp_path):
     import pytest
 
     from sunstack.output import write_excel, write_frame
-    from sunstack.ui import _latest_dir, _resolve_site
+    from sunstack.ui import latest_dir, resolve_site
 
-    assert _resolve_site(None).slug == "south-bend"  # old URLs keep working
+    assert resolve_site(None).slug == "south-bend"  # old URLs keep working
     with pytest.raises(FileNotFoundError, match="unknown location"):
-        _resolve_site("no-such-place")
+        _ = resolve_site("no-such-place")
     with pytest.raises(FileNotFoundError, match="No SunStack run found"):
-        _latest_dir(tmp_path)
+        _ = latest_dir(tmp_path)
     write_frame(pd.DataFrame(), tmp_path / "out", "x")
     assert not (tmp_path / "out").exists()
     write_excel({}, tmp_path / "empty.xlsx")
@@ -1956,17 +2143,17 @@ def test_output_helpers_fail_loud_or_noop(tmp_path):
 def test_day_status_thresholds():
     # User-facing day verdicts shown in the dashboard and day export; pin the
     # boundaries so a threshold edit is deliberate, never incidental.
-    from sunstack.opportunity import _day_status
+    from sunstack.opportunity import day_status
 
-    assert _day_status(float("nan")) == "UNKNOWN"
-    assert _day_status(95.0) == "EXCELLENT"
-    assert _day_status(80.0) == "EXCELLENT"
-    assert _day_status(79.9) == "VERY GOOD"
-    assert _day_status(65.0) == "VERY GOOD"
-    assert _day_status(50.0) == "GOOD"
-    assert _day_status(35.0) == "FAIR"
-    assert _day_status(34.9) == "POOR"
-    assert _day_status(0.0) == "NO OUTDOOR WINDOW"
+    assert day_status(float("nan")) == "UNKNOWN"
+    assert day_status(95.0) == "EXCELLENT"
+    assert day_status(80.0) == "EXCELLENT"
+    assert day_status(79.9) == "VERY GOOD"
+    assert day_status(65.0) == "VERY GOOD"
+    assert day_status(50.0) == "GOOD"
+    assert day_status(35.0) == "FAIR"
+    assert day_status(34.9) == "POOR"
+    assert day_status(0.0) == "NO OUTDOOR WINDOW"
 
 
 def test_30min_nearest_fills_discrete_weather_codes():
@@ -1988,58 +2175,59 @@ def test_30min_nearest_fills_discrete_weather_codes():
         }
     )
     out = build_30min_forecast(hourly, None)
-    slot = out.loc[out["time"] == "2026-09-15T12:30"].iloc[0]
-    assert float(slot["weather_code"]) == 61.0
+    slot = out.loc[_text(out, "time") == "2026-09-15T12:30"]
+    assert float(num(slot, "weather_code").iloc[0]) == 61.0
 
 
-def test_read_table_falls_back_to_csv(tmp_path):
-    from sunstack.ui import _latest_dir, _read_table
+def test_read_table_falls_back_to_csv(tmp_path: Path):
+    from sunstack.ui import latest_dir, read_table
 
     tables = tmp_path / "tables"
     tables.mkdir(parents=True)
     pd.DataFrame({"a": [1.0]}).to_csv(tables / "m.csv", index=False)
-    assert _read_table(tmp_path, "m")["a"].tolist() == [1.0]
-    assert _read_table(tmp_path, "missing").empty
+    assert read_table(tmp_path, "m")["a"].tolist() == [1.0]
+    assert read_table(tmp_path, "missing").empty
     target = tmp_path / "run1"
     target.mkdir()
-    (tmp_path / "LATEST").write_text(str(target), encoding="utf-8")
-    assert _latest_dir(tmp_path) == target
+    _ = (tmp_path / "LATEST").write_text(str(target), encoding="utf-8")
+    assert latest_dir(tmp_path) == target
 
 
 def test_site_nav_relative_urls_cover_both_pages():
     # Static export picker: root page links down to sites, site pages link
     # back up; the current page never links to itself.
-    from sunstack.ui import _site_nav
+    from sunstack.ui import site_nav
 
-    root = {e["slug"]: e for e in _site_nav(None)}
+    root = {e["slug"]: e for e in site_nav(None)}
     assert root["south-bend"]["url"] is None
     assert root["pacific-palisades"]["url"] == "sites/pacific-palisades/"
-    site = {e["slug"]: e for e in _site_nav("pacific-palisades")}
+    site = {e["slug"]: e for e in site_nav("pacific-palisades")}
     assert site["pacific-palisades"]["url"] is None
     assert site["south-bend"]["url"] == "../../"
 
 
-def test_build_sha_unknown_off_git(monkeypatch):
+def test_build_sha_unknown_off_git(monkeypatch: pytest.MonkeyPatch):
     import subprocess
 
     import sunstack.ui as _ui
+    from sunstack.build_sha import build_sha
 
-    def _boom(*a, **k):
+    def _boom(*_args: object, **_kwargs: object) -> None:
         raise OSError("no git here")
 
     monkeypatch.setattr(_ui, "BUILD_SHA", None)
     monkeypatch.setattr(subprocess, "run", _boom)
-    assert _ui.build_sha() == "unknown"
+    assert build_sha() == "unknown"
 
 
 def test_calendar_builders_skip_ragged_rows():
     # Calendar builders must survive ragged frames: empty tables, missing
     # time columns, and unparseable stamps degrade to fewer events, never
     # a crash that blocks the whole export.
-    from sunstack.ui import _daily_uv_peaks, build_interval_ics
+    from sunstack.ui import build_interval_ics, daily_uv_peaks
 
-    assert _daily_uv_peaks(pd.DataFrame()) == {}
-    assert _daily_uv_peaks(pd.DataFrame({"uv_index": [5.0]})) == {}
+    assert daily_uv_peaks(pd.DataFrame()) == {}
+    assert daily_uv_peaks(pd.DataFrame({"uv_index": [5.0]})) == {}
     half = pd.DataFrame([
         {"time": "2026-09-15T12:00", "tan_score_absolute_0_100": 40.0},
         {"time": None, "tan_score_absolute_0_100": 42.0},
@@ -2050,7 +2238,7 @@ def test_calendar_builders_skip_ragged_rows():
     assert ics.count("END:VEVENT") == 1
 
 
-def test_location_registry_rejects_malformed_shapes(tmp_path):
+def test_location_registry_rejects_malformed_shapes(tmp_path: Path):
     # Every malformed registry shape must fail loudly at load (never a
     # half-parsed location silently scoring the wrong coordinates).
     import pytest
@@ -2058,44 +2246,44 @@ def test_location_registry_rejects_malformed_shapes(tmp_path):
 
     from sunstack.config import load_sites
 
-    def write(obj):
+    def write(obj: object) -> Path:
         p = tmp_path / "loc.yaml"
-        p.write_text(yaml.safe_dump(obj), encoding="utf-8")
+        _ = p.write_text(yaml.safe_dump(obj), encoding="utf-8")
         return p
 
-    def good(**kw):
-        base = {"slug": "a", "lat": 0, "lon": 0, "timezone": "UTC",
-                "default": True}
+    def good(**kw: object) -> dict[str, object]:
+        base: dict[str, object] = {"slug": "a", "lat": 0, "lon": 0, "timezone": "UTC",
+                                   "default": True}
         base.update(kw)
         return base
 
     with pytest.raises(TypeError, match="must be a list"):
-        load_sites(write({"slug": "a"}))
+        _ = load_sites(write({"slug": "a"}))
     with pytest.raises(TypeError, match="must be a mapping"):
-        load_sites(write(["nope"]))
+        _ = load_sites(write(["nope"]))
     with pytest.raises(TypeError, match="keys must be strings"):
-        load_sites(write([{123: "x", "slug": "a", "lat": 0, "lon": 0,
+        _ = load_sites(write([{123: "x", "slug": "a", "lat": 0, "lon": 0,
                            "timezone": "UTC"}]))
     with pytest.raises(TypeError, match="missing slug"):
-        load_sites(write([{"lat": 0, "lon": 0, "timezone": "UTC"}]))
+        _ = load_sites(write([{"lat": 0, "lon": 0, "timezone": "UTC"}]))
     with pytest.raises(TypeError, match="must be a number"):
-        load_sites(write([good(lat="x")]))
+        _ = load_sites(write([good(lat="x")]))
     with pytest.raises(TypeError, match="must be a number"):
-        load_sites(write([good(lat=True)]))
+        _ = load_sites(write([good(lat=True)]))
     with pytest.raises(TypeError, match="must be a number"):
-        load_sites(write([good(lon="x")]))
+        _ = load_sites(write([good(lon="x")]))
     with pytest.raises(TypeError, match="must be a number"):
-        load_sites(write([good(lon=False)]))
+        _ = load_sites(write([good(lon=False)]))
     with pytest.raises(TypeError, match="must be a string"):
-        load_sites(write([good(timezone="")]))
+        _ = load_sites(write([good(timezone="")]))
     with pytest.raises(ValueError, match="empty"):
-        load_sites(write([]))
+        _ = load_sites(write([]))
     assert load_sites(write(None)) == []
     with pytest.raises(ValueError, match="default"):
-        load_sites(write([good(default=False)]))
+        _ = load_sites(write([good(default=False)]))
 
 
-def test_render_static_html_falls_back_to_loaddata_anchor(monkeypatch):
+def test_render_static_html_falls_back_to_loaddata_anchor(monkeypatch: pytest.MonkeyPatch):
     # Template variants without the init() anchor must still get skin
     # wiring via the legacy loadData() anchor, never a half-swapped page.
     import sunstack.serving as _serving
@@ -2112,15 +2300,18 @@ def test_render_static_html_falls_back_to_loaddata_anchor(monkeypatch):
 def test_percentile_helpers_reject_non_series_loudly():
     import pytest
 
-    from sunstack.tanscore import fnum
+    from sunstack.tanscore import circular_doy_distance, fnum, percentile
 
-    percentile = tanscore.__dict__["_percentile"]
-    circular_doy_distance = tanscore.__dict__["_circular_doy_distance"]
+    # The test's whole point is that a non-Series is rejected. The value stays a
+    # list at runtime; this helper declares the type the caller is *claiming* to
+    # hold, so the guard under test is still the thing that raises.
+    def _as_declared(value: object) -> pd.Series:
+        return cast("pd.Series", value)
 
     with pytest.raises(TypeError, match="must be a Series"):
-        percentile([1.0, 2.0], 1.5)
+        _ = percentile(_as_declared([1.0, 2.0]), 1.5)
     with pytest.raises(TypeError, match="must be a Series"):
-        circular_doy_distance([200, 210], 205)
+        _ = circular_doy_distance(_as_declared([200, 210]), 205)
     row = pd.Series({"a": 5.0, "b": None, "c": "junk"})
     assert fnum(row, "a") == 5.0
     assert pd.isna(fnum(row, "missing"))
@@ -2130,15 +2321,15 @@ def test_percentile_helpers_reject_non_series_loudly():
 
 
 def test_grade_ladders_cover_full_range():
-    from sunstack.tanscore import _grade_absolute, _grade_local
+    from sunstack.tanscore import grade_absolute, grade_local
 
-    assert _grade_absolute(float("nan")) == "unknown"
-    assert _grade_absolute(85.0) == "extreme natural tanning intensity"
-    assert _grade_absolute(0.0) == "low"
-    assert _grade_local(float("nan")) == "unknown"
-    assert _grade_local(99.0) == "exceptional locally"
-    assert _grade_local(91.8) == "excellent locally"
-    assert _grade_local(0.0) == "poor locally"
+    assert grade_absolute(float("nan")) == "unknown"
+    assert grade_absolute(85.0) == "extreme natural tanning intensity"
+    assert grade_absolute(0.0) == "low"
+    assert grade_local(float("nan")) == "unknown"
+    assert grade_local(99.0) == "exceptional locally"
+    assert grade_local(91.8) == "excellent locally"
+    assert grade_local(0.0) == "poor locally"
 
 
 def test_local_scores_widen_on_thin_reference():
@@ -2168,7 +2359,7 @@ def test_class_aware_window_excludes_class_blocks():
 
     from sunstack.opportunity import build_daily_summary
 
-    rows = []
+    rows: list[dict[str, object]] = []
     for h in range(9, 17):
         for m in (0, 30):
             rows.append({
@@ -2198,7 +2389,7 @@ def test_sun_adjusted_comfort_rewards_calm_sun_punishes_wind():
 
     from sunstack.opportunity import apply_outdoor_feasibility
 
-    def row(temp, uvi, wind, dew):
+    def row(temp: float, uvi: float, wind: float, dew: float) -> pd.DataFrame:
         return pd.DataFrame({
             'temperature_2m': [temp], 'apparent_temperature': [temp],
             'uv_index': [uvi], 'uvi_consensus': [uvi], 'uv_index_clear_sky': [5.5],

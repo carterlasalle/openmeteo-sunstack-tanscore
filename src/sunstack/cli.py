@@ -83,7 +83,7 @@ def _setup_logging(root: Path, debug: bool = False) -> None:
     LOG.addHandler(fh)
 
 
-def _print_config() -> None:
+def print_config() -> None:
     for site in config.active_sites():
         mark = " (default)" if site.default else ""
         print(f"Location {site.slug}{mark}: {site.lat}, {site.lon} ({site.timezone})")
@@ -177,7 +177,7 @@ def _bootstrap_inner(
     skip_cams_history: bool = False,
     strict: bool = True,
 ) -> dict[str, object]:
-    source_dir, calibration_dir, cache_dir = _calibration_paths(root)
+    source_dir, calibration_dir, cache_dir = calibration_paths(root)
     if (
         strict
         and config.REQUIRE_DIRECT_CAMS
@@ -285,7 +285,7 @@ def ensure_calibration(
         raise DataValidationError(
             "Strict mode requires Copernicus ADS credentials before calibration/live scoring. Configure ~/.cdsapirc first, or explicitly use --allow-degraded."
         )
-    _, calibration_dir, _ = _calibration_paths(root, site.slug if site else None)
+    _, calibration_dir, _ = calibration_paths(root, site.slug if site else None)
     required = [
         calibration_dir / "uva_uvb_models.joblib",
         calibration_dir / "local_reference.parquet",
@@ -336,7 +336,7 @@ def run_live(
 ) -> Path:
     if site is not None:
         with config.use_site(site):
-            return _run_live_inner(
+            return run_live_inner(
                 root,
                 auto_calibrate=auto_calibrate,
                 force_cams=force_cams,
@@ -354,7 +354,7 @@ def run_live(
                 surface_uva_reflectance=surface_uva_reflectance,
                 surface_uvb_reflectance=surface_uvb_reflectance,
             )
-    return _run_live_inner(
+    return run_live_inner(
         root,
         auto_calibrate=auto_calibrate,
         force_cams=force_cams,
@@ -373,7 +373,7 @@ def run_live(
     )
 
 
-def _run_live_inner(
+def run_live_inner(
     root: Path,
     auto_calibrate: bool = True,
     force_cams: bool = False,
@@ -397,7 +397,7 @@ def _run_live_inner(
         else root / "sites" / site.slug
     )
     ensure_calibration(root, auto=auto_calibrate, strict=strict, site=site)
-    _, calibration_dir, cache_dir = _calibration_paths(
+    _, calibration_dir, cache_dir = calibration_paths(
         root, site.slug if site else None
     )
     # Collision-proof run ID (audit: second-resolution stamps collided
@@ -776,7 +776,7 @@ def _run_live_inner(
     return run_dir
 
 
-def _global_reference_status() -> tuple[bool, str]:
+def global_reference_status() -> tuple[bool, str]:
     """Locate + sanity-check the versioned global melanogenic reference."""
     try:
         from importlib import resources
@@ -816,7 +816,7 @@ def _global_reference_status() -> tuple[bool, str]:
 
 
 def doctor(root: Path, probe: bool = False) -> bool:
-    _, calibration_dir, _ = _calibration_paths(root)
+    _, calibration_dir, _ = calibration_paths(root)
     checks = {
         "ADS/CAMS credentials": cds_credentials_present(),
         "UVA/UVB model": (calibration_dir / "uva_uvb_models.joblib").exists(),
@@ -834,7 +834,7 @@ def doctor(root: Path, probe: bool = False) -> bool:
         strict_canonical=config.REQUIRE_CANONICAL_SPECTRUM)
     photo_errors = [i for i in photo_issues if i.severity == "ERROR"]
     checks["action spectra (melanogenesis/erythema/IPD)"] = not photo_errors
-    ref_ok, ref_detail = _global_reference_status()
+    ref_ok, ref_detail = global_reference_status()
     checks["global melanogenic reference"] = ref_ok
     print("SunStack doctor")
     print(f"  location: {config.LATITUDE}, {config.LONGITUDE} ({config.TIMEZONE})")
@@ -964,7 +964,7 @@ def debug_photobiology(root: Path) -> None:
         print("  no latest hourly table")
 
 
-def _publish_site(site: config.Site) -> None:
+def publish_site(site: config.Site) -> None:
     """Commit + push one site's docs and data. Small atomic publishes."""
     import subprocess
 
@@ -1065,7 +1065,7 @@ def run_one_site(
     strict stays on, no fallback tiers, no skipped validations.
     """
     with config.site_lock():
-        return _run_one_site_locked(
+        return run_one_site_locked(
             root, site, strict, skin_type, min_temp_f, personal_mmd_j_m2,
             personal_mmd_basis, fresh, force_cams, auto_calibrate, surface_slug,
             surface_extent, skin_tilt_deg, skin_azimuth_deg,
@@ -1073,7 +1073,7 @@ def run_one_site(
         )
 
 
-def _run_one_site_locked(
+def run_one_site_locked(
     root: Path,
     site: config.Site,
     strict: bool = True,
@@ -1093,7 +1093,7 @@ def _run_one_site_locked(
 ) -> Path:
     from .output import export_static_site
 
-    _, calibration_dir, _ = _calibration_paths(
+    _, calibration_dir, _ = calibration_paths(
         root, site.slug if site.slug != config.default_site().slug else None
     )
     required = [
@@ -1106,7 +1106,7 @@ def _run_one_site_locked(
             site.slug,
             calibration_dir,
         )
-        raise _SiteSkipped(f"calibration missing for {site.slug}")
+        raise SiteSkipped(f"calibration missing for {site.slug}")
     run_dir = run_live(
         root,
         auto_calibrate=auto_calibrate,
@@ -1175,11 +1175,11 @@ def _run_one_site_locked(
                 + "; ".join(f"{k}: {len(v)}" for k, v in _failed.items()
                             if isinstance(v, list))
             )
-    _publish_site(site)
+    publish_site(site)
     return run_dir
 
 
-def _run_all_sites(
+def run_all_sites(
     root: Path,
     strict: bool = True,
     skin_type: int | None = None,
@@ -1222,15 +1222,15 @@ def _run_all_sites(
                 surface_uva_reflectance=surface_uva_reflectance,
                 surface_uvb_reflectance=surface_uvb_reflectance,
             )
-        except _SiteSkipped as exc:
+        except SiteSkipped as exc:
             LOG.warning("Site skipped, continuing to next site: %s", exc)
 
 
-class _SiteSkipped(RuntimeError):
+class SiteSkipped(RuntimeError):
     """A site was deliberately skipped (cold calibration); not a failure."""
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def build_parser() -> argparse.ArgumentParser:
     from .surface import SURFACE_EXTENT_MODES
 
     parser = argparse.ArgumentParser(
@@ -1368,7 +1368,7 @@ def _build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     from argparse import Namespace
 
-    parser = _build_parser()
+    parser = build_parser()
     args: Namespace = parser.parse_args()
     if args.personal_mmd is not None and not args.personal_mmd_basis:
         # Same rule as the dashboard/API 400: an MMD without an explicit
@@ -1420,7 +1420,7 @@ def main() -> None:
             if not sites:
                 raise DataValidationError(f"unknown site slug: {args.site}")
         if args.command == "show-config":
-            _print_config()
+            print_config()
         elif args.command == "doctor":
             if not doctor(root, probe=args.probe):
                 sys.exit(2)
@@ -1498,7 +1498,7 @@ def main() -> None:
                     f"Reskinned {site.slug}: {info['page']} (run {info['run']}, build {info['build_sha']})"
                 )
         else:
-            _run_all_sites(
+            run_all_sites(
                 root,
                 strict=strict,
                 skin_type=args.skin_type,

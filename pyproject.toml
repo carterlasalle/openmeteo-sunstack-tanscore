@@ -48,6 +48,20 @@ required-version = "==0.12.15"
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
+# pvlib ships no type information upstream; stubs/ declares the surface this
+# package actually calls so solar-geometry values do not type as Unknown.
+stubPath = "stubs"
+# mutmut writes a full shadow checkout into mutants/ on every run. Left in, its
+# generated MutantDict mutants are analysed as if they were our source and
+# flood the error count with findings that are not our code.
+exclude = ["mutants"]
+
+[tool.pytest.ini_options]
+# mutmut writes a full shadow checkout into mutants/ on every run, including a
+# copy of tests/. Collected from the rootdir those two copies collide by module
+# basename ("import file mismatch") and abort collection, so scope the default
+# run to the real test tree.
+testpaths = ["tests"]
 
  [dependency-groups]
 dev = [
@@ -108,3 +122,7 @@ pytest_add_cli_args_test_selection = ["tests/"]
 # instead of spending most of its budget on code the suite never executes.
 mutate_only_covered_lines = true
 # END BUGHUNT MANAGED MUTMUT CONFIG
+also_copy = [
+    "data/research/action_spectra/",
+    "locations.yaml",
+]

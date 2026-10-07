@@ -17,6 +17,7 @@ interval doses, ranking, summaries, serialization, validation.
 from __future__ import annotations
 
 import math
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -52,9 +53,10 @@ _FUSION_WEIGHT_CAP = 0.6  # max single-source share: no false certainty
 # the dominant share clipped at 0.6 (false-certainty guard) with the clipped
 # slack redistributed to the uncapped sources. Per-row weights restrict these
 # shares to finite sources and renormalize.
-_RAW = np.array([1.0 / m**2 for m in _SOURCE_MAE])
-_fixed_shares = np.clip(_RAW / _RAW.sum(), 0.0, _FUSION_WEIGHT_CAP)
-_FIXED_SHARES_NORM: np.ndarray = _fixed_shares / _fixed_shares.sum()
+_RAW: np.ndarray = np.array([1.0 / m**2 for m in _SOURCE_MAE], dtype=float)
+_fixed_shares: np.ndarray = np.clip(
+    _RAW / cast(float, np.sum(_RAW)), 0.0, _FUSION_WEIGHT_CAP)
+_FIXED_SHARES_NORM: np.ndarray = _fixed_shares / cast(float, np.sum(_fixed_shares))
 
 
 def _source_weights(finite: np.ndarray) -> np.ndarray:
@@ -96,12 +98,16 @@ def fuse_uvi_unique_count(frame: pd.DataFrame) -> pd.DataFrame:
         # clean air; downstream SED integrates them as gaps, not zeros.
         out["uvi_consensus"] = np.round(np.where(finite.any(axis=0), consensus, np.nan), 3)
         out["uvi_consensus_sources"] = np.asarray(finite.sum(axis=0), dtype=int)
-        # Legacy OMx2 vote count, migration diagnostic only.
-        vote_arr: np.ndarray = np.asarray(
-            2 * finite[0].astype(int) + finite[1].astype(int) + finite[2].astype(int))
-        out["uvi_consensus_vote_count"] = np.asarray(vote_arr, dtype=int)
-        out["uvi_source_values"] = [tuple(np.round(row, 3)) for row in stacked.T]
-        out["uvi_source_weights"] = [tuple(np.round(row, 3)) for row in weights.T]
+        # Legacy OMx2 vote count, migration diagnostic only. Read the flag
+        # matrix once as typed lists: numpy scalar indexing types as Any under
+        # the stubs, and the vote arithmetic is plain integer sums.
+        bits = cast("list[list[int]]", finite.astype(int).tolist())
+        vote = [2 * b0 + b1 + b2 for b0, b1, b2 in zip(bits[0], bits[1], bits[2])]
+        out["uvi_consensus_vote_count"] = np.asarray(vote, dtype=int)
+        rounded_values = cast("list[list[float]]", np.round(stacked, 3).T.tolist())
+        out["uvi_source_values"] = [tuple(row) for row in rounded_values]
+        rounded_weights = cast("list[list[float]]", np.round(weights, 3).T.tolist())
+        out["uvi_source_weights"] = [tuple(row) for row in rounded_weights]
         spread = np.nanmax(stacked, axis=0) - np.nanmin(stacked, axis=0)
         out["uvi_source_spread"] = np.round(spread, 3)
         out["uvi_sunny"] = np.round(np.nanmax(stacked, axis=0), 3)

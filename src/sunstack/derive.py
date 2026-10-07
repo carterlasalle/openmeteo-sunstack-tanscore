@@ -1,20 +1,25 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import cast
+
 import numpy as np
 import pandas as pd
 
 from .frame import num, scol
 
 
-def _num(frame: pd.DataFrame, name: str) -> pd.Series:
+def _num(frame: pd.DataFrame, name: str) -> pd.Series[float]:
     return num(frame, name)
 
 
-def safe_ratio(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
-    n = pd.to_numeric(numerator, errors="coerce")
-    d = pd.to_numeric(denominator, errors="coerce")
-    if not isinstance(n, pd.Series) or not isinstance(d, pd.Series):
+def safe_ratio(numerator: pd.Series, denominator: pd.Series) -> pd.Series[float]:
+    n_raw = cast(object, pd.to_numeric(numerator, errors="coerce"))
+    d_raw = cast(object, pd.to_numeric(denominator, errors="coerce"))
+    if not isinstance(n_raw, pd.Series) or not isinstance(d_raw, pd.Series):
         raise TypeError("safe_ratio expects Series inputs")
+    n = cast("pd.Series[float]", n_raw)
+    d = cast("pd.Series[float]", d_raw)
     out = n / d.where(d.abs() > 1e-9)
     return out.replace([np.inf, -np.inf], np.nan)
 
@@ -79,21 +84,21 @@ def add_solar_diagnostics(frame: pd.DataFrame, interval_seconds: int = 3600) -> 
         out["upper_air_cloud_max"] = out[cloud_levels].apply(pd.to_numeric, errors="coerce").max(axis=1)
 
     uv_abs = (uv / 6.0).clip(0, 1)
-    uv_trans = out["uv_transmission"].clip(0, 1.2)
+    uv_trans = cast("pd.Series[float]", out["uv_transmission"]).clip(0, 1.2)
     dni_strength = (dni_i.where(dni_i.notna(), dni) / 850.0).clip(0, 1)
-    clear_strength = (
-        out["clearness_index_instant"].where(
-            out["clearness_index_instant"].notna(), out["clearness_index"]
-        ) / 0.78
-    ).clip(0, 1)
-    directness = out["direct_fraction_instant"].where(
-        out["direct_fraction_instant"].notna(), out["direct_fraction"]
-    ).clip(0, 1)
-    sunny_fraction = out["sunshine_fraction"].clip(0, 1)
+    # Columns written above; re-assert the float dtype so scoring arithmetic
+    # below keeps real types instead of erasing to Any.
+    clear_instant = cast("pd.Series[float]", out["clearness_index_instant"])
+    clear_interval = cast("pd.Series[float]", out["clearness_index"])
+    clear_strength = (clear_instant.where(clear_instant.notna(), clear_interval) / 0.78).clip(0, 1)
+    direct_instant = cast("pd.Series[float]", out["direct_fraction_instant"])
+    direct_interval = cast("pd.Series[float]", out["direct_fraction"])
+    directness = direct_instant.where(direct_instant.notna(), direct_interval).clip(0, 1)
+    sunny_fraction = cast("pd.Series[float]", out["sunshine_fraction"]).clip(0, 1)
 
     # Renormalize to the evidence available on each row. This avoids assigning
     # zero merely because (for example) an ensemble does not provide UV.
-    components = [
+    components: list[tuple[pd.Series[float], float]] = [
         (uv_abs, 0.30),
         (uv_trans, 0.15),
         (dni_strength, 0.20),
@@ -101,8 +106,8 @@ def add_solar_diagnostics(frame: pd.DataFrame, interval_seconds: int = 3600) -> 
         (directness, 0.10),
         (sunny_fraction, 0.10),
     ]
-    weighted_sum = pd.Series(0.0, index=out.index)
-    weight_sum = pd.Series(0.0, index=out.index)
+    weighted_sum: pd.Series[float] = pd.Series(0.0, index=out.index)
+    weight_sum: pd.Series[float] = pd.Series(0.0, index=out.index)
     for series, weight in components:
         valid = series.notna()
         weighted_sum = weighted_sum + series.fillna(0) * weight
@@ -115,7 +120,7 @@ def add_solar_diagnostics(frame: pd.DataFrame, interval_seconds: int = 3600) -> 
     cin = _num(out, "convective_inhibition")
     low_cloud = (_num(out, "cloud_cover_low") / 100.0).clip(0, 1)
 
-    penalty = pd.Series(0.0, index=out.index)
+    penalty: pd.Series[float] = pd.Series(0.0, index=out.index)
     penalty += 0.18 * pop.fillna(0)
     penalty += 0.05 * low_cloud.fillna(0)
     penalty += 0.12 * (precip.fillna(0) > 0.01).astype(float)
@@ -146,7 +151,7 @@ def enrich_15min_with_hourly_uv(hrrr15: pd.DataFrame, hourly_best: pd.DataFrame)
         if col not in hb:
             continue
         s = _num(hb, col).reindex(union).interpolate(method="time", limit_area="inside")
-        mapper = s.reindex(out_dt.values).to_numpy()
+        mapper: np.ndarray = s.reindex(out_dt.values).to_numpy()
         out[col] = mapper
     out["uv_temporal_source"] = "best_match_hourly_time_interpolated"
     return out
@@ -186,7 +191,7 @@ def deterministic_consensus(hourly: pd.DataFrame) -> pd.DataFrame:
         "diffuse_radiation_instant", "sun_score_0_100",
     ]
     metrics = [m for m in metrics if m in df.columns]
-    pieces = []
+    pieces: list[pd.DataFrame] = []
     for metric in metrics:
         grouped = df.groupby("time", dropna=False)[metric].agg(["count", "mean", "median", "std", "min", "max"])
         grouped.columns = [f"{metric}__{c}" for c in grouped.columns]
@@ -195,7 +200,7 @@ def deterministic_consensus(hourly: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     out = pd.concat(pieces, axis=1).reset_index()
 
-    penalties = []
+    penalties: list[pd.Series[float]] = []
     normalizers = {
         "cloud_cover": 35.0,
         "shortwave_radiation_instant": 180.0,
@@ -207,9 +212,10 @@ def deterministic_consensus(hourly: pd.DataFrame) -> pd.DataFrame:
         if col in out:
             penalties.append((_num(out, col) / scale).clip(0, 1))
     if penalties:
-        penalty = pd.concat(penalties, axis=1).mean(axis=1, skipna=True)
-        if not isinstance(penalty, pd.Series):
+        penalty_raw = cast(object, pd.concat(penalties, axis=1).mean(axis=1, skipna=True))
+        if not isinstance(penalty_raw, pd.Series):
             raise TypeError("consensus penalty must be a Series")
+        penalty = cast("pd.Series[float]", penalty_raw)
         vals = penalty.to_numpy(dtype=float, na_value=np.nan)
         agreement = pd.Series(np.round(100.0 * (1.0 - vals), 1), index=penalty.index)
         out["deterministic_agreement_0_100"] = agreement
@@ -221,16 +227,20 @@ def ensemble_probabilities(ensemble_long: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     df = add_solar_diagnostics(ensemble_long)
 
-    def prob(frame: pd.DataFrame, name: str, predicate) -> float:
+    def prob(
+        frame: pd.DataFrame,
+        name: str,
+        predicate: Callable[[pd.Series[float]], pd.Series[bool]],
+    ) -> float:
         x = _num(frame, name).dropna()
         if x.empty:
             return np.nan
         return 100.0 * float(predicate(x).mean())
 
-    rows = []
+    rows: list[dict[str, object]] = []
     for model, mdf in df.groupby("model", dropna=False):
         for time, g in mdf.groupby("time", dropna=False):
-            row = {
+            row: dict[str, object] = {
                 "model": model,
                 "time": time,
                 "member_count": int(scol(g, "member").nunique()) if "member" in g else len(g),
@@ -277,9 +287,9 @@ def merge_air_quality(best_match: pd.DataFrame, air: pd.DataFrame) -> pd.DataFra
     return out.merge(aq, on="time", how="left")
 
 
-def _row_weighted_mean(df: pd.DataFrame, specs: list[tuple[str, float, bool]]) -> pd.Series:
-    num = pd.Series(0.0, index=df.index)
-    den = pd.Series(0.0, index=df.index)
+def _row_weighted_mean(df: pd.DataFrame, specs: list[tuple[str, float, bool]]) -> pd.Series[float]:
+    num: pd.Series[float] = pd.Series(0.0, index=df.index)
+    den: pd.Series[float] = pd.Series(0.0, index=df.index)
     for col, weight, invert in specs:
         if col not in df:
             continue
@@ -292,19 +302,19 @@ def _row_weighted_mean(df: pd.DataFrame, specs: list[tuple[str, float, bool]]) -
     return num / den.where(den > 0)
 
 
-def best_windows(best_match_enriched: pd.DataFrame, ensemble_probs: pd.DataFrame, consensus: pd.DataFrame) -> pd.DataFrame:
+def best_windows(best_match_enriched: pd.DataFrame, ensemble_probs: pd.DataFrame | None, consensus: pd.DataFrame | None) -> pd.DataFrame:
     if best_match_enriched.empty:
         return pd.DataFrame()
     df = best_match_enriched.copy()
     if "is_day" in df:
         df = df.loc[_num(df, "is_day").fillna(0) > 0]
     if ensemble_probs is not None and not ensemble_probs.empty:
-        ep = ensemble_probs.groupby("time", as_index=False).agg({
+        ep_raw = cast(object, ensemble_probs.groupby("time", as_index=False).agg({
             c: "mean" for c in ensemble_probs.columns if c.startswith("p_")
-        })
-        if not isinstance(ep, pd.DataFrame):
+        }))
+        if not isinstance(ep_raw, pd.DataFrame):
             raise TypeError("ensemble mean aggregation must produce a DataFrame")
-        df = df.merge(ep, on="time", how="left")
+        df = df.merge(ep_raw, on="time", how="left")
     if consensus is not None and not consensus.empty:
         cols = ["time"] + [c for c in consensus.columns if c == "deterministic_agreement_0_100"]
         df = df.merge(consensus.loc[:, cols], on="time", how="left")

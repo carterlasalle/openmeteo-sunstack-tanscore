@@ -6,7 +6,13 @@ fixed window — never Local/Atmo/confidence blending, never Overall.
 
 from __future__ import annotations
 
+from typing import cast
+
 import pandas as pd
+
+
+def _cell_text(row: pd.Series, name: str) -> str:
+    return cast("str", row[name])
 
 
 def _day() -> pd.DataFrame:
@@ -87,8 +93,8 @@ def test_comfortable_window_excludes_hard_blocked_and_warm_slots() -> None:
         "2026-06-21 11:00:00",
     ]
     row = build_daily_summary(day).iloc[0]
-    assert str(row["best_comfortable_usable_30m_start"]) == "2026-06-21T11:00:00"
-    assert str(row["best_comfortable_usable_30m_end"]) == "2026-06-21T11:30:00"
+    assert _cell_text(row, "best_comfortable_usable_30m_start") == "2026-06-21T11:00:00"
+    assert _cell_text(row, "best_comfortable_usable_30m_end") == "2026-06-21T11:30:00"
     assert row["best_comfortable_usable_30m_dose_j_m2"] == 720.0
 
 
@@ -141,6 +147,6 @@ def test_daily_summary_carries_both_rankings() -> None:
     row = daily.iloc[0]
     assert row["window_rank_version"] == "fixed-duration-dose-v2"
     assert row["exposure_basis"] == "environmental_horizontal"
-    assert str(row["strongest_30m_start"]) == "2026-06-21T10:00:00"
-    assert str(row["best_usable_30m_start"]) == "2026-06-21T10:00:00"
-    assert str(row["best_comfortable_usable_30m_start"]) == "2026-06-21T10:00:00"
+    assert _cell_text(row, "strongest_30m_start") == "2026-06-21T10:00:00"
+    assert _cell_text(row, "best_usable_30m_start") == "2026-06-21T10:00:00"
+    assert _cell_text(row, "best_comfortable_usable_30m_start") == "2026-06-21T10:00:00"

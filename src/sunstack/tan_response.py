@@ -54,7 +54,7 @@ class ExposureHistory:
 class TanResponseModel:
     """Abstract response-model interface. Production returns cumulative dose."""
 
-    model_version = TAN_RESPONSE_MODEL_VERSION
+    model_version: str = TAN_RESPONSE_MODEL_VERSION
 
     def predict(self, history: ExposureHistory) -> dict[str, object]:
         # Baseline: cumulative physical dose with no biological transformation.

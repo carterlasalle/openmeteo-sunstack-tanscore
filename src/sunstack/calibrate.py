@@ -4,6 +4,7 @@ import json
 import math
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Protocol, SupportsFloat, TypedDict, cast
 from zoneinfo import ZoneInfo
 
 import joblib
@@ -81,11 +82,13 @@ def _find_col(df: pd.DataFrame, *tokens: str) -> str | None:
     return None
 
 
-def _angstroem(aod1: pd.Series, wave1: float, aod2: pd.Series, wave2: float) -> pd.Series:
-    a = pd.to_numeric(aod1, errors="coerce")
-    b = pd.to_numeric(aod2, errors="coerce")
-    if not isinstance(a, pd.Series) or not isinstance(b, pd.Series):
+def _angstroem(aod1: pd.Series, wave1: float, aod2: pd.Series, wave2: float) -> pd.Series[float]:
+    raw_a = cast(object, pd.to_numeric(aod1, errors="coerce"))
+    raw_b = cast(object, pd.to_numeric(aod2, errors="coerce"))
+    if not isinstance(raw_a, pd.Series) or not isinstance(raw_b, pd.Series):
         raise TypeError("angstrom inputs must be Series")
+    a = cast("pd.Series[float]", raw_a)
+    b = cast("pd.Series[float]", raw_b)
     valid = (a > 0) & (b > 0)
     out = pd.Series(np.nan, index=a.index, dtype="float64")
     out.loc[valid] = -np.log(a.loc[valid] / b.loc[valid]) / math.log(wave1 / wave2)
@@ -98,6 +101,32 @@ def _utc_ns(frame: pd.DataFrame) -> pd.DataFrame:
         frame = frame.copy()
         frame["time_utc"] = pd.to_datetime(frame["time_utc"], utc=True).astype("datetime64[ns, UTC]")
     return frame
+
+
+class _Predictor(Protocol):
+    """Only the sklearn surface the pickled UVA/UVB bundle is called through."""
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray: ...
+
+
+class _UVBundle(TypedDict):
+    """Shape of the pickled UVA/UVB bundle written by `train_uv_models`.
+
+    Mirrored by `tanscore._load_bundle`; every key is required because both
+    readers index the bundle directly.
+    """
+
+    features: list[str]
+    uva_model: _Predictor
+    uvb_model: _Predictor
+    manifest: dict[str, object]
+
+
+def _as_str_dict(raw: object) -> dict[str, object] | None:
+    """str-keyed view of an untyped mapping; non-mappings stay None."""
+    if not isinstance(raw, dict):
+        return None
+    return cast("dict[str, object]", raw)
 
 def prepare_nasa_training(nasa: pd.DataFrame, cams_eac4: pd.DataFrame | None = None) -> pd.DataFrame:
     if nasa.empty:
@@ -127,7 +156,7 @@ def prepare_nasa_training(nasa: pd.DataFrame, cams_eac4: pd.DataFrame | None = N
         ozone = _find_col(cams, "total", "column", "ozone")
         cols = ["time_utc"] + [c for c in (c469, c550, c670, c865, ozone) if c]
         cams = _utc_ns(cams.loc[:, cols])
-        ren = {}
+        ren: dict[str, str] = {}
         if c469: ren[c469] = "cams_aod469"
         if c550: ren[c550] = "cams_aod550"
         if c670: ren[c670] = "cams_aod670"
@@ -173,7 +202,7 @@ def _metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
         "mae": float(mean_absolute_error(y_true, y_pred)),
         "rmse": float(math.sqrt(mean_squared_error(y_true, y_pred))),
         "r2": float(r2_score(y_true, y_pred)),
-        "median_absolute_error": float(np.median(np.abs(y_true - y_pred))),
+        "median_absolute_error": float(cast(SupportsFloat, np.median(np.abs(y_true - y_pred)))),
     }
 
 
@@ -240,9 +269,9 @@ def train_uv_models(training: pd.DataFrame, calibration_dir: Path) -> dict[str, 
             l2_regularization=0.15,
             random_state=23,
         )
-        model.fit(X.loc[train_mask], work.loc[train_mask, target])
+        _ = model.fit(X.loc[train_mask], work.loc[train_mask, target])
         pred = np.clip(model.predict(X.loc[test_mask]), 0, None)
-        report[target] = _metrics(work.loc[test_mask, target].to_numpy(), pred)
+        report[target] = _metrics(num(work.loc[test_mask], target).to_numpy(dtype=float), pred)
         bundle[f"{target}_model"] = model
 
     # Bundle manifest: bind the pickle to training code/data/sklearn versions.
@@ -268,8 +297,8 @@ def train_uv_models(training: pd.DataFrame, calibration_dir: Path) -> dict[str, 
         "metrics": {k: v for k, v in report.items() if k in ("uva", "uvb")},
         "dropped_constant_features": list(dropped),
     }
-    joblib.dump(bundle, calibration_dir / "uva_uvb_models.joblib")
-    (calibration_dir / "model_metrics.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    _ = joblib.dump(bundle, calibration_dir / "uva_uvb_models.joblib")
+    _ = (calibration_dir / "model_metrics.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     return report
 
 
@@ -294,12 +323,12 @@ def build_local_reference(training: pd.DataFrame, calibration_dir: Path) -> pd.D
         from .spectral import melanogenic_from_broadband
 
         if "uvb" in ref:
-            uvb = pd.to_numeric(scol(ref, "uvb"), errors="coerce").to_numpy(dtype=float)
+            uvb = num(ref, "uvb").to_numpy(dtype=float)
         else:
             # No measured UVB band: rough fallback so E_mel stays defined.
-            uvb = pd.to_numeric(scol(ref, "uvi"), errors="coerce").to_numpy(dtype=float) * 0.15
+            uvb = num(ref, "uvi").to_numpy(dtype=float) * 0.15
         e_mel = melanogenic_from_broadband(
-            pd.to_numeric(scol(ref, "uva"), errors="coerce").to_numpy(dtype=float),
+            num(ref, "uva").to_numpy(dtype=float),
             uvb,
         )
     except (FileNotFoundError, ValueError) as exc:
@@ -327,7 +356,7 @@ def build_local_reference(training: pd.DataFrame, calibration_dir: Path) -> pd.D
     calibration_dir.mkdir(parents=True, exist_ok=True)
     ref.to_parquet(calibration_dir / "local_reference.parquet", index=False)
     ref.to_csv(calibration_dir / "local_reference.csv", index=False)
-    (calibration_dir / "local_reference_version.json").write_text(
+    _ = (calibration_dir / "local_reference_version.json").write_text(
         json.dumps({
             "tan_score_model_version": config.TAN_SCORE_MODEL_VERSION,
             "action_spectrum_version": config.ACTION_SPECTRUM_VERSION,
@@ -389,24 +418,26 @@ def build_serving_reference(
 
     bundle_path = calibration_dir / "uva_uvb_models.joblib"
     bundle = joblib.load(bundle_path) if bundle_path.exists() else None
-    if isinstance(bundle, dict):
-        manifest = bundle.get("manifest")
-        if not isinstance(manifest, dict):
-            raise TypeError(
-                "UVA/UVB bundle has no manifest (pre-manifest training); "
-                "retrain with `sunstack bootstrap` to bind versions.")
+    _bundle_manifest = _as_str_dict(bundle)
+    if _bundle_manifest is not None:
+        manifest = _as_str_dict(_bundle_manifest.get("manifest"))
+        if manifest is None:
+            msg = ("UVA/UVB bundle has no manifest (pre-manifest training); "
+                   "retrain with `sunstack bootstrap` to bind versions.")
+            raise TypeError(msg)
         if manifest.get("model_version") != config.TAN_SCORE_MODEL_VERSION:
-            raise RuntimeError(
-                f"UVA/UVB bundle model_version={manifest.get('model_version')} != "
-                f"runtime {config.TAN_SCORE_MODEL_VERSION}: retrain with "
-                f"`sunstack bootstrap`.")
+            msg = (f"UVA/UVB bundle model_version={manifest.get('model_version')} != "
+                   f"runtime {config.TAN_SCORE_MODEL_VERSION}: retrain with "
+                   f"`sunstack bootstrap`.")
+            raise RuntimeError(msg)
 
     def predict_hindcast(features: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
         if bundle is not None:
-            X = features.reindex(columns=bundle["features"])
+            _b = cast(_UVBundle, bundle)
+            X = features.reindex(columns=_b["features"])
             return (
-                np.clip(bundle["uva_model"].predict(X), 0, None),
-                np.clip(bundle["uvb_model"].predict(X), 0, None),
+                np.clip(_b["uva_model"].predict(X), 0, None),
+                np.clip(_b["uvb_model"].predict(X), 0, None),
             )
         sza = num(features, "sza").to_numpy(dtype=float)
         o3 = num(features, "ozone_du").to_numpy(dtype=float)
@@ -424,8 +455,8 @@ def build_serving_reference(
             np.clip(0.10 * num(features, "uv_index").to_numpy(dtype=float), 0, 3),
             uvb,
         )
-        night = num(features, "is_day").fillna(1).to_numpy(dtype=float) == 0
-        return np.where(night, 0.0, uva), np.where(night, 0.0, uvb)
+        night = num(features, "is_day").fillna(1) == 0
+        return np.where(night.to_numpy(), 0.0, uva), np.where(night.to_numpy(), 0.0, uvb)
     sources: list[pd.DataFrame] = []
     for model in config.PREVIOUS_RUN_MODELS:
         path = previous_runs_dir / f"previous_runs__{model}.parquet"
@@ -506,8 +537,8 @@ def build_serving_reference(
         ref = pd.concat(mapped, ignore_index=True)
         try:
             e_mel = melanogenic_from_broadband(
-                scol(ref, "uva").to_numpy(dtype=float),
-                scol(ref, "uvb").to_numpy(dtype=float),
+                num(ref, "uva").to_numpy(dtype=float),
+                num(ref, "uvb").to_numpy(dtype=float),
             )
         except (FileNotFoundError, ValueError) as exc:
             raise RuntimeError(f"ERROR photobiology: {exc}") from exc
@@ -530,7 +561,7 @@ def build_serving_reference(
                        index=False)
         refs[band] = ref
 
-    (calibration_dir / "lead_reference_manifest.json").write_text(
+    _ = (calibration_dir / "lead_reference_manifest.json").write_text(
         json.dumps({
             "bands": list(refs),
             "row_counts": {band: len(ref) for band, ref in refs.items()},
@@ -551,7 +582,7 @@ def build_serving_reference(
 
 def build_training_dataset(
     nasa: pd.DataFrame,
-    openmeteo_hist: pd.DataFrame,
+    openmeteo_hist: pd.DataFrame | None,
     cams_eac4: pd.DataFrame,
     calibration_dir: Path,
 ) -> pd.DataFrame:
@@ -581,7 +612,7 @@ def build_training_dataset(
         })
         base = base.rename(columns={"pred_source": "source", "pred_model": "model"})
         base = base.drop(columns=["pred_time_utc"], errors="ignore")
-        if not isinstance(base, pd.DataFrame):
+        if not isinstance(cast(object, base), pd.DataFrame):
             raise TypeError("training merge must produce a DataFrame")
     calibration_dir.mkdir(parents=True, exist_ok=True)
     base.to_parquet(calibration_dir / "training_calibration_hourly.parquet", index=False)
@@ -600,7 +631,7 @@ def compute_openmeteo_model_skill(
     truth = _utc_ns(verifying.loc[:, ["time_utc", *[v for v in config.PREVIOUS_RUN_BASE_VARIABLES if v in verifying]]].copy())
     rows: list[dict[str, object]] = []
     for model, group in _utc_ns(previous).groupby("model"):
-        if not isinstance(group, pd.DataFrame):
+        if not isinstance(cast(object, group), pd.DataFrame):
             raise TypeError("model group must be a DataFrame")
         merged = group.merge(truth, on="time_utc", how="inner", suffixes=("", "__truth"))
         for variable in config.PREVIOUS_RUN_BASE_VARIABLES:
@@ -626,7 +657,7 @@ def compute_openmeteo_model_skill(
                     "lead_days": lead,
                     "n": int(mask.sum()),
                     "mae": float(np.abs(err).mean()),
-                    "rmse": float(np.sqrt((err ** 2).mean())),
+                    "rmse": math.sqrt(float((err ** 2).mean())),
                     "bias": float(err.mean()),
                     "correlation": float(xs.corr(pd.Series(yv[mask]))) if mask.sum() > 2 else np.nan,
                     "verification_source": "openmeteo_historical_forecast_best_match",
@@ -652,7 +683,7 @@ def compute_openmeteo_model_skill(
 
 def estimate_expected_uvi_error(
     frame: pd.DataFrame,
-    calibration_dir: Path | None = None,
+    _calibration_dir: Path | None = None,
 ) -> pd.DataFrame:
     """Calibrated UVI expected-absolute-error + reliability score (§11).
 
@@ -673,7 +704,8 @@ def estimate_expected_uvi_error(
         return out
     n = len(out)
     spread = num(out, "uvi_source_spread").fillna(2.0).clip(0, 8).to_numpy(dtype=float)
-    sources = num(out, "uvi_consensus_sources").fillna(1).clip(1, 3).to_numpy(dtype=float)
+    source_count = num(out, "uvi_consensus_sources").fillna(1).clip(1, 3)
+    sources = source_count.to_numpy(dtype=float)
     # Lead-time proxy: rows farther from run start err more. Position in the
     # frame is the only lead signal available without run metadata.
     lead_days = np.arange(n, dtype=float) / 24.0
@@ -684,7 +716,9 @@ def estimate_expected_uvi_error(
     # level term: sunniness must not move reliability (§11).
     base = 0.35 + 0.06 * np.minimum(lead_days, 7.0)
     spread_term = 0.35 * spread
-    source_term = np.where(sources >= 3, 0.0, np.where(sources == 2, 0.25, 0.60))
+    source_term = np.where(
+        sources >= 3, 0.0, np.where((source_count == 2).to_numpy(), 0.25, 0.60),
+    )
     low_sun_term = np.where(sza > 65, 0.30, 0.0)
     cloud_term = 0.002 * np.abs(cloud - 50.0)
     # EPA UVI is an integer product (contract §10.3): its straight average

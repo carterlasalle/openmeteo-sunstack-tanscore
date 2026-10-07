@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import math
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import cast
 
 import pandas as pd
 
 from .config import TAN_SCORE_MODEL_VERSION
+from .fetch import FetchResult
 from .frame import num
 
 
@@ -20,6 +24,19 @@ class DataValidationError(SunStackError):
     pass
 
 
+def _present(value: object) -> bool:
+    """True when a JSON row value is neither null nor NaN.
+
+    `pd.notna` has no overload for a bare `object`, and these rows come out of
+    `json.loads`, so a value is a number, a string, a bool, or None.
+    """
+    if value is None:
+        return False
+    if isinstance(value, float):
+        return not math.isnan(value)
+    return True
+
+
 @dataclass
 class ValidationIssue:
     severity: str
@@ -27,14 +44,18 @@ class ValidationIssue:
     message: str
 
 
-def validate_live_sources(results, strict: bool = True) -> list[ValidationIssue]:
+def validate_live_sources(results: Sequence[FetchResult], strict: bool = True) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     by_name = {r.name: r for r in results}
     required_exact = ["deterministic__best_match", "hrrr_15min", "air_quality"]
     for name in required_exact:
         r = by_name.get(name)
-        if r is None or r.payload is None:
-            issues.append(ValidationIssue("ERROR", name, r.error if r else "missing source"))
+        if r is None:
+            issues.append(ValidationIssue("ERROR", name, "missing source"))
+        elif r.payload is None:
+            # fetch always records a reason when payload is None; the fallback
+            # covers hand-built results and an upstream that returns JSON null.
+            issues.append(ValidationIssue("ERROR", name, r.error or "missing source"))
 
     deterministic_ok = sum(1 for r in results if r.name.startswith("deterministic__") and r.payload is not None)
     ensemble_ok = sum(1 for r in results if r.name.startswith("ensemble_members__") and r.payload is not None)
@@ -95,9 +116,9 @@ def validate_scored_hourly(df: pd.DataFrame) -> list[ValidationIssue]:
                     df.get("local_reference_version")).dropna().astype(str).unique().tolist()
                 issues.append(ValidationIssue(
                     "WARN", "local_reference",
-                    f"local percentiles not from the current score model "
-                    f"(versions seen: {versions or ['unknown']}); rebuild with "
-                    f"scripts/rebuild_v4_references.py"))
+                    "local percentiles not from the current score model "
+                    + f"(versions seen: {versions or ['unknown']}); rebuild with "
+                    + "scripts/rebuild_v4_references.py"))
         except (TypeError, ValueError):
             pass
     return issues
@@ -135,21 +156,21 @@ def validate_final_products(
             # against a different triple than the one that produced it.
             try:
                 om_col = ("uvi_openmeteo" if r.get("uvi_openmeteo") is not None
-                          and pd.notna(r.get("uvi_openmeteo")) else "uv_index")
-                vs = [float(r[c]) for c in (om_col, "uvi_cams", "uvi_epa")
-                      if r.get(c) is not None and pd.notna(r[c])]
+                          and _present(cast(object, r.get("uvi_openmeteo"))) else "uv_index")
+                vs = [float(cast(float, r[c])) for c in (om_col, "uvi_cams", "uvi_epa")
+                      if r.get(c) is not None and _present(cast(object, r[c]))]
             except (TypeError, ValueError):
                 continue
             cons = r.get("uvi_consensus")
-            if (len(vs) >= 2 and cons is not None and pd.notna(cons)
-                    and not (min(vs) - 0.01 <= float(cons) <= max(vs) + 0.01)):
+            if (len(vs) >= 2 and cons is not None and _present(cast(object, cons))
+                    and not (min(vs) - 0.01 <= float(cast(float, cons)) <= max(vs) + 0.01)):
                 issues.append(ValidationIssue(
                     "ERROR", f"tan_forecast_{label}",
                     f"consensus {cons} outside sources at {r.get('time')}"))
                 break
             sp = r.get("uvi_source_spread")
-            if (len(vs) >= 2 and sp is not None and pd.notna(sp)
-                    and abs(float(sp) - (max(vs) - min(vs))) > 0.02):
+            if (len(vs) >= 2 and sp is not None and _present(cast(object, sp))
+                    and abs(float(cast(float, sp)) - (max(vs) - min(vs))) > 0.02):
                 issues.append(ValidationIssue(
                     "ERROR", f"tan_forecast_{label}",
                     f"spread {sp} != source range at {r.get('time')}"))
@@ -176,9 +197,9 @@ def validate_final_products(
             for col, dcol in (("uvi_consensus", "peak_uv_index"),
                               ("tan_dose_30m_j_m2", "peak_30m_tan_dose_j_m2"),
                               ("sed_30m", "peak_30m_sed")):
-                if col in g.columns and dcol in d and pd.notna(d[dcol]):
-                    actual = pd.to_numeric(g[col], errors="coerce").max()
-                    if pd.notna(actual) and abs(float(actual) - float(d[dcol])) > 0.05 * max(1.0, abs(float(actual))):
+                if col in g.columns and dcol in d and pd.notna(cast(float, d[dcol])):
+                    actual = cast(float, pd.to_numeric(g[col], errors="coerce").max())
+                    if pd.notna(actual) and abs(float(actual) - float(cast(float, d[dcol]))) > 0.05 * max(1.0, abs(float(actual))):
                         issues.append(ValidationIssue(
                             "ERROR", "tan_daily_summary",
                             f"{dcol}={d[dcol]} != true max {round(float(actual), 2)} on {day}"))
@@ -209,11 +230,15 @@ def validate_final_products(
 
 
 def validate_cams_direct(df: pd.DataFrame) -> list[ValidationIssue]:
-    if df is None or df.empty:
+    # Callers can still hand us None at runtime; the object-typed view keeps
+    # the guard legal for the checker (and real if it ever fires).
+    raw = cast(object, df)
+    if raw is None or df.empty:
         return [ValidationIssue("ERROR", "cams_direct_ads", "no CAMS rows returned")]
     lows = [c.lower() for c in df.columns]
-    def present(tokens): return any(all(t in c for t in tokens) for c in lows)
-    issues=[]
+    def present(tokens: tuple[str, ...]) -> bool:
+        return any(all(t in c for t in tokens) for c in lows)
+    issues: list[ValidationIssue] = []
     for name,tokens in [
         ("AOD340", ("aerosol","optical","340")),
         ("AOD380", ("aerosol","optical","380")),

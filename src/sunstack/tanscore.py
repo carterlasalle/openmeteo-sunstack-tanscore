@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import timedelta
 from pathlib import Path
+from typing import Protocol, SupportsFloat, TypedDict, cast
 from zoneinfo import ZoneInfo
 
 import joblib
@@ -28,7 +30,80 @@ def _find_col(df: pd.DataFrame, tokens: tuple[str, ...], excludes: tuple[str, ..
     return None
 
 
-def _to_utc_from_openmeteo(times: pd.Series) -> pd.Series:
+class _Regressor(Protocol):
+    """Only the sklearn surface the pickled UVA/UVB bundle is called through."""
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray: ...
+
+
+class _UVBundle(TypedDict):
+    """Shape of the pickled UVA/UVB bundle written by `calibrate.train_uv_models`.
+
+    Every key is required: callers index it directly, so a bundle missing one
+    is a KeyError at the unpack site, exactly as before this annotation.
+    """
+
+    features: list[str]
+    uva_model: _Regressor
+    uvb_model: _Regressor
+    manifest: dict[str, object]
+
+
+def _as_float(value: object, default: float = math.nan) -> float:
+    """float() view of an untyped scalar; None or unparseable → default."""
+    if value is None:
+        return default
+    try:
+        return float(cast(SupportsFloat, value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_str_dict(raw: object) -> dict[str, object] | None:
+    """str-keyed view of an untyped mapping; non-mappings stay None.
+
+    JSON objects and unpickled bundles both arrive typed as `object`; the
+    runtime shape is only checked to the extent the callers branch on it.
+    """
+    if not isinstance(raw, dict):
+        return None
+    return cast("dict[str, object]", raw)
+
+
+def _as_str_list(value: object) -> list[str] | None:
+    """List-of-string view of a manifest field; non-lists stay None.
+
+    Non-string entries are dropped: the only consumer matches them against
+    known band names, which they can never equal.
+    """
+    if not isinstance(value, list):
+        return None
+    return [item for item in cast("list[object]", value) if isinstance(item, str)]
+
+
+def _json_object(text: str) -> dict[str, object]:
+    """Mapping view of a JSON document; the parse itself is unchecked.
+
+    `json.loads` is declared `Any`; widening to `object` first keeps one
+    untyped document from erasing every field read to `Any`. A non-object
+    document still fails downstream exactly as it did before.
+    """
+    return cast("dict[str, object]", cast(object, json.loads(text)))
+
+
+def _feature_schema(bundle: dict[str, object]) -> list[str]:
+    """Model feature list from the bundle manifest, most specific field first."""
+    man = _as_str_dict(bundle.get("manifest")) or {}
+    for field in ("feature_schema", "features"):
+        if field in man:
+            listed = _as_str_list(man[field])
+            if listed is not None:
+                return listed
+    listed = _as_str_list(bundle.get("features"))
+    return listed if listed is not None else []
+
+
+def to_utc_from_openmeteo(times: pd.Series) -> pd.Series:
     parsed = pd.to_datetime(times)
     if getattr(parsed.dt, "tz", None) is None:
         parsed = parsed.dt.tz_localize(ZoneInfo(config.TIMEZONE), ambiguous="infer", nonexistent="shift_forward")
@@ -37,7 +112,7 @@ def _to_utc_from_openmeteo(times: pd.Series) -> pd.Series:
     return parsed.dt.tz_convert("UTC").astype("datetime64[ns, UTC]")
 
 
-def _cams_features(cams: pd.DataFrame | None) -> pd.DataFrame:
+def cams_features(cams: pd.DataFrame | None) -> pd.DataFrame:
     """Propagate every direct CAMS UV/aerosol/column field (never fetch-and-drop).
 
     Adds erythemal irradiance (CAMS UVBED is a dose rate/irradiance, NOT an
@@ -133,7 +208,7 @@ def build_live_feature_frame(best: pd.DataFrame, cams_direct: pd.DataFrame | Non
     if best.empty:
         return pd.DataFrame()
     out = best.copy()
-    out["time_utc"] = _to_utc_from_openmeteo(scol(out, "time"))
+    out["time_utc"] = to_utc_from_openmeteo(scol(out, "time"))
     if "elevation_m" in out:
         elev = num(out, "elevation_m").dropna()
         altitude = float(elev.median()) if elev.notna().any() else 220.0
@@ -160,11 +235,11 @@ def build_live_feature_frame(best: pd.DataFrame, cams_direct: pd.DataFrame | Non
     else:
         out["aod55"] = np.nan
 
-    camsf = _cams_features(cams_direct)
+    camsf = cams_features(cams_direct)
     if cams_direct is not None and not cams_direct.empty and "cams_cycle" in cams_direct:
         # Mode, not row zero: fallback cycles can concatenate, and the label
         # must describe the bulk of the data, not whichever row came first.
-        modes = pd.Series(cams_direct["cams_cycle"]).dropna().mode()
+        modes = cast("pd.Series[str]", pd.Series(cams_direct["cams_cycle"]).dropna().mode())
         out["cams_cycle"] = str(modes.iloc[0]) if len(modes) else np.nan
     else:
         out["cams_cycle"] = np.nan
@@ -188,7 +263,7 @@ def build_live_feature_frame(best: pd.DataFrame, cams_direct: pd.DataFrame | Non
     return out
 
 
-def _load_bundle(calibration_dir: Path, *, strict: bool = True):
+def _load_bundle(calibration_dir: Path, *, strict: bool = True) -> object:
     """Load the UVA/UVB bundle, failing closed on version mismatch.
 
     A stale pickle (old sklearn, old model version, changed training code)
@@ -198,6 +273,9 @@ def _load_bundle(calibration_dir: Path, *, strict: bool = True):
     warn-and-continue behavior for pre-manifest bundles, sklearn drift, and
     training-code drift, but model-version drift still errors (a wrong-model
     pickle is never acceptable output).
+
+    The pickle is an arbitrary object; callers narrow it (`_UVBundle`) where
+    they unpack it.
     """
     import logging as _logging
 
@@ -205,8 +283,9 @@ def _load_bundle(calibration_dir: Path, *, strict: bool = True):
     if not path.exists():
         return None
     bundle = joblib.load(path)
-    man = bundle.get("manifest") if isinstance(bundle, dict) else None
-    if not isinstance(man, dict):
+    _bundle = _as_str_dict(bundle)
+    man = _as_str_dict(_bundle.get("manifest")) if _bundle is not None else None
+    if man is None:
         msg = ("UVA/UVB bundle has no manifest (pre-manifest training); "
                "retrain with `sunstack bootstrap` to bind versions.")
         if strict:
@@ -225,10 +304,10 @@ def _load_bundle(calibration_dir: Path, *, strict: bool = True):
             raise RuntimeError(f"ERROR bundle: {msg}")
         _logging.getLogger("sunstack").warning("%s", msg)
     if man.get("model_version") != config.TAN_SCORE_MODEL_VERSION:
-        raise RuntimeError(
-            f"UVA/UVB bundle model_version={man.get('model_version')} != "
-            f"runtime {config.TAN_SCORE_MODEL_VERSION}: retrain with "
-            f"`sunstack bootstrap`.")
+        msg = (f"UVA/UVB bundle model_version={man.get('model_version')} != "
+               f"runtime {config.TAN_SCORE_MODEL_VERSION}: retrain with "
+               f"`sunstack bootstrap`.")
+        raise RuntimeError(msg)
     # Contract §20.2: a recorded-but-uncompared hash is not enforcement.
     # Recompute the training-code hash and fail strict on mismatch.
     import hashlib as _hashlib
@@ -249,13 +328,15 @@ def predict_uva_uvb(features: pd.DataFrame, calibration_dir: Path,
                     *, strict: bool = True) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     bundle = _load_bundle(calibration_dir, strict=strict)
     if bundle is not None:
-        X = features.reindex(columns=bundle["features"])
-        uva = np.clip(bundle["uva_model"].predict(X), 0, None)
-        uvb = np.clip(bundle["uvb_model"].predict(X), 0, None)
+        _b = cast(_UVBundle, bundle)
+        X = features.reindex(columns=_b["features"])
+        uva = np.clip(_b["uva_model"].predict(X), 0, None)
+        uvb = np.clip(_b["uvb_model"].predict(X), 0, None)
         # Per-row tier: whole-frame .any() used to stamp full-CAMS on rows
         # past the CAMS horizon with no CAMS data (audit P1).
-        _has = lambda c: (num(features, c).notna().to_numpy()
-                          if c in features else np.full(len(features), False))
+        def _has(c: str) -> np.ndarray:
+            return (num(features, c).notna().to_numpy()
+                    if c in features else np.full(len(features), False))
         _full = (_has("ozone_du") & _has("aod340") & _has("aod380"))
         # Per-row array: the caller assigns it as the column (audit P1: the
         # old scalar stamped full-CAMS on rows past the CAMS horizon).
@@ -288,37 +369,31 @@ def predict_uva_uvb(features: pd.DataFrame, calibration_dir: Path,
     return uva, uvb, tier
 
 
-def _percentile(values: pd.Series, value: float) -> float:
-    clean = pd.to_numeric(values, errors="coerce")
+def percentile(values: pd.Series, value: float) -> float:
+    clean = cast(object, pd.to_numeric(values, errors="coerce"))
     if not isinstance(clean, pd.Series):
         raise TypeError("percentile values must be a Series")
-    vals = clean.dropna().to_numpy()
+    vals = cast("pd.Series[float]", clean).dropna().to_numpy(dtype=float)
     if not len(vals) or not np.isfinite(value):
         return np.nan
     return float(100.0 * np.mean(vals <= value))
 
 
-def _circular_doy_distance(series: pd.Series, doy: int) -> pd.Series:
-    nums = pd.to_numeric(series, errors="coerce")
+def circular_doy_distance(series: pd.Series, doy: int) -> pd.Series[float]:
+    nums = cast(object, pd.to_numeric(series, errors="coerce"))
     if not isinstance(nums, pd.Series):
         raise TypeError("doy series must be a Series")
-    diff = (nums - doy).abs()
+    diff = (cast("pd.Series[float]", nums) - doy).abs()
     mirror = 366 - diff
     return diff.where(diff <= mirror, mirror)
 
 
-def fnum(row: pd.Series, name: str, default: float = float("nan")) -> float:
+def fnum(row: pd.Series, name: str, default: float = math.nan) -> float:
     """Scalar float read with a quiet default (missing/garbage → default)."""
-    v = row.get(name, default)
-    if v is None:
-        return default
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return default
+    return _as_float(cast(object, row.get(name, default)), default)
 
 
-def add_local_scores(forecast: pd.DataFrame, local_ref: pd.DataFrame) -> pd.DataFrame:
+def add_local_scores(forecast: pd.DataFrame, local_ref: pd.DataFrame | None) -> pd.DataFrame:
     out = forecast.copy()
     if local_ref is None or local_ref.empty:
         out["local_tan_score_0_100"] = np.nan * np.ones(len(out))
@@ -327,19 +402,19 @@ def add_local_scores(forecast: pd.DataFrame, local_ref: pd.DataFrame) -> pd.Data
         return out
     ref = local_ref.copy()
     local_times = pd.to_datetime(scol(out, "time_utc"), utc=True).dt.tz_convert(ZoneInfo(config.TIMEZONE))
-    local_scores = []
-    atm_scores = []
+    local_scores: list[float] = []
+    atm_scores: list[float] = []
     for pos in range(len(out)):
         row = out.iloc[pos]
-        _lt = local_times.iloc[pos] if pos < len(local_times) else local_times.iloc[0]
-        lt = _lt if isinstance(_lt, pd.Timestamp) else pd.to_datetime(_lt)
+        _lt = cast(object, local_times.iloc[pos] if pos < len(local_times) else local_times.iloc[0])
+        lt = _lt if isinstance(_lt, pd.Timestamp) else pd.to_datetime(cast("str | pd.Timestamp", _lt))
         doy = int(lt.dayofyear)
         elev = fnum(row, "solar_elevation_deg")
         score = fnum(row, "tan_score_absolute_0_100")
-        seasonal = ref.loc[_circular_doy_distance(scol(ref, "day_of_year"), doy) <= config.LOCAL_DOY_WINDOW_DAYS]
+        seasonal = ref.loc[circular_doy_distance(scol(ref, "day_of_year"), doy) <= config.LOCAL_DOY_WINDOW_DAYS]
         if len(seasonal) < 250:
             seasonal = ref
-        local_scores.append(_percentile(scol(seasonal, "absolute_tan_score_0_100"), score))
+        local_scores.append(percentile(scol(seasonal, "absolute_tan_score_0_100"), score))
 
         same_geometry = seasonal.loc[
             (num(seasonal, "solar_elevation_deg") - elev).abs()
@@ -349,7 +424,7 @@ def add_local_scores(forecast: pd.DataFrame, local_ref: pd.DataFrame) -> pd.Data
             same_geometry = seasonal.loc[
                 (num(seasonal, "solar_elevation_deg") - elev).abs() <= 15.0
             ]
-        atm_scores.append(_percentile(scol(same_geometry, "absolute_tan_score_0_100"), score))
+        atm_scores.append(percentile(scol(same_geometry, "absolute_tan_score_0_100"), score))
     out["local_tan_score_0_100"] = np.round(local_scores, 1)
     out["geometry_conditioned_transmission_percentile_0_100"] = np.round(atm_scores, 1)
     # Deprecated alias (one migration version): old name stays parseable but
@@ -377,7 +452,8 @@ def _add_serving_local_scores(
     )
     fallback = np.zeros(len(out), dtype=bool)
     for band in (*bands, "fallback"):
-        positions = np.flatnonzero(row_bands == band)
+        positions = np.flatnonzero(
+            cast("np.ndarray[tuple[int, ...], np.dtype[np.bool_]]", row_bands == band))
         if not len(positions):
             continue
         reference = references.get(band)
@@ -396,7 +472,7 @@ def _add_serving_local_scores(
     return out, fallback
 
 
-def _grade_absolute(score: float) -> str:
+def grade_absolute(score: float) -> str:
     if not np.isfinite(score): return "unknown"
     if score >= 80: return "extreme natural tanning intensity"
     if score >= 65: return "very strong"
@@ -406,7 +482,7 @@ def _grade_absolute(score: float) -> str:
     return "low"
 
 
-def _grade_local(score: float) -> str:
+def grade_local(score: float) -> str:
     if not np.isfinite(score): return "unknown"
     if score >= 98: return "exceptional locally"
     if score >= 90: return "excellent locally"
@@ -416,7 +492,7 @@ def _grade_local(score: float) -> str:
     return "poor locally"
 
 
-def _uv_ghi_disagree(frame: pd.DataFrame) -> pd.Series:
+def uv_ghi_disagree(frame: pd.DataFrame) -> pd.Series[bool]:
     """True where broadband and UV inputs describe different skies.
 
     Heuristic priors, not fitted: flag only strong disagreement with the sun
@@ -437,10 +513,10 @@ def _uv_ghi_disagree(frame: pd.DataFrame) -> pd.Series:
     return (sun_up & high_sun & (bright_ghi_dark_uv | dark_ghi_bright_uv)).fillna(False)
 
 
-def apply_disagreement_penalty(confidence: pd.Series, disagree: pd.Series) -> pd.Series:
+def apply_disagreement_penalty(confidence: pd.Series, disagree: pd.Series) -> pd.Series[float]:
     """Halve confidence where inputs disagree. Values stay untouched; only
     trust is discounted. Both series must come from the same frame."""
-    vals = pd.to_numeric(confidence, errors="coerce").to_numpy(dtype=float).copy()
+    vals = cast("pd.Series[float]", pd.to_numeric(confidence, errors="coerce")).to_numpy(dtype=float).copy()
     vals[disagree.fillna(False).to_numpy(dtype=bool)] *= 0.5
     return pd.Series(np.round(vals, 1), index=confidence.index)
 
@@ -468,7 +544,7 @@ def torso_lift_deg(elevation_deg: float) -> float | None:
     """
     if not np.isfinite(elevation_deg) or elevation_deg <= 0:
         return None
-    return round(float(np.clip(90.0 - elevation_deg, 0.0, 90.0)), 1)
+    return round(min(max(90.0 - elevation_deg, 0.0), 90.0), 1)
 
 
 def sun_posture_guidance(elevation_deg: float, azimuth_deg: float) -> str:
@@ -493,8 +569,8 @@ def sun_posture_guidance(elevation_deg: float, azimuth_deg: float) -> str:
 def add_sun_posture(frame: pd.DataFrame) -> pd.DataFrame:
     """Attach sun-position context columns. Values untouched by construction."""
     out = frame.copy()
-    elev = pd.to_numeric(frame["solar_elevation_deg"] if "solar_elevation_deg" in frame else pd.Series(np.nan, index=frame.index), errors="coerce")
-    azim = pd.to_numeric(frame["solar_azimuth_deg"] if "solar_azimuth_deg" in frame else pd.Series(np.nan, index=frame.index), errors="coerce")
+    elev = num(frame, "solar_elevation_deg")
+    azim = num(frame, "solar_azimuth_deg")
     out["sun_compass"] = [sun_compass(float(a)) if pd.notna(a) else "—" for a in azim]
     out["torso_lift_deg"] = [torso_lift_deg(float(e)) if pd.notna(e) else None for e in elev]
     out["sun_posture_guidance"] = [
@@ -505,7 +581,7 @@ def add_sun_posture(frame: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _require_photobiology_or_fail() -> tuple[object, float, str]:
+def require_photobiology_or_fail() -> tuple[object, float, str]:
     """Load melanogenesis spectrum + global reference, failing loudly."""
     from .photobiology import ACTION_SPECTRUM_STEM, load_action_spectrum
 
@@ -550,8 +626,8 @@ def score_forecast(
         from .photobiology import ACTION_SPECTRUM_STEM as _STEM
         from .photobiology import require_canonical_spectrum
 
-        require_canonical_spectrum(_STEM)
-    _spec, global_ref, spectrum_tier = _require_photobiology_or_fail()
+        _ = require_canonical_spectrum(_STEM)
+    _spec, global_ref, spectrum_tier = require_photobiology_or_fail()
     uva, uvb, tier = predict_uva_uvb(features, calibration_dir, strict=strict)
     out = features.copy()
     # v5 contract §11.4 coverage fractions: computed from the bundle/backend
@@ -561,15 +637,9 @@ def score_forecast(
     # or any score (no error-model coupling — no historical calibration shows
     # a coverage→error relationship, so uncertainty stays calibrated-error-v1).
     _schema: list[str] = []
-    _bundle = _load_bundle(calibration_dir, strict=strict)
-    if isinstance(_bundle, dict):
-        _man = _bundle.get("manifest")
-        if isinstance(_man, dict) and isinstance(_man.get("feature_schema"), list):
-            _schema = [str(c) for c in _man["feature_schema"] if isinstance(c, str)]
-        elif isinstance(_man, dict) and isinstance(_man.get("features"), list):
-            _schema = [str(c) for c in _man["features"] if isinstance(c, str)]
-        elif isinstance(_bundle.get("features"), list):
-            _schema = [str(c) for c in _bundle["features"] if isinstance(c, str)]
+    _bundle = _as_str_dict(_load_bundle(calibration_dir, strict=strict))
+    if _bundle is not None:
+        _schema = _feature_schema(_bundle)
     if _schema:
         _cov = np.zeros(len(features), dtype=int)
         for c in _schema:
@@ -624,29 +694,27 @@ def score_forecast(
         else SPECTRAL_BACKEND_VERSION)
     out["spectral_tier"] = spectral_tier_for_row(
         has_emulator=_tierB_bundle is not None)
-    if str(out["spectral_tier"].iloc[0]) in ("A", "B"):
+    if str(cast(object, out["spectral_tier"].iloc[0])) in ("A", "B"):
         # No silent tier inflation: reference/emulator quality may only be
         # claimed behind a validated manifest (SUNSTACK_TIERB_MANIFEST).
         from .spectral import validate_tierB_manifest
 
         if not config.TIERB_MANIFEST_PATH:
-            raise RuntimeError(
-                "ERROR spectral: tier A/B claimed with no emulator manifest "
-                "configured (SUNSTACK_TIERB_MANIFEST unset). Build the corpus "
-                "with scripts/build_spectral_corpus.py first."
-            )
-        import json as _json
+            msg = ("ERROR spectral: tier A/B claimed with no emulator manifest "
+                   "configured (SUNSTACK_TIERB_MANIFEST unset). Build the corpus "
+                   "with scripts/build_spectral_corpus.py first.")
+            raise RuntimeError(msg)
         from pathlib import Path as _Path
 
-        validate_tierB_manifest(
-            _json.loads(_Path(config.TIERB_MANIFEST_PATH).read_text(encoding="utf-8")))
+        _ = validate_tierB_manifest(
+            _json_object(_Path(config.TIERB_MANIFEST_PATH).read_text(encoding="utf-8")))
     # Temporary migration diagnostic: legacy value for comparison reports only.
     # Never used in ranking or UI headline scores after validation.
     out["legacy_absolute_tan_score_55_30_15"] = np.round(
         absolute_tan_score(num(out, "uv_index"), scol(out, "predicted_uva_wm2")), 1
     )
     out["absolute_tan_intensity_label"] = [
-        _grade_absolute(float(x)) for x in num(out, "tan_score_absolute_0_100").fillna(np.nan)
+        grade_absolute(float(x)) for x in num(out, "tan_score_absolute_0_100").fillna(np.nan)
     ]
 
     # UVI source fusion: EPA/NWS operational (US public product) + CAMS
@@ -693,7 +761,7 @@ def score_forecast(
     # confirmed night rows read as zero, so the SED integrator marks true gaps
     # instead of trapezoids through invented zeros.
     out["erythemal_irradiance_wm2"] = np.round(
-        erythemal_irradiance_from_uvi(out["uvi_consensus"].to_numpy(dtype=float)), 5
+        erythemal_irradiance_from_uvi(num(out, "uvi_consensus").to_numpy(dtype=float)), 5
     )
     # Separate UVA-dominant pigment-darkening channel (existing pigment only).
     try:
@@ -713,16 +781,16 @@ def score_forecast(
     # for back-compat; uvi_source_spread covers every source including EPA.
     with np.errstate(divide="ignore", invalid="ignore"):
         denom = np.maximum(
-            np.maximum(out["uvi_openmeteo"].to_numpy(dtype=float),
-                       out["uvi_cams"].to_numpy(dtype=float)), 0.5,
+            np.maximum(num(out, "uvi_openmeteo").to_numpy(dtype=float),
+                       num(out, "uvi_cams").to_numpy(dtype=float)), 0.5,
         )
         out["uvi_difference_absolute"] = (
-            out["uvi_openmeteo"] - out["uvi_cams"]
+            num(out, "uvi_openmeteo") - num(out, "uvi_cams")
         ).round(3)
         # Percent (0-100), not fraction: the old 0-1 storage rendered as
         # 0.4% instead of 35% wherever a % sign was appended (audit 100x bug).
         out["uvi_difference_percent"] = (
-            100.0 * (out["uvi_openmeteo"] - out["uvi_cams"]).abs() / denom
+            100.0 * (num(out, "uvi_openmeteo") - num(out, "uvi_cams")).abs() / denom
         ).round(2)
 
     ref_path = calibration_dir / "local_reference.parquet"
@@ -736,7 +804,7 @@ def score_forecast(
     try:
         _ver_path = calibration_dir / "local_reference_version.json"
         if _ver_path.exists():
-            _ver = json.loads(_ver_path.read_text(encoding="utf-8"))
+            _ver = _json_object(_ver_path.read_text(encoding="utf-8"))
             out["local_reference_version"] = str(
                 _ver.get("tan_score_model_version", "unknown"))
             _model_ok = (_ver.get("tan_score_model_version")
@@ -752,7 +820,7 @@ def score_forecast(
             _refver_ok = (_ver.get("global_reference_version")
                           == config.GLOBAL_MELANOGENIC_REFERENCE_VERSION)
             _refval = _ver.get("global_reference_e_mel_wm2", None)
-            _refval_ok = (_refval is not None and float(_refval) ==
+            _refval_ok = (_refval is not None and float(cast(SupportsFloat, _refval)) ==
                           float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2))
             _ref_usable = bool(_model_ok and _spec_ok and _tier_ok and _temp_ok
                                and _refver_ok and _refval_ok)
@@ -766,7 +834,7 @@ def score_forecast(
     try:
         _lead_path = calibration_dir / "lead_reference_manifest.json"
         if _lead_path.exists():
-            _lead_manifest = json.loads(_lead_path.read_text(encoding="utf-8"))
+            _lead_manifest = _json_object(_lead_path.read_text(encoding="utf-8"))
             _lead_version = str(_lead_manifest.get("tan_score_model_version", "unknown"))
             _lead_model_ok = (_lead_manifest.get("tan_score_model_version")
                               == config.TAN_SCORE_MODEL_VERSION)
@@ -779,12 +847,13 @@ def score_forecast(
             _lead_refver_ok = (_lead_manifest.get("global_reference_version")
                                == config.GLOBAL_MELANOGENIC_REFERENCE_VERSION)
             _lead_refval = _lead_manifest.get("global_reference_e_mel_wm2", None)
-            _lead_refval_ok = (_lead_refval is not None and float(_lead_refval) ==
+            _lead_refval_ok = (_lead_refval is not None
+                               and float(cast(SupportsFloat, _lead_refval)) ==
                                float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2))
-            _lead_bands = _lead_manifest.get("bands", [])
+            _lead_bands = _as_str_list(_lead_manifest.get("bands"))
             _lead_ok = (_lead_model_ok and _lead_spec_ok and _lead_tier_ok
                         and _lead_temp_ok and _lead_refver_ok and _lead_refval_ok)
-            if _lead_ok and isinstance(_lead_bands, list):
+            if _lead_ok and _lead_bands is not None:
                 for _band in _lead_bands:
                     if _band not in SERVING_REFERENCE_BANDS:
                         continue
@@ -805,19 +874,17 @@ def score_forecast(
             out.loc[_served, "local_reference_version"] = _lead_version
             out.loc[_served, "local_reference_stale"] = False
         if _fallback.any():
-            _logging.getLogger("sunstack").warning(
-                "Serving local reference unavailable for forecast lead; "
-                "falling back to legacy local_reference.parquet"
-            )
+            msg = ("Serving local reference unavailable for forecast lead; "
+                   "falling back to legacy local_reference.parquet")
+            _logging.getLogger("sunstack").warning(msg)
     else:
         out = add_local_scores(out, local_ref)
         out["local_reference_fallback"] = True
-        _logging.getLogger("sunstack").warning(
-            "Serving local references unavailable; "
-            "falling back to legacy local_reference.parquet"
-        )
+        msg = ("Serving local references unavailable; "
+               "falling back to legacy local_reference.parquet")
+        _logging.getLogger("sunstack").warning(msg)
     out["local_tan_label"] = [
-        _grade_local(float(x)) for x in num(out, "local_tan_score_0_100").fillna(np.nan)
+        grade_local(float(x)) for x in num(out, "local_tan_score_0_100").fillna(np.nan)
     ]
 
     # Reliability from the calibrated error model (§11): confidence is a
@@ -840,7 +907,7 @@ def score_forecast(
     from .calibrate import estimate_expected_uvi_error as _estimate_err
 
     out = _estimate_err(out, calibration_dir)
-    out["uv_input_disagree"] = _uv_ghi_disagree(out).to_numpy(dtype=bool)
+    out["uv_input_disagree"] = uv_ghi_disagree(out).to_numpy(dtype=bool)
     out["tan_forecast_confidence_0_100"] = apply_disagreement_penalty(
         out["tan_forecast_confidence_0_100"], out["uv_input_disagree"]
     )

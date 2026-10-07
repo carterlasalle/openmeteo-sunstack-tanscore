@@ -62,12 +62,12 @@ def test_training_intervals_align_not_raw_timestamps() -> None:
 
 
 def test_history_normalizers_attach_interval_metadata() -> None:
-    from sunstack.history import _openmeteo_hourly_frame, normalize_nasa_power
+    from sunstack.history import normalize_nasa_power, openmeteo_hourly_frame
 
     power = normalize_nasa_power({
         "properties": {"parameter": {"ALLSKY_SFC_UVA": {"2026062112": 30.0}}}
     })
-    openmeteo = _openmeteo_hourly_frame(
+    openmeteo = openmeteo_hourly_frame(
         {"hourly": {"time": ["2026-06-21T13:00Z"], "shortwave_radiation": [800.0]}},
         "openmeteo_historical_forecast",
         "best_match",
@@ -143,7 +143,7 @@ def test_dose_routing_uses_exact_interval_means_and_point_trapezoids() -> None:
 
 def test_half_hour_interval_columns_survive_record_serialization() -> None:
     from sunstack.opportunity import build_30min_forecast
-    from sunstack.ui import _records
+    from sunstack.ui import records
 
     half_hour = build_30min_forecast(pd.DataFrame({
         "time": ["2026-06-21T12:00", "2026-06-21T13:00"],
@@ -154,15 +154,23 @@ def test_half_hour_interval_columns_survive_record_serialization() -> None:
         "wind_speed_10m": [1.0, 1.0],
         "weather_code": [0, 0],
     }))
-    record = _records(half_hour)[0]
+    record = records(half_hour)[0]
     assert {
         "interval_start_utc", "interval_end_utc", "interval_midpoint_utc"
     }.issubset(record)
     assert record["radiation_support_type"] == "interval_mean"
     assert record["temporal_semantics_version"] == "interval-contract-v1"
-    start = pd.Timestamp(record["interval_start_utc"])
-    end = pd.Timestamp(record["interval_end_utc"])
-    midpoint = pd.Timestamp(record["interval_midpoint_utc"])
+
+    def _stamp(key: str) -> pd.Timestamp:
+        # `records` serialises with date_format="iso", so stamps are ISO strings;
+        # asserting it here keeps the contract explicit instead of implied.
+        value = record[key]
+        assert isinstance(value, str), f"{key} must be an ISO string, got {type(value).__name__}"
+        return pd.Timestamp(value)
+
+    start = _stamp("interval_start_utc")
+    end = _stamp("interval_end_utc")
+    midpoint = _stamp("interval_midpoint_utc")
     assert end - start == pd.Timedelta(minutes=30)
     assert midpoint - start == pd.Timedelta(minutes=15)
 

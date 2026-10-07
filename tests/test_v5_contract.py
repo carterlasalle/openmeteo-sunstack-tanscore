@@ -105,7 +105,7 @@ def test_documented_v5_tokens_remain_current() -> None:
 def test_parser_exposes_surface_context_flags() -> None:
     from sunstack import cli
 
-    parser = cli._build_parser()
+    parser = cli.build_parser()
     args = parser.parse_args([])
     actions = {
         option: action

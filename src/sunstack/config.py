@@ -130,12 +130,12 @@ def default_site(registry: Path | None = None) -> Site:
         if s.default:
             return s
     raise ValueError("no default location")
-_SITE_STACK: list[Site] = []
+SITE_STACK: list[Site] = []
 
 
 def current_site() -> Site | None:
     """Innermost active site, or None when running legacy single-site mode."""
-    return _SITE_STACK[-1] if _SITE_STACK else None
+    return SITE_STACK[-1] if SITE_STACK else None
 
 
 _site_lock: threading.RLock | None = None
@@ -175,7 +175,7 @@ class use_site:
         active["LATITUDE"] = self._site.lat
         active["LONGITUDE"] = self._site.lon
         active["TIMEZONE"] = self._site.timezone
-        _SITE_STACK.append(self._site)
+        SITE_STACK.append(self._site)
         return self._site
 
     def __exit__(self, *_exc: object) -> bool:
@@ -183,7 +183,7 @@ class use_site:
         active["LATITUDE"] = self._saved["LATITUDE"]
         active["LONGITUDE"] = self._saved["LONGITUDE"]
         active["TIMEZONE"] = self._saved["TIMEZONE"]
-        closed: Site = _SITE_STACK.pop()
+        closed: Site = SITE_STACK.pop()
         if closed is not self._site:
             # Explicit raise, never assert: site-stack corruption silently
             # misattributes coordinates across locations, and assert vanishes

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any
+from pathlib import Path
+from typing import cast
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -16,7 +17,7 @@ from .temporal import TEMPORAL_SEMANTICS_VERSION
 LOG = logging.getLogger("sunstack")
 
 
-def _num(df: pd.DataFrame, name: str, default=np.nan) -> pd.Series:
+def _num(df: pd.DataFrame, name: str, default: float = np.nan) -> pd.Series[float]:
     return num(df, name, default)
 
 
@@ -28,32 +29,56 @@ THUNDER_CODES = {95, 96, 97, 99}
 SNOW_DEPTH_BLOCK_M = 0.05
 
 
+def _as_float(value: object) -> float:
+    """Float view of a maybe-missing frame cell; NaN when it is not numeric.
+
+    ``Series.get`` types as Any, which would otherwise leak untyped values into
+    every downstream comparison. Coercing at the read keeps the arithmetic below
+    statically float.
+    """
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        # Every branch above implements __float__; the cast names that contract so
+        # the numpy scalar generics do not leak their Unknown dtype parameter.
+        return float(cast(float, value))
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return float("nan")
+    return float("nan")
+
+
 def _weighted_geometric(row: pd.Series) -> float:
-    vals: dict[str, Any] = {
-        "absolute": row.get("tan_score_absolute_0_100", np.nan),
-        "local": row.get("local_tan_score_0_100", np.nan),
-        # Canonical key first, deprecated alias as fallback (one migration version).
-        "atmosphere": row.get("geometry_conditioned_transmission_percentile_0_100",
-                              row.get("atmospheric_quality_percentile_0_100", np.nan)),
-        "confidence": row.get("tan_forecast_confidence_0_100", np.nan),
+    # Canonical key first, deprecated alias as fallback (one migration version).
+    # `Series.get` is typed Any because a cell has no static dtype; cast each read
+    # to `object` so the coercion below is the only place that widens back out.
+    vals: dict[str, float] = {
+        "absolute": _as_float(cast("object", row.get("tan_score_absolute_0_100", np.nan))),
+        "local": _as_float(cast("object", row.get("local_tan_score_0_100", np.nan))),
+        "atmosphere": _as_float(
+            cast(
+                "object",
+                row.get(
+                    "geometry_conditioned_transmission_percentile_0_100",
+                    cast("object", row.get("atmospheric_quality_percentile_0_100", np.nan)),
+                ),
+            )
+        ),
+        "confidence": _as_float(cast("object", row.get("tan_forecast_confidence_0_100", np.nan))),
     }
-    weights = config.OVERALL_SCORE_WEIGHTS
-    usable = [
-        (float(vals[k]), float(weights[k]))
-        for k in weights
-        if bool(pd.notna(vals.get(k)))
-    ]
+    weights: dict[str, float] = config.OVERALL_SCORE_WEIGHTS
+    usable = [(vals[k], weights[k]) for k in weights if not math.isnan(vals.get(k, float("nan")))]
     if not usable:
         return np.nan
     total_w = sum(w for _, w in usable)
     # 0 is a legitimate score; clamp only for logarithm math.
     geom = math.exp(sum((w / total_w) * math.log(max(v, 0.25)) for v, w in usable))
     absolute = vals["absolute"]
-    if pd.notna(absolute):
+    if not math.isnan(absolute):
         # Local rarity and favorable atmosphere may improve interpretation, but can
         # never turn biologically weak radiation into an elite global opportunity.
-        geom = min(geom, float(absolute) + config.OVERALL_ABSOLUTE_HEADROOM)
-    return float(np.clip(geom, 0, 100))
+        geom = min(geom, absolute + config.OVERALL_ABSOLUTE_HEADROOM)
+    return min(max(geom, 0.0), 100.0)
 
 
 def apply_outdoor_feasibility(
@@ -69,6 +94,12 @@ def apply_outdoor_feasibility(
         return scored.copy()
     out = scored.copy()
     min_temp = float(config.MIN_TAN_TEMP_F if min_temp_f is None else min_temp_f)
+    # Guarded here rather than only in the API route: `temp < nan` is False for
+    # every row, so a non-finite threshold silently disables the cold floor while
+    # the run summary still reports the configured one. Every entry point (CLI,
+    # bootstrap, HTTP) routes through this function, so the check lives here.
+    if not math.isfinite(min_temp):
+        raise ValueError(f"min_temp_f must be a finite temperature, got {min_temp_f!r}")
     temp = _num(out, "temperature_2m")
     # Sun-warming heuristic for BARE SKIN lying still (user context: shirtless
     # + shorts on grass/sand). Contract §15: the old UVI-based "feels-like"
@@ -118,25 +149,40 @@ def apply_outdoor_feasibility(
     # block the interval as precipitation-exposed.
     hard_block = rain_now | snow_now | thunder | too_hot | too_cold | ground_snow
     # Contract §14.1: essential missing weather is UNKNOWN, never perfect.
-    missing_hard = temp.isna() | code.eq(-1)
+    # "Unknown" describes a ROW whose weather is incomplete — never a frame that
+    # does not carry the field at all. An absent column is a wiring fault that
+    # build_30min_forecast() already warns about loudly; marking every row
+    # unknown for it blanks the whole product instead of naming the gap.
+    missing_hard = pd.Series(False, index=out.index)
+    if "temperature_2m" in out.columns:
+        missing_hard |= temp.isna()
+    if "weather_code" in out.columns:
+        missing_hard |= code.eq(-1)
     out["outdoor_feasibility_complete"] = ~missing_hard.fillna(True)
+    # Every flag column shares one index with `out`, so position is the label and
+    # the reads can be plain typed lists instead of `.loc[label]` round-trips.
+    missing_flags: dict[str, list[bool]] = {
+        "temperature_2m": temp.isna().tolist(),
+        "weather_code": code.eq(-1).tolist(),
+    }
     out["outdoor_feasibility_missing_fields"] = [
-        ",".join([n for n, s in (("temperature_2m", temp.isna().loc[i]),
-                                 ("weather_code", code.eq(-1).loc[i])) if bool(s)])
-        for i in out.index]
+        ",".join(n for n, flags in missing_flags.items() if flags[k]) for k in range(len(out))
+    ]
     # §14.1: name which rule fired, so a blocked/unknown row is explainable
     # without re-deriving it from the weather columns.
+    reason_flags: dict[str, list[bool]] = {
+        "missing_weather": missing_hard.tolist(),
+        "rain_interval": rain_now.tolist(),
+        "snow_interval": snow_now.tolist(),
+        "thunderstorm": thunder.tolist(),
+        "too_hot": too_hot.tolist(),
+        "too_cold": too_cold.tolist(),
+        "ground_snow": ground_snow.tolist(),
+    }
     out["outdoor_feasibility_reason_codes"] = [
-        ",".join([n for n, s in (
-            ("missing_weather", missing_hard.loc[i]),
-            ("rain_interval", rain_now.loc[i]),
-            ("snow_interval", snow_now.loc[i]),
-            ("thunderstorm", thunder.loc[i]),
-            ("too_hot", too_hot.loc[i]),
-            ("too_cold", too_cold.loc[i]),
-            ("ground_snow", ground_snow.loc[i]),
-        ) if bool(s)]) or "ok"
-        for i in out.index]
+        ",".join(n for n, flags in reason_flags.items() if flags[k]) or "ok"
+        for k in range(len(out))
+    ]
 
     multiplier = pd.Series(1.0, index=out.index)
     # Cold/heat comfort penalties use sun-adjusted feels-like: 65F calm + high
@@ -159,42 +205,70 @@ def apply_outdoor_feasibility(
     multiplier.loc[wind >= config.WIND_WARNING_MPH] *= 0.80
     multiplier.loc[wind >= config.WIND_STRONG_MPH] *= 0.65
     multiplier.loc[hard_block] = 0.0
+    # Contract §14.1: essential missing weather is UNKNOWN — never perfect, and
+    # never silently 0 either. A blocked row and an unknown row are different
+    # states with different remedies, so they get different values: blocked =
+    # 0.0, unknown = NaN. Both are excluded from the usable ranking by
+    # best_fixed_dose_window(), which requires completeness.
+    # Previously `missing_hard` was recorded in `outdoor_feasibility_complete`
+    # and in the reason codes but never reached the multiplier, so a row with no
+    # temperature reported 100 % feasibility and comfort "perfect" (live audit
+    # 2026-10-06: 336 such rows on the Pacific Palisades site).
+    unknown = missing_hard.fillna(False)
+    out["outdoor_feasibility_unknown"] = unknown.to_numpy(dtype=bool)
+    multiplier = multiplier.mask(unknown, np.nan)
+
+    # Every column shares `out`'s index, so position is the label: read each
+    # series once into a typed list instead of one `.loc[label]` round-trip per
+    # row, which is both untyped and O(rows) hashing.
+    _rain_l = rain_now.tolist()
+    _snow_l = snow_now.tolist()
+    _thunder_l = thunder.tolist()
+    _ground_l = ground_snow.tolist()
+    _missing_l = missing_hard.tolist()
+    _temp_l = temp.tolist()
+    _feel_l = _feel.tolist()
+    _pop_l = pop.tolist()
+    _wind_l = wind.tolist()
+    _rh_l = rh.tolist()
+    _feels_l = feels.tolist()
 
     reasons: list[str] = []
     flags: list[str] = []
-    for i in out.index:
-        rs, fs = [], []
-        if bool(rain_now.loc[i]):
+    for k in range(len(out)):
+        rs: list[str] = []
+        fs: list[str] = []
+        if _rain_l[k]:
             rs.append("precipitation in interval/code")
-        if bool(snow_now.loc[i]):
+        if _snow_l[k]:
             rs.append("snowfall in interval/code")
-        if bool(thunder.loc[i]):
+        if _thunder_l[k]:
             rs.append("thunderstorm")
-        if bool(ground_snow.loc[i]):
+        if _ground_l[k]:
             rs.append("snow-covered ground")
-        if bool(missing_hard.loc[i]):
+        if _missing_l[k]:
             rs.append("unknown (missing weather)")
-        if pd.notna(temp.loc[i]) and temp.loc[i] >= config.MAX_TAN_TEMP_F:
+        if not math.isnan(_temp_l[k]) and _temp_l[k] >= config.MAX_TAN_TEMP_F:
             rs.append(f"temperature >= {config.MAX_TAN_TEMP_F:.0f}F")
-        if pd.notna(temp.loc[i]) and temp.loc[i] < min_temp:
+        if not math.isnan(_temp_l[k]) and _temp_l[k] < min_temp:
             rs.append(f"temperature < {min_temp:.0f}F")
         if not rs:
-            if pd.notna(_feel.loc[i]) and _feel.loc[i] < config.COMFORTABLE_TAN_TEMP_F:
+            if not math.isnan(_feel_l[k]) and _feel_l[k] < config.COMFORTABLE_TAN_TEMP_F:
                 fs.append("cold")
-            if pd.notna(temp.loc[i]) and temp.loc[i] >= config.HEAT_WARNING_TEMP_F:
+            if not math.isnan(_temp_l[k]) and _temp_l[k] >= config.HEAT_WARNING_TEMP_F:
                 fs.append("heat")
-            if pop.loc[i] >= 40:
-                fs.append(f"{pop.loc[i]:.0f}% precipitation risk")
-            if wind.loc[i] >= config.WIND_WARNING_MPH:
+            if _pop_l[k] >= 40:
+                fs.append(f"{_pop_l[k]:.0f}% precipitation risk")
+            if _wind_l[k] >= config.WIND_WARNING_MPH:
                 fs.append("windy")
             if (
-                pd.notna(rh.loc[i])
-                and pd.notna(temp.loc[i])
-                and rh.loc[i] >= 80
-                and temp.loc[i] >= 80
+                not math.isnan(_rh_l[k])
+                and not math.isnan(_temp_l[k])
+                and _rh_l[k] >= 80
+                and _temp_l[k] >= 80
             ):
                 fs.append("humid/sweaty")
-            if pd.notna(feels.loc[i]) and feels.loc[i] >= 100:
+            if not math.isnan(_feels_l[k]) and _feels_l[k] >= 100:
                 fs.append("high apparent temperature")
         reasons.append("; ".join(rs))
         flags.append("; ".join(fs))
@@ -208,7 +282,11 @@ def apply_outdoor_feasibility(
         _comfort = _comfort.mask(temp >= config.MAX_TAN_TEMP_F, "too hot")
     except (TypeError, ValueError):
         pass
-    out["comfort_band"] = _comfort.where(~hard_block.fillna(False), _comfort)
+    # Unknown weather is its own band, not "perfect". Every comparison above is
+    # False for NaN temperature, which is how "unknown" silently became the
+    # best possible comfort verdict.
+    _comfort = _comfort.mask(unknown, "unknown")
+    out["comfort_band"] = _comfort
     out["outdoor_feasibility_0_100"] = np.round(multiplier * 100, 1)
     out["outdoor_blocked"] = hard_block.to_numpy()
     out["outdoor_block_reason"] = reasons
@@ -330,12 +408,10 @@ def attach_personalization(
                    "OBJECTIVE_ESTIMATE", "COARSE_ESTIMATE")
     if personal_mmd_j_m2 is not None and basis is None:
         raise ValueError(
-            "personal_mmd_j_m2 requires an explicit basis (SUNSTACK_EFFECTIVE_DOSE_MEASURED, "
-            "SOURCE_SPECTRUM_MEASURED, OBJECTIVE_ESTIMATE, or COARSE_ESTIMATE)")
+            f"personal_mmd_j_m2 requires an explicit basis; allowed: {list(_COMPATIBLE)}")
     if personal_mmd_j_m2 is not None and basis not in _COMPATIBLE:
         raise ValueError(
-            f"personal_mmd basis {basis!r} is not compatible with SunStack "
-            f"delayed-pigmentation-effective J/m²; allowed: {list(_COMPATIBLE)}")
+            f"personal_mmd basis {basis!r} is not compatible with SunStack delayed-pigmentation-effective J/m²; allowed: {list(_COMPATIBLE)}")
     out = df.copy()
     out["personalization_basis"] = basis or "not personalized"
     if personal_mmd_j_m2 is not None and np.isfinite(personal_mmd_j_m2) and personal_mmd_j_m2 > 0:
@@ -403,16 +479,15 @@ def _toa_wm2(times_utc: pd.Series) -> np.ndarray:
     date-dependent values use ``temporal.extra_radiation_date_dependent``.
     """
     loc = pvlib.location.Location(config.LATITUDE, config.LONGITUDE, tz="UTC")
-    zen = pd.DataFrame(loc.get_solarposition(pd.DatetimeIndex(times_utc)))[
-        "zenith"
-    ].to_numpy(dtype=float)
+    pos = loc.get_solarposition(pd.DatetimeIndex(times_utc))
+    zen = num(pos, "zenith").to_numpy(dtype=float)
     return np.clip(1361.1 * np.cos(np.radians(zen)), 0, None)
 
 
 def build_30min_forecast(
     hourly: pd.DataFrame, hrrr15: pd.DataFrame | None = None,
     min_temp_f: float | None = None,
-    calibration_dir = None,
+    calibration_dir: Path | None = None,
 ) -> pd.DataFrame:
     if hourly.empty:
         return pd.DataFrame()
@@ -496,7 +571,9 @@ def build_30min_forecast(
                 if c not in numeric.columns]
     if _missing and not h.empty:
         LOG.warning("30-min transformer missing columns: %s", _missing)
-    idx = pd.date_range(h.index.min(), h.index.max(), freq="30min")
+    idx = pd.date_range(
+        cast("pd.Timestamp", h.index.min()), cast("pd.Timestamp", h.index.max()), freq="30min"
+    )
     union_idx = numeric.index.union(idx)
     # Boolean flags cannot hold reindex gaps (numpy bool upcasts to object and
     # breaks time interpolation) and must never be numerically interpolated:
@@ -522,7 +599,8 @@ def build_30min_forecast(
         if hseries is None or hseries.empty:
             base[col] = np.nan
             continue
-        lo, hi = hseries.index.min(), hseries.index.max()
+        lo = cast("pd.Timestamp", hseries.index.min())
+        hi = cast("pd.Timestamp", hseries.index.max())
         base.loc[(base.index < lo) | (base.index > hi), col] = np.nan
     base = base.reindex(columns=[c for c in numeric.columns if c in base.columns])
     base.index.name = "dt"
@@ -537,7 +615,9 @@ def build_30min_forecast(
     # Backed by native HRRR 15-min forecast comparison: daylight MAE 53.8 -> 51.5, median
     # 16.0 -> 12.1 (n=258 slots).
     if "shortwave_radiation_instant" in h.columns:
-        ghi_h = pd.to_numeric(h["shortwave_radiation_instant"], errors="coerce")
+        # `num` is the typed numeric reader; a bare `pd.to_numeric(h[...])` would
+        # hand an Any series to the clear-sky-index arithmetic below.
+        ghi_h = num(h, "shortwave_radiation_instant")
         toa_h = _toa_wm2(_as_utc(h.index.to_series()))
         kt_h = (ghi_h.to_numpy() / np.where(toa_h > 1, toa_h, np.nan)).clip(0, 1.5)
         kt_h = pd.Series(kt_h, index=h.index)
@@ -783,8 +863,18 @@ def build_30min_forecast(
                 _ref = _pd.read_parquet(_ref_path)
                 # add_local_scores keys on time_utc; the 30-min frame carries
                 # dt/time. Alias (not rename) so downstream keeps both.
+                #
+                # `dt` is a NAIVE LOCAL wall clock, so it must be localised to
+                # the site timezone and then converted — not passed straight to
+                # `to_datetime(..., utc=True)`, which localises it *as* UTC.
+                # That mis-stamp shipped for months: local 08:00 EDT became
+                # `08:00Z` instead of `12:00Z`, contradicting the same row's
+                # `interval_end_utc` by the site's UTC offset, while the hourly
+                # frame (which uses `to_utc_from_openmeteo`) was correct.
                 if "time_utc" not in out.columns and "dt" in out.columns:
-                    out["time_utc"] = _pd.to_datetime(out["dt"], utc=True)
+                    from .tanscore import to_utc_from_openmeteo as _to_utc
+
+                    out["time_utc"] = _to_utc(out["dt"])
                 out = _add_local(out, _ref)
         except (ImportError, ValueError, OSError):
             pass
@@ -846,31 +936,117 @@ def build_30min_forecast(
     return out
 
 
-# Weekly class blocks, minutes since midnight ET, Mon=0..Fri=4 (mirrors UI CLASSES).
-# South-Bend (Eastern) only; other sites get no constraint.
-_CLASS_BLOCKS = {
-    0: [(660, 735), (770, 820), (840, 950)],
-    1: [(570, 620), (660, 735)],
-    2: [(660, 735), (770, 820), (840, 950)],
-    3: [(660, 735)],
-    4: [(770, 820)],
-}
+# Weekly class blocks, minutes since local midnight, Mon=0..Fri=4.
+#
+# This is USER CONTEXT, not product data. It used to be a hardcoded personal
+# timetable shipped in both the client (`CLASSES`) and here, gated to the
+# South Bend slug — so a public page rendered "Show my classes" and
+# "free for you:" for one person's week. The schedule now arrives per request
+# (query parameter `classes`) and is empty by default: no schedule supplied
+# means no constraint, no class rows, no "free for you" line.
+ClassBlocks = dict[int, list[tuple[int, int]]]
 
 
-def _in_class(dt: pd.Timestamp) -> bool:
-    try:
-        wd = int(dt.dayofweek)
-    except (AttributeError, TypeError, ValueError):
+def parse_class_blocks(raw: object) -> ClassBlocks:
+    """Parse `classes` into {weekday: [(start_min, end_min), ...]}.
+
+    Accepts a JSON array of blocks, each either
+    `{"dow": 0-4, "start": "HH:MM", "end": "HH:MM"}` or
+    `{"dow": 0-4, "start_min": int, "end_min": int}`. Anything malformed is
+    rejected loudly — a schedule silently dropped would silently change which
+    window the product recommends.
+    """
+    import json as _json
+
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return {}
+    parsed: object = raw
+    if isinstance(raw, str):
+        try:
+            # Re-widened: `json.loads` is annotated as returning Any, which would
+            # silently re-narrow `parsed` and erase the validation below.
+            parsed = cast(object, _json.loads(raw))
+        except ValueError as exc:
+            raise ValueError(f"classes must be valid JSON: {exc}") from None
+    if not isinstance(parsed, list):
+        raise TypeError("classes must be a JSON array of blocks")
+    entries = cast("list[object]", parsed)
+
+    def _weekday(value: object) -> int:
+        """Weekday from a JSON block.
+
+        Accepts the numeric string a `<select>` sends. A float is rejected
+        rather than truncated — 2.5 is not a weekday, and silently reading it
+        as Tuesday would move the window the product recommends.
+        """
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            # A wrong type is a TypeError, not a ValueError: the caller sent a
+            # different kind of thing, not an out-of-range weekday.
+            raise TypeError(f"classes entry dow must be a weekday number, got {value!r}")
+        try:
+            return int(value)
+        except ValueError:
+            raise ValueError(f"classes entry dow must be a weekday number, got {value!r}") from None
+
+    def _mins(block: dict[str, object]) -> tuple[int, int]:
+        if "start_min" in block and "end_min" in block:
+            try:
+                start = int(str(block["start_min"]))
+                end = int(str(block["end_min"]))
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"classes start_min/end_min must be integers, got {block['start_min']!r}/{block['end_min']!r}"
+                ) from None
+            return start, end
+
+        def _hhmm(value: object, label: str) -> int:
+            text = str(value or "").strip()
+            if ":" not in text:
+                raise ValueError(f"classes block {label} must be 'HH:MM', got {text!r}")
+            hh, _, mm = text.partition(":")
+            try:
+                hours, minutes = int(hh), int(mm)
+            except ValueError:
+                raise ValueError(f"classes block {label} must be 'HH:MM', got {text!r}") from None
+            if not (0 <= hours <= 23 and 0 <= minutes <= 59):
+                raise ValueError(f"classes block {label} out of range: {text!r}")
+            return hours * 60 + minutes
+
+        return _hhmm(block.get("start"), "start"), _hhmm(block.get("end"), "end")
+
+    blocks: ClassBlocks = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise TypeError("each classes entry must be an object")
+        block = cast("dict[str, object]", entry)
+        dow = _weekday(block.get("dow", -1))
+        if not 0 <= dow <= 4:
+            raise ValueError(f"classes entry dow must be 0-4 (Mon-Fri), got {dow}")
+        start, end = _mins(block)
+        if not 0 <= start < end <= 1440:
+            raise ValueError(f"classes entry must satisfy 0 <= start < end <= 1440, got {start}-{end}")
+        blocks.setdefault(dow, []).append((start, end))
+    return blocks
+
+
+def _in_class(dt: object, blocks: ClassBlocks | None = None) -> bool:
+    """True when `dt` falls inside a supplied class block. No blocks = no constraint."""
+    if not blocks:
         return False
+    # `dt` arrives from a datetime64 column, so it is a Timestamp or NaT.
+    if not isinstance(dt, pd.Timestamp) or pd.isna(dt):
+        return False
+    wd = int(dt.dayofweek)
+    mins = int(dt.hour) * 60 + int(dt.minute)
     if wd > 4:
         return False
-    mins = int(dt.hour) * 60 + int(dt.minute)
-    return any(a <= mins < b for a, b in _CLASS_BLOCKS.get(wd, []))
+    return any(a <= mins < b for a, b in blocks.get(wd, []))
 
 
-def _best_contiguous_window(
+def best_contiguous_window(
     day: pd.DataFrame, threshold_delta: float = 12.0,
     skip_class: bool = False,
+    class_blocks: ClassBlocks | None = None,
 ) -> tuple[pd.Timestamp, pd.Timestamp, float] | None:
     """Longest near-peak sustained outdoor period (legacy Overall-based).
 
@@ -890,7 +1066,7 @@ def _best_contiguous_window(
         & (~d["outdoor_blocked"].fillna(False))
     ].copy()
     if skip_class:
-        eligible = eligible.loc[~eligible["dt"].map(_in_class)].copy()
+        eligible = eligible.loc[~eligible["dt"].map(lambda t: _in_class(t, class_blocks))].copy()
     if eligible.empty:
         return None
     groups, cur, last = [], [], None
@@ -922,6 +1098,7 @@ def best_fixed_dose_window(
     day: pd.DataFrame, duration_min: int = 30,
     usable_only: bool = True, comfort_min: float | None = None,
     dose_tolerance_frac: float = 0.01,
+    class_blocks: ClassBlocks | None = None,
 ) -> tuple[pd.Timestamp, pd.Timestamp, float] | None:
     """Maximum expected delayed-pigmentation dose over a fixed window (§16.3).
 
@@ -930,8 +1107,10 @@ def best_fixed_dose_window(
     dose_tolerance_frac or the model uncertainty floor) break toward lower
     expected error, then earliest start. Local percentile never enters the
     physical objective. `comfort_min` requires every stamp to meet a rank from
-    `comfort_band`: perfect=3, sun-warmed=2, cool/warm=1, too cold/too hot=0;
-    hard-blocked or unknown bands rank 0. Returns (start, end, dose_J_m2).
+    `comfort_band`: perfect=3, sun-warmed=2, cool/warm=1, too cold/too hot/
+    unknown=0. When `usable_only` is set the window must additionally be
+    complete (known weather) and, if `class_blocks` is supplied, must not
+    overlap a class block. Returns (start, end, dose_J_m2).
     """
     if day.empty:
         return None
@@ -947,7 +1126,21 @@ def best_fixed_dose_window(
     blocked_raw = d.get("outdoor_blocked", False)
     blocked = (blocked_raw.fillna(False).astype(bool)
                if isinstance(blocked_raw, pd.Series) else False)
+    # §14.1: essential missing weather is UNKNOWN. Unknown is not "usable" —
+    # a window cannot be recommended when the feasibility inputs never arrived.
+    # The physical dose is still ranked by strongest_30m (usable_only=False).
+    complete_raw = d.get("outdoor_feasibility_complete")
+    complete = (complete_raw.fillna(True).astype(bool)
+                if isinstance(complete_raw, pd.Series) else pd.Series(True, index=d.index))
     stamps = d["dt"].reset_index(drop=True)
+    # Schedule is user context (§2.5: "best usable" must pass hard outdoor
+    # constraints AND the user's schedule). It was previously applied only to a
+    # separate `best_available_window`, so the headline recommendation could sit
+    # inside a class the page was simultaneously reporting as busy.
+    in_class = (
+        stamps.map(lambda t: _in_class(t, class_blocks)).reset_index(drop=True)
+        if class_blocks else None
+    )
     e_vals = e_mel.reset_index(drop=True)
     c_vals = conf.reset_index(drop=True)
     if isinstance(blocked, pd.Series):
@@ -958,7 +1151,7 @@ def best_fixed_dose_window(
         comfort_rank = (
             bands.map({
                 "perfect": 3.0, "sun-warmed": 2.0, "cool": 1.0, "warm": 1.0,
-                "too cold": 0.0, "too hot": 0.0,
+                "too cold": 0.0, "too hot": 0.0, "unknown": 0.0,
             }).fillna(0.0).reset_index(drop=True)
             if isinstance(bands, pd.Series)
             else pd.Series(0.0, index=range(len(d)))
@@ -988,7 +1181,12 @@ def best_fixed_dose_window(
             continue  # night/zero window: no physical stimulus to rank
         if usable_only and isinstance(blocked, pd.Series) and bool(blocked.iloc[window_idx].any()):
             continue
-        if comfort_rank is not None and bool((comfort_rank.iloc[window_idx] < comfort_min).any()):
+        if usable_only and not bool(complete.iloc[window_idx].all()):
+            continue  # unknown weather is not a recommendation
+        if usable_only and in_class is not None and bool(in_class.iloc[window_idx].any()):
+            continue  # the user is busy: never headline a window they cannot take
+        if (comfort_rank is not None and comfort_min is not None
+                and bool((comfort_rank.iloc[window_idx] < comfort_min).any())):
             continue
         vals = [float(seg.iloc[j]) for j in range(len(seg))]
         # Rectangular: the window [start, start+duration) covers the
@@ -1007,25 +1205,32 @@ def best_fixed_dose_window(
     return best
 
 
-def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
+def build_daily_summary(
+    subhour: pd.DataFrame,
+    class_blocks: ClassBlocks | None = None,
+) -> pd.DataFrame:
     if subhour.empty:
         return pd.DataFrame()
     df = subhour.copy()
-    df["dt"] = pd.to_datetime(df["dt"])
-    df["date"] = df["dt"].dt.date.astype(str)
+    _dt = pd.DatetimeIndex(pd.to_datetime(scol(df, "dt")))
+    df["dt"] = _dt
+    df["date"] = _dt.date.astype(str)
     rows = []
     for day, g in df.groupby("date"):
-        if not isinstance(g, pd.DataFrame):
-            raise TypeError("date group must be a DataFrame")
         # Astronomical daylight (audit: wall-clock 8-20 was wrong by
         # season/latitude/DST). is_day when present, else solar elevation.
-        def _col(name: str, _g: pd.DataFrame = g) -> pd.Series:
-            _raw = _g.get(name)
-            _n, _idx = len(_g), _g.index
-            return pd.to_numeric(
-                _raw if isinstance(_raw, pd.Series)
-                else pd.Series([_raw] * _n, index=_idx),
-                errors="coerce")
+        def _col(name: str, _g: pd.DataFrame = g) -> pd.Series[float]:
+            # Widened so the Series check stays a real runtime branch: `get` is
+            # typed Any, which would otherwise make the isinstance provably true.
+            _raw = cast(object, _g.get(name))
+            if isinstance(_raw, pd.Series):
+                # `_col` is a numeric-coercion helper by contract and is only ever
+                # called for numeric columns, so name that here rather than let the
+                # unknown dtype propagate.
+                _num_src = cast("pd.Series[float]", _raw)
+                return pd.to_numeric(_num_src, errors="coerce")
+            # Absent column: broadcast the scalar then coerce, exactly as before.
+            return pd.Series([_as_float(_raw)] * len(_g), index=_g.index, dtype="float64")
         _isday = _col("is_day")
         if bool(_isday.notna().any()):
             daylight = g.loc[_isday.fillna(0) > 0].copy()
@@ -1045,32 +1250,33 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
         best = _flat.iloc[[int(_pos) if isinstance(_pos, (int, np.integer)) else 0]].iloc[0]
         # Best one-hour rolling pair.
         s = daylight.sort_values(by=["dt"]).reset_index(drop=True)
+        _s_dt = pd.DatetimeIndex(pd.to_datetime(scol(s, "dt")))
         best_hour: object = None
         best_hour_score = -1.0
         for i in range(len(s) - 1):
-            cur = pd.to_datetime(s["dt"].iloc[i + 1])
-            prev = pd.to_datetime(s["dt"].iloc[i])
-            if cur - prev != pd.Timedelta(minutes=30):
+            if _s_dt[i + 1] - _s_dt[i] != pd.Timedelta(minutes=30):
                 continue
+            # Contiguous two-row `.iloc` slice on a DataFrame always yields a frame.
             window_rows = s.iloc[i : i + 2]
-            if not isinstance(window_rows, pd.DataFrame):
-                raise TypeError("rolling window slice must be a DataFrame")
             pair = _num(window_rows, "overall_tan_opportunity_0_100").fillna(0)
             avg = float(pair.mean())
             if avg > best_hour_score:
                 best_hour_score = avg
-                best_hour = s["dt"].iloc[i]
-        window = _best_contiguous_window(daylight)
-        # Class-aware window: same ranking, class blocks excluded (south-bend
-        # Eastern schedule; None when the whole window is in class).
-        avail = _best_contiguous_window(daylight, skip_class=True)
+                best_hour = _s_dt[i]
+        window = best_contiguous_window(daylight)
+        # Class-aware window: same ranking, class blocks excluded (None when
+        # the whole window is in class).
+        avail = best_contiguous_window(daylight, skip_class=True, class_blocks=class_blocks)
         # v5 physical ranking (§16.3, fixed-duration-dose-v2): strongest 30m
-        # E_mel dose regardless of comfort; best usable 30m among windows
-        # passing hard outdoor constraints. Local percentile never enters.
+        # E_mel dose regardless of comfort or schedule; best usable 30m among
+        # windows passing hard outdoor constraints AND the user's schedule.
+        # Local percentile never enters.
         strongest_30m = best_fixed_dose_window(daylight, 30, usable_only=False)
-        usable_30m = best_fixed_dose_window(daylight, 30, usable_only=True)
+        usable_30m = best_fixed_dose_window(
+            daylight, 30, usable_only=True, class_blocks=class_blocks
+        )
         comfortable_usable_30m = best_fixed_dose_window(
-            daylight, 30, usable_only=True, comfort_min=2
+            daylight, 30, usable_only=True, comfort_min=2, class_blocks=class_blocks
         )
         try:
             from .doses import day_totals as _day_totals
@@ -1088,12 +1294,14 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
         # t+30m, so read there (searching the full day grid g, since t+30m can
         # sit outside the daylight slice). Missing end stamp -> NaN, never a
         # neighboring slot's dose relabeled.
-        def _col_at(col: str, stamp, _grid: pd.DataFrame = g) -> float:
+        def _col_at(col: str, stamp: object, _grid: pd.DataFrame = g) -> float:
             try:
-                _cmp = pd.to_datetime(_grid["dt"])
-                _cmp_idx = _cmp if isinstance(_cmp, pd.Series) else pd.Series(_cmp, index=_grid.index)
-                hit = _grid.loc[pd.DatetimeIndex(_cmp_idx) == pd.to_datetime(stamp), col]
-                return float(hit.iloc[0]) if len(hit) else float("nan")
+                # Normalise once to a DatetimeIndex: `to_datetime` is a union of
+                # Series/DatetimeIndex depending on input, and the comparison only
+                # ever needs the values.
+                _cmp = pd.DatetimeIndex(pd.to_datetime(scol(_grid, "dt")))
+                hit = _grid.loc[_cmp == pd.to_datetime(_as_ts(stamp)), col]
+                return _as_float(cast(object, hit.iloc[0])) if len(hit) else float("nan")
             except (KeyError, ValueError, IndexError, TypeError):
                 return float("nan")
         def _as_ts(v: object) -> pd.Timestamp:
@@ -1113,7 +1321,11 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
         try:
             from .doses import window_dose as _wd2
 
-            _hour_doses = _wd2(g, best_hour, best_hour_end) if best_hour is not None else {}
+            _hour_doses = (
+                _wd2(g, best_hour, best_hour_end)
+                if best_hour is not None and best_hour_end is not None
+                else {}
+            )
         except (ImportError, ValueError, KeyError, RuntimeError):
             _hour_doses = {}
         rows.append(
@@ -1236,13 +1448,13 @@ def build_daily_summary(subhour: pd.DataFrame) -> pd.DataFrame:
                 "blocked_half_hours": int(
                     scol(daylight, "outdoor_blocked").fillna(False).sum()
                 ),
-                "day_status": _day_status(float(best["overall_tan_opportunity_0_100"])),
+                "day_status": day_status(float(best["overall_tan_opportunity_0_100"])),
             }
         )
     return pd.DataFrame(rows)
 
 
-def _day_status(score: float) -> str:
+def day_status(score: float) -> str:
     if not np.isfinite(score):
         return "UNKNOWN"
     if score >= 80:

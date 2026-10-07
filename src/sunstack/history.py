@@ -1,30 +1,62 @@
 from __future__ import annotations
 
+import importlib
 import json
+import math
 import os
 import re
 import shutil
 import time
 import zipfile
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Protocol, cast
+
+if TYPE_CHECKING:
+    import xarray as xr
 
 import numpy as np
 import pandas as pd
 import requests
-
-try:
-    from retry_requests import retry
-except ImportError:  # Lightweight fallback; uv sync installs retry-requests normally.
-    def retry(session, **_kwargs):
-        return session
 import requests_cache
 
 from . import config
 from .temporal import openmeteo_hourly_to_intervals, power_hourly_to_intervals
+
+# `retry_requests` ships no type information, so a static import would erase
+# every wrapped session to Unknown. This declares the surface this module
+# actually calls; the import resolves at runtime and degrades gracefully.
+
+
+class _RetryModule(Protocol):
+    def retry(
+        self, session: requests.Session, *, retries: int, backoff_factor: float
+    ) -> requests.Session: ...
+
+
+try:
+    _retry_module: _RetryModule | None = cast(
+        "_RetryModule", cast(object, importlib.import_module("retry_requests"))
+    )
+except ImportError:
+    # Lightweight fallback; uv sync installs retry-requests normally.
+    _retry_module = None
+
+
+def _retry(
+    session: requests.Session, *, retries: int, backoff_factor: float
+) -> requests.Session:
+    """Wrap `session` in retry_requests' adapter, or return it unchanged.
+
+    Keeps the module's previous degrade-gracefully behaviour: with the package
+    absent the session is used as-is rather than raising.
+    """
+    if _retry_module is None:
+        return session
+    return _retry_module.retry(session, retries=retries, backoff_factor=backoff_factor)
+
 
 NASA_POWER_URL = "https://power.larc.nasa.gov/api/temporal/hourly/point"
 HISTORICAL_FORECAST_URL = "https://historical-forecast-api.open-meteo.com/v1/forecast"
@@ -33,9 +65,11 @@ CAMS_FORECAST_DATASET = "cams-global-atmospheric-composition-forecasts"
 CAMS_EAC4_DATASET = "cams-global-reanalysis-eac4"
 
 
-def _session(cache_dir: Path, expire_after: int = 86400 * 30, fresh: bool = False):
+def _session(
+    cache_dir: Path, expire_after: int = 86400 * 30, fresh: bool = False
+) -> requests.Session:
     if fresh:
-        return retry(requests.Session(), retries=5, backoff_factor=0.6)
+        return _retry(requests.Session(), retries=5, backoff_factor=0.6)
     cache_dir.mkdir(parents=True, exist_ok=True)
     cached = requests_cache.CachedSession(
         str(cache_dir / "history_http"),
@@ -43,7 +77,7 @@ def _session(cache_dir: Path, expire_after: int = 86400 * 30, fresh: bool = Fals
         stale_if_error=True,
         allowable_methods=("GET",),
     )
-    return retry(cached, retries=5, backoff_factor=0.6)
+    return _retry(cached, retries=5, backoff_factor=0.6)
 
 
 def _write_table(df: pd.DataFrame, path_no_suffix: Path) -> None:
@@ -62,13 +96,21 @@ def _chunks(start: date, end: date, days: int) -> Iterable[tuple[date, date]]:
         cur = stop + timedelta(days=1)
 
 
-def _json_get(session, url: str, params: dict[str, Any], timeout: int = 180) -> dict[str, Any]:
+def _json_get(
+    session: requests.Session,
+    url: str,
+    params: Mapping[str, str | int | float],
+    timeout: int = 180,
+) -> dict[str, object]:
     r = session.get(url, params=params, timeout=timeout)
     r.raise_for_status()
-    payload = r.json()
-    if isinstance(payload, dict) and payload.get("error"):
-        raise RuntimeError(str(payload.get("reason", payload)))
-    return payload
+    payload = cast(object, r.json())
+    if not isinstance(payload, dict):
+        raise TypeError(f"unexpected non-object JSON from {url}")
+    typed = cast("dict[str, object]", payload)
+    if typed.get("error"):
+        raise RuntimeError(str(typed.get("reason", typed)))
+    return typed
 
 
 # ---------------------------------------------------------------------------
@@ -76,22 +118,29 @@ def _json_get(session, url: str, params: dict[str, Any], timeout: int = 180) -> 
 # ---------------------------------------------------------------------------
 
 
-def normalize_nasa_power(payload: dict[str, Any]) -> pd.DataFrame:
-    params = payload.get("properties", {}).get("parameter", {})
+def normalize_nasa_power(payload: Mapping[str, object]) -> pd.DataFrame:
+    properties = payload.get("properties")
+    params = (
+        cast("dict[str, object]", properties).get("parameter")
+        if isinstance(properties, dict)
+        else None
+    )
     if not isinstance(params, dict) or not params:
         return pd.DataFrame()
+    api_params = cast("dict[str, object]", params)
     all_times: set[str] = set()
-    for values in params.values():
+    for values in api_params.values():
         if isinstance(values, dict):
-            all_times.update(values)
+            all_times.update(cast("dict[str, object]", values))
     if not all_times:
         return pd.DataFrame()
     ordered = sorted(all_times)
     out = pd.DataFrame({"time_utc": pd.to_datetime(ordered, format="%Y%m%d%H", utc=True)})
-    for name, values in params.items():
+    for name, values in api_params.items():
         if not isinstance(values, dict):
             continue
-        series = pd.Series([values.get(k, np.nan) for k in ordered], dtype="float64")
+        numeric = cast("dict[str, float]", values)
+        series = pd.Series([numeric.get(k, np.nan) for k in ordered], dtype="float64")
         series = series.mask(series.isin([-999.0, -999]), np.nan)
         out[name] = series
     return power_hourly_to_intervals(out)
@@ -136,7 +185,7 @@ def fetch_nasa_power_history(
         except requests.RequestException as exc:
             print(f"WARN NASA POWER {year}: {exc}")
             continue
-        raw.write_text(json.dumps(payload), encoding="utf-8")
+        _ = raw.write_text(json.dumps(payload), encoding="utf-8")
         frame = normalize_nasa_power(payload)
         if frame.empty:
             print(f"WARN NASA POWER {year}: empty response")
@@ -159,22 +208,33 @@ def fetch_nasa_power_history(
 # ---------------------------------------------------------------------------
 
 
-def _openmeteo_hourly_frame(payload: dict[str, Any], source: str, model: str) -> pd.DataFrame:
+def openmeteo_hourly_frame(payload: dict[str, object], source: str, model: str) -> pd.DataFrame:
+    """Open-Meteo hourly JSON block to the canonical interval frame.
+
+    Public (no leading underscore) so white-box normalizer tests can exercise
+    this seam without reaching into a private name; every other caller is the
+    two history fetchers below.
+    """
     block = payload.get("hourly")
-    if not isinstance(block, dict) or "time" not in block:
+    if not isinstance(block, dict):
         return pd.DataFrame()
-    n = len(block["time"])
-    data: dict[str, Any] = {"time": block["time"]}
-    for k, v in block.items():
-        if k != "time" and isinstance(v, list) and len(v) == n:
+    hourly = cast("dict[str, object]", block)
+    times = hourly.get("time")
+    if not isinstance(times, list):
+        return pd.DataFrame()
+    time_list = cast("list[object]", times)
+    n = len(time_list)
+    data: dict[str, object] = {"time": time_list}
+    for k, v in hourly.items():
+        if k != "time" and isinstance(v, list) and len(cast("list[object]", v)) == n:
             data[k] = v
     df = pd.DataFrame(data)
     df["time_utc"] = pd.to_datetime(df.pop("time"), utc=True)
     df.insert(1, "source", source)
     df.insert(2, "model", model)
-    df["latitude_grid"] = payload.get("latitude")
-    df["longitude_grid"] = payload.get("longitude")
-    df["elevation_m"] = payload.get("elevation")
+    df["latitude_grid"] = cast("float | None", payload.get("latitude"))
+    df["longitude_grid"] = cast("float | None", payload.get("longitude"))
+    df["elevation_m"] = cast("float | None", payload.get("elevation"))
     return openmeteo_hourly_to_intervals(df, time_col="time_utc")
 
 
@@ -220,8 +280,8 @@ def fetch_openmeteo_historical_forecast(
         except requests.RequestException as exc:
             print(f"WARN Open-Meteo historical {key}: {exc}")
             continue
-        raw.write_text(json.dumps(payload), encoding="utf-8")
-        frame = _openmeteo_hourly_frame(payload, "openmeteo_historical_forecast", "best_match")
+        _ = raw.write_text(json.dumps(payload), encoding="utf-8")
+        frame = openmeteo_hourly_frame(payload, "openmeteo_historical_forecast", "best_match")
         if frame.empty:
             continue
         frame.to_parquet(parquet, index=False)
@@ -255,7 +315,7 @@ def fetch_openmeteo_previous_runs(
     frames: list[pd.DataFrame] = []
 
     variables = _previous_run_variables()
-    fallback_days = []
+    fallback_days: list[int] = []
     for d in [config.OPENMETEO_PREVIOUS_RUNS_DAYS, 730, 365, 92]:
         if d not in fallback_days:
             fallback_days.append(d)
@@ -265,8 +325,8 @@ def fetch_openmeteo_previous_runs(
         if parquet.exists() and not force:
             frames.append(pd.read_parquet(parquet))
             continue
-        payload = None
-        used_days = None
+        payload: dict[str, object] | None = None
+        used_days: int | None = None
         last_error: Exception | None = None
         for days in fallback_days:
             params = {
@@ -290,8 +350,8 @@ def fetch_openmeteo_previous_runs(
         if payload is None:
             print(f"WARN Previous Runs {model}: {last_error}")
             continue
-        (raw_dir / f"previous_runs__{model}.json").write_text(json.dumps(payload), encoding="utf-8")
-        frame = _openmeteo_hourly_frame(payload, "openmeteo_previous_runs", model)
+        _ = (raw_dir / f"previous_runs__{model}.json").write_text(json.dumps(payload), encoding="utf-8")
+        frame = openmeteo_hourly_frame(payload, "openmeteo_previous_runs", model)
         if frame.empty:
             continue
         frame["requested_past_days"] = used_days
@@ -312,6 +372,24 @@ EPA_UV_HOURLY_URL = "https://enviro.epa.gov/enviro/efservice/getEnvirofactsUVHOU
 EPA_UV_DAILY_URL = "https://enviro.epa.gov/enviro/efservice/getEnvirofactsUVDAILY/ZIP/{zip}/JSON"
 
 
+def _as_float(value: object) -> float:
+    """Numeric coercion at the JSON boundary; non-numeric never fabricates.
+
+    Missing values read as NaN so the caller's finiteness check drops the row,
+    exactly as the previous ``float(x if x is not None else nan)`` did for
+    scalars — including raising nothing: unparseable input maps to NaN, which
+    the caller already treats as "drop this row".
+    """
+    if value is None:
+        return math.nan
+    if isinstance(value, (int, float, str)):
+        try:
+            return float(value)
+        except ValueError:
+            return math.nan
+    return math.nan
+
+
 def normalize_epa_hourly(payload: object) -> pd.DataFrame:
     """EPA hourly UVI rows to a site-local hourly frame (time, uvi_epa).
 
@@ -321,17 +399,17 @@ def normalize_epa_hourly(payload: object) -> pd.DataFrame:
     """
     if not isinstance(payload, list) or not payload:
         return pd.DataFrame()
-    recs = []
-    for row in payload:
+    recs: list[dict[str, object]] = []
+    for row in cast("list[object]", payload):
         if not isinstance(row, dict):
             continue
+        typed = cast("dict[str, object]", row)
         try:
             # Wall-clock parse is intentional: EPA DATE_TIME is already the
             # ZIP's local time, matching the site-local wall clock join key.
             dt = datetime.strptime(  # noqa: DTZ007
-                str(row.get("DATE_TIME", "")).strip(), "%b/%d/%Y %I %p")
-            raw_uv = row.get("UV_VALUE")
-            val = float(raw_uv if raw_uv is not None else float("nan"))
+                str(typed.get("DATE_TIME", "")).strip(), "%b/%d/%Y %I %p")
+            val = _as_float(typed.get("UV_VALUE"))
         except (ValueError, TypeError):
             continue
         if not np.isfinite(val):
@@ -348,16 +426,16 @@ def normalize_epa_daily(payload: object) -> pd.DataFrame:
     """EPA daily UVI peaks to (date, uvi_epa_daily_peak). Display reference only."""
     if not isinstance(payload, list) or not payload:
         return pd.DataFrame()
-    recs = []
-    for row in payload:
+    recs: list[dict[str, object]] = []
+    for row in cast("list[object]", payload):
         if not isinstance(row, dict):
             continue
+        typed = cast("dict[str, object]", row)
         try:
             # Date-only parse is intentional: EPA DATE is a calendar-day label.
             day = datetime.strptime(  # noqa: DTZ007
-                str(row.get("DATE", "")).strip(), "%b/%d/%Y").date().isoformat()
-            raw_idx = row.get("UV_INDEX")
-            val = float(raw_idx if raw_idx is not None else float("nan"))
+                str(typed.get("DATE", "")).strip(), "%b/%d/%Y").date().isoformat()
+            val = _as_float(typed.get("UV_INDEX"))
         except (ValueError, TypeError):
             continue
         if not np.isfinite(val):
@@ -384,16 +462,16 @@ def fetch_epa_uv_forecast(out_dir: Path, zip_code: str, timeout: int = 30) -> tu
         resp = requests.get(EPA_UV_HOURLY_URL.format(zip=zip_code), timeout=timeout, allow_redirects=True)
         resp.raise_for_status()
         raw_dir.mkdir(parents=True, exist_ok=True)
-        raw_dir.joinpath(f"epa_hourly_{zip_code}.json").write_text(resp.text, encoding="utf-8")
-        hourly = normalize_epa_hourly(resp.json())
+        _ = raw_dir.joinpath(f"epa_hourly_{zip_code}.json").write_text(resp.text, encoding="utf-8")
+        hourly = normalize_epa_hourly(cast(object, resp.json()))
     except (requests.RequestException, ValueError) as exc:
         print(f"WARN EPA hourly UVI {zip_code}: {exc}")
     try:
         resp = requests.get(EPA_UV_DAILY_URL.format(zip=zip_code), timeout=timeout, allow_redirects=True)
         resp.raise_for_status()
         raw_dir.mkdir(parents=True, exist_ok=True)
-        raw_dir.joinpath(f"epa_daily_{zip_code}.json").write_text(resp.text, encoding="utf-8")
-        daily = normalize_epa_daily(resp.json())
+        _ = raw_dir.joinpath(f"epa_daily_{zip_code}.json").write_text(resp.text, encoding="utf-8")
+        daily = normalize_epa_daily(cast(object, resp.json()))
     except (requests.RequestException, ValueError) as exc:
         print(f"WARN EPA daily UVI {zip_code}: {exc}")
     if not hourly.empty:
@@ -413,15 +491,45 @@ def cds_credentials_present() -> bool:
     home = Path.home()
     return (home / ".cdsapirc").exists() or (home / ".cdsapi").exists()
 
-def _cds_client():
-    import cdsapi
+class _CdsResult(Protocol):
+    """The cdsapi result surface this module actually calls.
+
+    Declared here (rather than in ``stubs/``) because only this module touches
+    cdsapi directly: ``reply`` is the ADS status document, and the request is
+    polled with a hard deadline instead of cdsapi's unbounded default.
+    """
+
+    # The ADS status document is provider JSON: the poller reads `state`,
+    # `request_id` and a nested `error` object, all untyped by the service.
+    reply: dict[str, Any]
+
+    def update(self) -> None: ...
+    def download(self, target: str) -> None: ...
+
+
+class _CdsClient(Protocol):
+    def retrieve(self, dataset: str, request: dict[str, object]) -> _CdsResult: ...
+
+
+class _CdsModule(Protocol):
+    def Client(
+        self,
+        url: str | None = ...,
+        key: str | None = ...,
+        *,
+        quiet: bool = ...,
+        wait_until_complete: bool = ...,
+    ) -> _CdsClient: ...
+
+
+def _cds_client() -> _CdsClient:
+    module = cast("_CdsModule", cast(object, importlib.import_module("cdsapi")))
 
     url = os.getenv("CDSAPI_URL")
     key = os.getenv("CDSAPI_KEY")
-    kwargs: dict[str, Any] = {"quiet": False, "wait_until_complete": False}
     if url and key:
-        return cdsapi.Client(url=url, key=key, **kwargs)
-    return cdsapi.Client(**kwargs)
+        return module.Client(url=url, key=key, quiet=False, wait_until_complete=False)
+    return module.Client(quiet=False, wait_until_complete=False)
 
 
 def _sanitize(text: str) -> str:
@@ -444,7 +552,7 @@ def _extract_nc_zip(path: Path, extract_dir: Path) -> list[Path]:
     return []
 
 
-def _point_from_dataset(ds, lat: float, lon: float):
+def _point_from_dataset(ds: xr.Dataset, lat: float, lon: float) -> xr.Dataset:
     # Coordinate names are stable for CAMS netCDF, but keep this tolerant.
     lat_name = next((x for x in ("latitude", "lat") if x in ds.coords), None)
     lon_name = next((x for x in ("longitude", "lon") if x in ds.coords), None)
@@ -515,7 +623,7 @@ def normalize_cams_netcdf_zip(path: Path, extract_dir: Path, source: str) -> pd.
                 name = "cams_" + _sanitize(str(long_name))
                 # If duplicate long names occur, retain the original short name too.
                 if name in keep:
-                    name = "cams_" + _sanitize(var)
+                    name = "cams_" + _sanitize(str(var))
                 keep[name] = pd.to_numeric(raw[var], errors="coerce")
             frame = pd.DataFrame(keep)
             frame["source"] = source
@@ -540,8 +648,8 @@ def _cams_area(pad: float = 0.45) -> list[float]:
         config.LONGITUDE + pad,
     ]
 
-def _retrieve_cams(
-    client,
+def retrieve_cams(
+    client: _CdsClient,
     dataset: str,
     request: dict[str, Any],
     target: Path,
@@ -568,7 +676,8 @@ def _retrieve_cams(
     rid = result.reply.get("request_id", "unknown")
     print(f"Request ID is {rid}")
     start = time.monotonic()
-    last_state: str | None = None
+    # Opaque status token from the CDS client, compared for change only.
+    last_state: object = None
     last_beat = start
     while True:
         result.update()
@@ -580,7 +689,8 @@ def _retrieve_cams(
             result.download(str(target))
             return
         if state == "failed":
-            err = result.reply.get("error", {})
+            raw_err = result.reply.get("error", {})
+            err = cast("dict[str, object]", raw_err) if isinstance(raw_err, dict) else {}
             raise RuntimeError(f"{err.get('message')}. {err.get('reason')}.")
         elapsed = time.monotonic() - start
         if elapsed > limit:
@@ -611,7 +721,7 @@ def _is_unpublished_cycle_error(exc: BaseException) -> bool:
     return "400" in s and ("valid combination" in s or "invalid request" in s)
 
 
-def _candidate_cams_cycles(now: datetime | None = None) -> list[tuple[date, str]]:
+def candidate_cams_cycles(now: datetime | None = None) -> list[tuple[date, str]]:
     """Newest-first CAMS run cycles, starting from the latest safe cycle.
 
     The newest started cycle is often not published yet (ADS 400s); starting
@@ -659,9 +769,9 @@ def fetch_cams_forecast(out_dir: Path, force: bool = False, raw_root: Path | Non
     won: tuple[date, str] | None = None
     frames: list[pd.DataFrame] = []
     fallback: tuple[tuple[date, str], list[pd.DataFrame]] | None = None
-    for cand_date, cand_cycle in _candidate_cams_cycles():
+    for cand_date, cand_cycle in candidate_cams_cycles():
         print(f"CAMS forecast trying cycle {cand_date.isoformat()}T{cand_cycle}Z...", flush=True)
-        got, complete = _fetch_cams_cycle(raw_dir, client, manifest, cand_date, cand_cycle, force)
+        got, complete = fetch_cams_cycle(raw_dir, client, manifest, cand_date, cand_cycle, force)
         if got and complete:
             won, frames = (cand_date, cand_cycle), got
             break
@@ -701,9 +811,9 @@ def fetch_cams_forecast(out_dir: Path, force: bool = False, raw_root: Path | Non
     return result
 
 
-def _fetch_cams_cycle(
+def fetch_cams_cycle(
     raw_dir: Path,
-    client,
+    client: _CdsClient,
     manifest: list[dict[str, Any]],
     cycle_date: date,
     cycle: str,
@@ -736,7 +846,7 @@ def _fetch_cams_cycle(
         yielded = False
         if not group_ok:
             try:
-                _retrieve_cams(client, CAMS_FORECAST_DATASET, request_for(variables), target)
+                retrieve_cams(client, CAMS_FORECAST_DATASET, request_for(variables), target)
                 group_ok = True
                 entries.append({"group": group, "variables": variables, "ok": True, "mode": "group"})
             except (OSError, RuntimeError, ValueError) as exc:  # ADS/network/provider failure: record entry, try singles or next cycle
@@ -758,7 +868,7 @@ def _fetch_cams_cycle(
             vextract = raw_dir / f"extract__{group}__{_sanitize(variable)}"
             try:
                 if not vtarget.exists() or force:
-                    _retrieve_cams(client, CAMS_FORECAST_DATASET, request_for([variable]), vtarget)
+                    retrieve_cams(client, CAMS_FORECAST_DATASET, request_for([variable]), vtarget)
                 frame = normalize_cams_netcdf_zip(vtarget, vextract, "cams_direct_forecast")
                 if frame.empty:
                     raise RuntimeError("download parsed to an empty table")
@@ -808,7 +918,7 @@ def fetch_cams_eac4_history(out_dir: Path, force: bool = False) -> pd.DataFrame:
             }
             print(f"CAMS EAC4 {year}: requesting...", flush=True)
             try:
-                _retrieve_cams(_cds_client(), CAMS_EAC4_DATASET, request, target)
+                retrieve_cams(_cds_client(), CAMS_EAC4_DATASET, request, target)
             except (OSError, RuntimeError, ValueError) as exc:  # EAC4 download failure: warn, treat year as missing
                 print(f"WARN CAMS EAC4 {year}: {exc}", flush=True)
                 return pd.DataFrame()

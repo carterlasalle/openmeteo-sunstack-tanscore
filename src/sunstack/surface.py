@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 
@@ -108,14 +109,14 @@ def load_surface_materials(path: Path) -> list[dict[str, object]]:
     """Load the version-controlled surface provenance registry."""
     import yaml
 
-    raw: object = yaml.safe_load(path.read_text(encoding="utf-8"))
+    raw = cast(object, yaml.safe_load(path.read_text(encoding="utf-8")))
     if not isinstance(raw, list):
         raise TypeError("surface materials registry must be a list")
     out: list[dict[str, object]] = []
-    for entry in raw:
+    for entry in cast("list[object]", raw):
         if not isinstance(entry, dict):
             raise TypeError("surface materials registry entries must be mappings")
-        out.append({str(k): v for k, v in entry.items()})
+        out.append({str(k): v for k, v in cast("dict[object, object]", entry).items()})
     return out
 
 
@@ -132,7 +133,9 @@ def validate_surface_materials() -> None:
         material = by_slug[slug]
         for field in ("proxy_reflectance", "reflectance_low", "reflectance_high"):
             raw_val = material[field]
-            assert abs(float(raw_val if isinstance(raw_val, (str, int, float)) else float("nan")) - getattr(profile, field)) <= 1e-12
+            got = float(raw_val) if isinstance(raw_val, (str, int, float)) else float("nan")
+            expected = cast(float, getattr(profile, field))
+            assert abs(got - expected) <= 1e-12
 
 SURFACE_EXTENT_MODES = ("local", "broad")
 

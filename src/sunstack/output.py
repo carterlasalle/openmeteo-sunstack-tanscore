@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 
-def _swap_once(text: str, old: str, new: str) -> str:
+def swap_once(text: str, old: str, new: str) -> str:
     found = text.count(old)
     if found != 1:
         raise RuntimeError(f"static export anchor drifted ({found}x): {old[:70]!r}")
@@ -39,42 +39,46 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
     from . import serving as _serving_mod
 
     html = _serving_mod.HTML
-    html = _swap_once(
+    # Anchor on the one-line url helper rather than the query string: the live
+    # page builds its query with URLSearchParams, so there is no literal URL to
+    # match, and this stays stable as query parameters come and go.
+    html = swap_once(
         html,
-        "/api/data?skin_type=${s}&min_temp=${m}&personal_mmd=${p}&personal_mmd_basis=${b}&surface=${encodeURIComponent(sf)}&skin_tilt_deg=${encodeURIComponent(t)}&skin_azimuth_deg=${encodeURIComponent(a)}&location=${encodeURIComponent(LOC)}",
-        "./data.json",
+        "function apiUrl(qs){return '/api/data?'+qs;}",
+        "function apiUrl(qs){return './data.json';}",
     )
     try:
-        html = _swap_once(
+        html = swap_once(
             html, "init();\n</script>", "init().then(initSkin);\n</script>"
         )
     except RuntimeError:
-        html = _swap_once(
+        html = swap_once(
             html,
             "loadData();\n</script>",
             "loadData().then(initSkin);\n</script>",
         )
     run_stamp = "".join(c for c in str(run_tag) if c.isdigit()) or "0"
     # Run-stamped fetch: a republished page must not serve a cached data.json.
-    html = _swap_once(
-        html, "fetch(`./data.json`)", f"fetch(`./data.json?v={run_stamp}`)"
+    # The stamp rides the swapped helper, since every fetch goes through it.
+    html = swap_once(
+        html, "return './data.json';", f"return './data.json?v={run_stamp}';"
     )
-    html = _swap_once(
+    html = swap_once(
         html,
         '<label>Min °F <input id="mintemp" type="number" min="32" max="80" step="1" value="50" style="width:64px"></label>',
         f'<input id="mintemp" type="hidden" value="{min_temp_f:g}">',
     )
-    html = _swap_once(
+    html = swap_once(
         html,
         '<button onclick="loadData()">Apply</button></div><div class="controls actions" role="group" aria-label="Actions"><button class="primary livereq" onclick="refreshData()">Refresh forecast</button>',
         f'</div><div class="controls actions" role="group" aria-label="Actions"><span class="note">Static export · min {min_temp_f:g}°F · reruns publish fresh data</span>',
     )
-    html = _swap_once(
+    html = swap_once(
         html,
         '<div class="daydetail" id="detail"></div>',
         '<p class="legend" id="skinnote" style="display:none"></p><div class="daydetail" id="detail"></div>',
     )
-    html = _swap_once(
+    html = swap_once(
         html,
         "async function loadData(){",
         (
@@ -107,12 +111,11 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
     # skin-plane reflection client-side from serialized components.
     # Static surface controls only update the reflected-context provenance;
     # broad homogeneous surfaces require backend radiative transfer.
-    html = _swap_once(
+    html = swap_once(
         html,
-        "document.getElementById('cal').href='webcal://'+location.host+'/api/calendar.ics"
-        "?skin_type='+document.getElementById('skin').value+'&min_temp='+document.getElementById('mintemp').value+'&surface='+encodeURIComponent((document.getElementById('surface')||{}).value||'unknown')+'&skin_tilt_deg='+encodeURIComponent((document.getElementById('skintilt')||{}).value||'0')+'&skin_azimuth_deg='+encodeURIComponent((document.getElementById('skinaz')||{}).value||'180')+'&location='+encodeURIComponent(LOC);",
-        "var calEl=document.getElementById('cal');if(calEl){var p=location.pathname;"
-        "p=p.slice(0,p.lastIndexOf('/')+1);calEl.href='webcal://'+location.host+p+'calendar.ics';}",
+        "function calUrl(qs){return 'webcal://'+location.host+'/api/calendar.ics?'+qs;}",
+        "function calUrl(qs){var p=location.pathname;"
+        "p=p.slice(0,p.lastIndexOf('/')+1);return 'webcal://'+location.host+p+'calendar.ics';}",
     )
     return html
 
@@ -130,7 +133,7 @@ def reskin_static_dir(
     """
     from .build_sha import build_sha
     from .opportunity import fitzpatrick_context
-    from .serving import _resolve_site, _site_nav
+    from .serving import resolve_site, site_nav
 
     page = Path(page_dir)
     payload: dict[str, object] = json.loads(
@@ -138,7 +141,7 @@ def reskin_static_dir(
     )
     summary = payload.get("summary")
     run_tag = summary.get("run", "") if isinstance(summary, dict) else ""
-    site = _resolve_site(site_slug)
+    site = resolve_site(site_slug)
     (page / "index.html").write_text(render_static_html(run_tag), encoding="utf-8")
     # Provenance guard: a reskin renders UI only. It must NEVER rewrite the
     # forecast identity stamped at generation time. The old code overwrote
@@ -152,7 +155,7 @@ def reskin_static_dir(
                             if isinstance(summary, dict) else build_sha())
     (page / "data.json").write_text(json.dumps(payload), encoding="utf-8")
     (page / "locations.json").write_text(
-        json.dumps({"locations": _site_nav(site.slug)}), encoding="utf-8"
+        json.dumps({"locations": site_nav(site.slug)}), encoding="utf-8"
     )
     (page / "skin.json").write_text(
         json.dumps({str(i): fitzpatrick_context(i) for i in range(1, 7)}),
@@ -185,34 +188,34 @@ def export_static_site(
     from .build_sha import build_sha
     from .opportunity import fitzpatrick_context
     from .serving import (
-        _daylight_payload_rows,
-        _filtered_payload,
-        _records,
-        _resolve_site,
-        _site_nav,
         build_calendar_ics,
         build_interval_ics,
+        daylight_payload_rows,
+        filtered_payload,
+        records,
+        resolve_site,
+        site_nav,
     )
-    site = _resolve_site(site_slug)
+    site = resolve_site(site_slug)
     entered = config.use_site(site)
     entered.__enter__()
     try:
-        run, hourly, half, daily, summary = _filtered_payload(
+        run, hourly, half, daily, summary = filtered_payload(
             root, skin_type, min_temp_f, site,
             personal_mmd_j_m2, personal_mmd_basis,
         )
     finally:
         entered.__exit__(None, None, None)
-    hourly_ui = _daylight_payload_rows(hourly)
-    half_ui = _daylight_payload_rows(half)
+    hourly_ui = daylight_payload_rows(hourly)
+    half_ui = daylight_payload_rows(half)
     if isinstance(summary, dict):
         summary.setdefault("forecast_code_sha", build_sha())
         summary["renderer_code_sha"] = build_sha()
     payload: dict[str, object] = {
         "run": str(run),
-        "daily": _records(daily),
-        "hourly": _records(hourly_ui),
-        "half_hour": _records(half_ui),
+        "daily": records(daily),
+        "hourly": records(hourly_ui),
+        "half_hour": records(half_ui),
         "summary": summary,
         "build_sha": (summary.get("forecast_code_sha")
                       if isinstance(summary, dict) else build_sha()),
@@ -222,7 +225,7 @@ def export_static_site(
     (out_dir / "index.html").write_text(html, encoding="utf-8")
     (out_dir / "data.json").write_text(json.dumps(payload), encoding="utf-8")
     (out_dir / "locations.json").write_text(
-        json.dumps({"locations": _site_nav(site.slug)}), encoding="utf-8"
+        json.dumps({"locations": site_nav(site.slug)}), encoding="utf-8"
     )
     (out_dir / "skin.json").write_text(
         json.dumps({str(i): fitzpatrick_context(i) for i in range(1, 7)}),

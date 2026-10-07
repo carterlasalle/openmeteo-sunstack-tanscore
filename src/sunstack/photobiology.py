@@ -18,6 +18,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -40,13 +41,24 @@ SED_J_M2 = 100.0
 DEFAULT_MAX_INTERP_GAP_S = 3 * 3600
 
 
-def _spectra_dir() -> Path:
+def spectra_dir() -> Path:
+    """Directory holding the action-spectrum resources (public for tests)."""
     here = Path(__file__).resolve()
     for parent in (here.parent.parent.parent, Path.cwd()):
         cand = parent / "data" / "research" / "action_spectra"
         if cand.exists():
             return cand
     return Path("data/research/action_spectra")
+
+
+def _spectra_dir() -> Path:
+    """Private alias kept for existing callers/tests.
+
+    It delegates through the module global, so ``monkeypatch.setattr`` on
+    either ``spectra_dir`` or ``_spectra_dir`` takes effect for internal
+    callers.
+    """
+    return spectra_dir()
 
 
 @dataclass(frozen=True)
@@ -64,6 +76,15 @@ class ActionSpectrum:
 
 
 _cache: dict[str, ActionSpectrum] = {}
+
+
+def clear_spectrum_cache() -> None:
+    """Drop the memoized action spectra.
+
+    Public for tests that swap the spectrum data directory or assert the
+    cold-cache error path; production never needs to clear it.
+    """
+    _cache.clear()
 
 
 def _package_bytes(*parts: str) -> bytes | None:
@@ -86,15 +107,17 @@ def _package_bytes(*parts: str) -> bytes | None:
 
 
 def _load_meta(stem: str) -> dict[str, object]:
+    # json.loads types as Any; the metadata contract is a flat string map, so
+    # name it at the boundary rather than letting Any spread to callers.
     raw = _package_bytes("action_spectra", f"{stem}.meta.json")
     if raw is not None:
-        return json.loads(raw.decode("utf-8"))
+        return cast("dict[str, object]", json.loads(raw.decode("utf-8")))
     meta_path = _spectra_dir() / f"{stem}.meta.json"
     if not meta_path.exists():
         raise FileNotFoundError(
             f"ERROR photobiology: action-spectrum metadata unavailable: {meta_path}"
         )
-    return json.loads(meta_path.read_text(encoding="utf-8"))
+    return cast("dict[str, object]", json.loads(meta_path.read_text(encoding="utf-8")))
 
 
 def load_action_spectrum(stem: str = ACTION_SPECTRUM_STEM) -> ActionSpectrum:
@@ -121,8 +144,12 @@ def load_action_spectrum(stem: str = ACTION_SPECTRUM_STEM) -> ActionSpectrum:
         raise ValueError(
             f"ERROR photobiology: {stem}.csv must have wavelength_nm,effectiveness columns"
         )
-    waves = pd.to_numeric(df["wavelength_nm"], errors="coerce").to_numpy(dtype=float)
-    eff = pd.to_numeric(df["effectiveness"], errors="coerce").to_numpy(dtype=float)
+    # pandas' to_numpy chain types as Any in these stubs; the columns are
+    # validated numeric immediately below, so name the array type here.
+    waves = cast(
+        "np.ndarray", pd.to_numeric(df["wavelength_nm"], errors="coerce").to_numpy(dtype=float))
+    eff = cast(
+        "np.ndarray", pd.to_numeric(df["effectiveness"], errors="coerce").to_numpy(dtype=float))
     if len(waves) < 10:
         raise ValueError(f"ERROR photobiology: {stem} has too few rows ({len(waves)})")
     if bool(np.isnan(waves).any()) or bool(np.isnan(eff).any()):
@@ -227,7 +254,10 @@ def absolute_tan_score_from_melanogenic_irradiance(
 def _epoch_seconds(times_utc: pd.Series) -> np.ndarray:
     """Resolution-independent epoch seconds (pandas 3 has non-nano units)."""
     t = pd.to_datetime(times_utc, utc=True)
-    return t.map(lambda x: x.timestamp() if not pd.isna(x) else float("nan")).to_numpy(dtype=float)
+    return cast(
+        "np.ndarray",
+        t.map(lambda x: x.timestamp() if not pd.isna(x) else float("nan")).to_numpy(dtype=float),
+    )
 
 
 def _trapezoidal_dose(

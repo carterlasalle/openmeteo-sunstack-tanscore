@@ -7,6 +7,7 @@ rows integrate as zero.
 """
 from __future__ import annotations
 
+from typing import cast
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -85,9 +86,11 @@ def _interval_mean_integral(
     )
     span = end_s - start_s
     valid = selected & np.isfinite(values)
-    covered = float(overlap[valid].sum())
-    geometry = float(overlap[selected].sum())
-    coverage = float(np.clip(covered / span, 0.0, 1.0))
+    # Masked ndarray sums type as Any in these stubs; the values are numeric
+    # by construction (finite overlap seconds), so name the type explicitly.
+    covered = cast(float, overlap[valid].sum())
+    geometry = cast(float, overlap[selected].sum())
+    coverage = cast(float, np.clip(covered / span, 0.0, 1.0))
     complete = bool(
         values_complete
         and geometry >= span - 1e-6
@@ -106,7 +109,11 @@ def _rolling_interval_integral(
     if bounds is None:
         return dose, complete, coverage
     _, ends = bounds
-    for i, end_s in enumerate(ends):
+    # Iterating a raw ndarray yields Any in these stubs; read the ends once as
+    # a typed list so the integral arguments keep their float contract.
+    ends_list = cast("list[float]", ends.tolist())
+    for i in range(len(ends_list)):
+        end_s = ends_list[i]
         if np.isfinite(end_s):
             dose[i], complete[i], coverage[i] = _interval_mean_integral(
                 frame, vals, end_s - window_s, end_s, bounds
@@ -115,7 +122,11 @@ def _rolling_interval_integral(
 
 
 def _window_utc_seconds(value: str | pd.Timestamp, *, local: bool = True) -> float:
-    stamp = value if isinstance(value, pd.Timestamp) else pd.Timestamp(value)
+    # The second check is a real runtime gate: pd.Timestamp(value) can hand
+    # back a non-Timestamp (NaT) for unparseable input, which must become NaN
+    # rather than an exception. Widening to object keeps that guard reachable
+    # for the checker without removing it.
+    stamp = cast(object, value if isinstance(value, pd.Timestamp) else pd.Timestamp(value))
     if not isinstance(stamp, pd.Timestamp):
         return float("nan")
     if stamp.tzinfo is None:
@@ -152,10 +163,15 @@ def _rolling_integral(
     # chronological in production, but sorting here (stable) makes shuffled
     # or DST-reordered inputs integrate identically instead of silently
     # producing garbage. Results map back to original row positions.
-    order = np.argsort(secs, kind="stable")
-    s_vals = vals[order]
-    s_secs = secs[order]
-    s_finite = finite[order]
+    # Scalar/fancy ndarray indexing types as Any in these stubs, and that Any
+    # would poison the running sum; read the arrays once as typed lists.
+    order = cast("list[int]", np.argsort(secs, kind="stable").tolist())
+    vals_list = cast("list[float]", vals.tolist())
+    secs_list = cast("list[float]", secs.tolist())
+    finite_list = cast("list[bool]", finite.tolist())
+    s_vals = [vals_list[o] for o in order]
+    s_secs = [secs_list[o] for o in order]
+    s_finite = [finite_list[o] for o in order]
     for pos in range(n):
         i = order[pos]
         if not s_finite[pos]:
@@ -169,7 +185,7 @@ def _rolling_integral(
                 continue
             if s_secs[k] < lo - 1e-9:
                 break
-            dt = float(s_secs[prev] - s_secs[k])
+            dt = s_secs[prev] - s_secs[k]
             if dt < 0:
                 break
             if dt > max_gap:
@@ -181,7 +197,7 @@ def _rolling_integral(
             prev, k = k, k - 1
         if count > 0:
             dose[i] = acc
-        coverage[i] = float(np.clip(covered / window_s, 0, 1)) if window_s > 0 else 1.0
+        coverage[i] = cast(float, np.clip(covered / window_s, 0, 1)) if window_s > 0 else 1.0
         complete[i] = bool(count > 0 and not split and covered >= window_s - 1e-6)
     return dose, complete, coverage
 
@@ -350,7 +366,9 @@ def day_totals(frame: pd.DataFrame) -> pd.DataFrame:
             work["_date"] = wall.astype(str).str.slice(0, 10)
     gap = float(config.TANDOSE_MAX_INTERP_GAP_S)
     interval_means = _uses_interval_means(work)
-    rows = []
+    # Row dicts mix str/float/bool/int values, so the element type is object:
+    # an unannotated [] would erase every append and the final DataFrame.
+    rows: list[dict[str, object]] = []
     for date, g in work.sort_values("_secs").groupby("_date"):
         source = work if interval_means else g
         e = _group_col(source, "melanogenic_effective_irradiance_wm2")
@@ -427,7 +445,7 @@ def day_totals(frame: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def window_dose(frame: pd.DataFrame, start, end,
+def window_dose(frame: pd.DataFrame, start: pd.Timestamp | str, end: pd.Timestamp | str,
                 max_gap_s: float | None = None) -> dict[str, float]:
     """Cumulative doses over a candidate window [start, end].
 

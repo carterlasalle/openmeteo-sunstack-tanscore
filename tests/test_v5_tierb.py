@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Protocol, cast
 
 import numpy as np
+import pandas as pd
+import pytest
 
 
 class _TrainerModule(Protocol):
@@ -99,8 +101,6 @@ def test_fixed_band_proxy_is_labeled_degraded() -> None:
 
 
 def test_tier_b_manifest_required_for_tier_b_label() -> None:
-    import pytest
-
     from sunstack.spectral import validate_tierB_manifest
 
     with pytest.raises((ValueError, TypeError)):
@@ -142,11 +142,11 @@ def test_band_boundary_energy_conservation() -> None:
 
     uva, uvb = 40.0, 0.8
     e = reconstruct_spectrum_tierC(uva, uvb)
-    assert abs(float(np.sum(e[UVB_MASK])) - uvb) < 1e-9
-    assert abs(float(np.sum(e[UVA_MASK])) - uva) < 1e-9
+    assert abs(cast(float, np.sum(e[UVB_MASK])) - uvb) < 1e-9
+    assert abs(cast(float, np.sum(e[UVA_MASK])) - uva) < 1e-9
     assert len(SPECTRAL_WAVES_NM[UVB_MASK]) == 35
     assert len(SPECTRAL_WAVES_NM[UVA_MASK]) == 86
-    assert float(np.sum(e)) == uva + uvb
+    assert cast(float, np.sum(e)) == uva + uvb
 
 
 
@@ -168,8 +168,6 @@ def test_dynamic_band_weights_track_true_spectral_shape() -> None:
     assert abs(wa - fa) / fa < 0.1
     # Blue-heavy spectrum (all energy at 315-320): UVA weight must rise
     # toward the local effectiveness, far above the band mean.
-    import numpy as np
-
     from sunstack.spectral import SPECTRAL_WAVES_NM
 
     blue = np.zeros_like(SPECTRAL_WAVES_NM, dtype=float)
@@ -185,12 +183,11 @@ def test_trainer_refuses_without_corpus(tmp_path: Path) -> None:
         _ = module.train_emulator(tmp_path, tmp_path / "out")
 
 
-def test_tierB_loader_returns_none_when_unwired(monkeypatch) -> None:
+def test_tierB_loader_returns_none_when_unwired(monkeypatch: pytest.MonkeyPatch) -> None:
     from sunstack import config as _config
     from sunstack.spectral import predict_tierB_channels
 
     monkeypatch.setattr(_config, "TIERB_MANIFEST_PATH", None)
-    import pandas as pd
 
     assert predict_tierB_channels(pd.DataFrame({"a": [1.0]})) is None
 
@@ -201,8 +198,8 @@ def test_tierB_loader_rejects_unknown_kind() -> None:
     from sunstack.spectral import predict_tierB_channels
 
     with pytest.raises(ValueError, match="unknown Tier-B emulator kind"):
-        predict_tierB_channels(
-            __import__("pandas").DataFrame(
+        _ = predict_tierB_channels(
+            pd.DataFrame(
                 {c: [0.0] for c in
                  ["sza_deg", "ozone_du", "altitude_m", "aod340", "angstrom",
                   "ssa340", "asymmetry", "albedo", "total_cloud_cover",

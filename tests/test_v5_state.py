@@ -7,8 +7,18 @@ shipped diverged uvi_consensus/erythemal/SED/source-count/confidence.
 
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
 import pandas as pd
+
+
+def _floats(frame: pd.DataFrame, name: str) -> list[float]:
+    return cast("list[float]", frame[name].tolist())
+
+
+def _num(frame: pd.DataFrame, name: str, i: int = 0) -> float:
+    return _floats(frame, name)[i]
 
 
 def _frame() -> pd.DataFrame:
@@ -26,8 +36,8 @@ def test_final_halfhour_erythemal_matches_final_consensus() -> None:
     from sunstack.state import recompute_derived_state
 
     out = recompute_derived_state(_frame())
-    expected = (out["uvi_consensus"].to_numpy(dtype=float) / 40.0).round(5)
-    assert np.allclose(out["erythemal_irradiance_wm2"].to_numpy(dtype=float), expected)
+    expected = np.round(np.asarray(_floats(out, "uvi_consensus"), dtype=float) / 40.0, 5)
+    assert np.allclose(np.asarray(_floats(out, "erythemal_irradiance_wm2"), dtype=float), expected)
 
 
 def test_final_sed_reintegrates_from_final_consensus() -> None:
@@ -39,9 +49,9 @@ def test_final_sed_reintegrates_from_final_consensus() -> None:
     out = recompute_derived_state(base)
     out = add_interval_doses(out)
     # SED_30m on row 1 = trapezoid of final erythemal over 1800 s / 100.
-    e0 = float(out["erythemal_irradiance_wm2"].iloc[0])
-    e1 = float(out["erythemal_irradiance_wm2"].iloc[1])
-    assert abs(float(out["sed_30m"].iloc[1]) - (0.5 * (e0 + e1) * 1800.0 / 100.0)) < 1e-9
+    e0 = _num(out, "erythemal_irradiance_wm2", 0)
+    e1 = _num(out, "erythemal_irradiance_wm2", 1)
+    assert abs(_num(out, "sed_30m", 1) - (0.5 * (e0 + e1) * 1800.0 / 100.0)) < 1e-9
 
 
 def test_consensus_never_leaves_observed_source_range() -> None:
@@ -64,7 +74,7 @@ def test_consensus_never_leaves_observed_source_range() -> None:
         "uvi_epa": [np.nan],
     })
     dout = fuse_uvi_unique_count(day)
-    cons = float(dout["uvi_consensus"].iloc[0])
+    cons = _num(dout, "uvi_consensus")
     assert 4.0 <= cons <= 5.0
 
 
@@ -126,11 +136,10 @@ def test_all_peak_fields_are_true_peaks() -> None:
     })
     daily = build_daily_summary(sub)
     assert len(daily) == 1
-    row = daily.iloc[0]
     # day_absolute_peak is the max of Absolute (40.0 at 10:00), NOT the
     # Absolute value at the Overall peak (20.0 at 11:00).
-    assert float(row["day_absolute_peak_0_100"]) == 40.0
-    assert float(row["day_local_peak_0_100"]) == 99.0
+    assert _num(daily, "day_absolute_peak_0_100") == 40.0
+    assert _num(daily, "day_local_peak_0_100") == 99.0
 
 
 def test_rows_carry_action_spectrum_identity() -> None:

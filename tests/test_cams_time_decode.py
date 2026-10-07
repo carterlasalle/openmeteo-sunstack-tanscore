@@ -9,14 +9,24 @@ silently shift, collapse, or double-count the time axis.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Protocol, cast
 
 import numpy as np
 import pandas as pd
 import pytest
 
-xr = pytest.importorskip("xarray")
-
 from sunstack import history
+
+
+class _NetCDFDataset(Protocol):
+    def to_netcdf(self, path: Path | str, *args: object, **kwargs: object) -> None: ...
+
+
+class _XArray(Protocol):
+    def Dataset(self, *args: object, **kwargs: object) -> _NetCDFDataset: ...
+
+
+xr: _XArray = cast(_XArray, pytest.importorskip("xarray"))
 
 
 def _write_ds(
@@ -36,7 +46,7 @@ def _write_ds(
     return path
 
 
-def test_valid_time_passes_through(tmp_path):
+def test_valid_time_passes_through(tmp_path: Path) -> None:
     times = pd.date_range("2026-09-22 12:00", periods=5, freq="h", tz="UTC")
     p = _write_ds(tmp_path / "a.nc", {"valid_time": times.tz_convert(None).to_numpy()})
     out = history.normalize_cams_netcdf_zip(p, tmp_path / "x1", "test")
@@ -44,7 +54,7 @@ def test_valid_time_passes_through(tmp_path):
     assert out["time_utc"].tolist() == list(times)
 
 
-def test_reference_plus_timedelta_step(tmp_path):
+def test_reference_plus_timedelta_step(tmp_path: Path) -> None:
     ref = np.array(["2026-09-22T12:00"], dtype="datetime64[ns]")
     steps = np.array([0, 6, 12], dtype="timedelta64[h]")
     p = _write_ds(tmp_path / "b.nc",
@@ -55,7 +65,7 @@ def test_reference_plus_timedelta_step(tmp_path):
                         "2026-09-23 00:00"], utc=True))
 
 
-def test_reference_plus_numeric_hour_step(tmp_path):
+def test_reference_plus_numeric_hour_step(tmp_path: Path) -> None:
     # Bare numeric steps are CAMS leadtime_hours, never nanoseconds: the grid
     # must span hours, not collapse onto the reference time.
     ref = np.array(["2026-09-22T12:00"], dtype="datetime64[ns]")
@@ -67,7 +77,7 @@ def test_reference_plus_numeric_hour_step(tmp_path):
                         "2026-09-22 14:00"], utc=True))
 
 
-def test_time_plus_timedelta_step(tmp_path):
+def test_time_plus_timedelta_step(tmp_path: Path) -> None:
     ref = np.array(["2026-09-22T12:00"], dtype="datetime64[ns]")
     steps = np.array([0, 3], dtype="timedelta64[h]")
     p = _write_ds(tmp_path / "d.nc", {"time": ref, "step": steps})
@@ -76,14 +86,14 @@ def test_time_plus_timedelta_step(tmp_path):
         pd.to_datetime(["2026-09-22 12:00", "2026-09-22 15:00"], utc=True))
 
 
-def test_time_only_falls_back_to_time(tmp_path):
+def test_time_only_falls_back_to_time(tmp_path: Path) -> None:
     times = pd.date_range("2026-09-22 12:00", periods=3, freq="h")
     p = _write_ds(tmp_path / "e.nc", {"time": times.to_numpy()})
     out = history.normalize_cams_netcdf_zip(p, tmp_path / "x5", "test")
     assert len(out) == 3
 
 
-def test_no_time_coordinate_returns_empty_not_crash(tmp_path, capsys):
+def test_no_time_coordinate_returns_empty_not_crash(tmp_path: Path) -> None:
     ds = xr.Dataset(
         {"uvbed": (("latitude", "longitude"), np.ones((2, 2)))},
         coords={"latitude": [41.5, 42.0], "longitude": [-86.5, -86.0]},

@@ -11,9 +11,16 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Protocol, cast
 
 import numpy as np
 import pandas as pd
+
+
+class _Predictor(Protocol):
+    """A fitted estimator: enough of the sklearn surface to score a holdout."""
+
+    def predict(self, x: pd.DataFrame) -> object: ...
 
 
 def _metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
@@ -82,15 +89,21 @@ def main() -> None:
         split_year = int(json.loads(mm.read_text()).get("validation_split_year", 2024)) \
             if mm.exists() else 2024
         if bundle_p.exists() and train_p.exists():
-            bundle = _joblib.load(bundle_p)
-            feats = list(bundle["features"])
+            raw_bundle = _joblib.load(bundle_p)
+            if not isinstance(raw_bundle, dict):
+                raise TypeError(f"{bundle_p} is not a joblib model bundle")
+            # joblib.load is typed `object`; narrow once so the feature list and
+            # the per-target predictors below keep their real shapes.
+            bundle = cast("dict[str, object]", raw_bundle)
+            feats = [str(f) for f in cast("list[object]", bundle["features"])]
             t = pd.read_parquet(train_p)
             yrs = pd.to_datetime(t["time_utc"], utc=True).dt.year
             test = t.loc[yrs > split_year].copy()
             X = test.reindex(columns=feats)
             for target in ("uva", "uvb"):
+                predictor = cast("_Predictor", bundle[f"{target}_model"])
                 test[f"pred_{target}"] = np.clip(
-                    bundle[f"{target}_model"].predict(X), 0, None)
+                    np.asarray(predictor.predict(X), dtype=float), 0, None)
             test["month"] = pd.to_datetime(
                 test["time_utc"], utc=True).dt.month
             sza_b = _bin(test["sza"], [0, 30, 50, 65, 80, 95],

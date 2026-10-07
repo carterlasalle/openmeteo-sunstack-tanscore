@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from sunstack.photobiology import (
     absolute_tan_score_from_melanogenic_irradiance,
@@ -125,15 +126,16 @@ def test_action_spectrum_uvb_orders_above_uva():
     assert uvb / uva > 100.0, f"expected >2 orders, got {uvb/uva:.1f}x"
 
 
-def test_action_spectrum_validation_rejects_bad_resources(tmp_path, monkeypatch):
+def test_action_spectrum_validation_rejects_bad_resources() -> None:
     import sunstack.photobiology as pb
 
-    monkeypatch.setitem(pb._cache, "zzz_bad", pb.ActionSpectrum(
+    # Built directly instead of seeded into the spectrum cache: the assertion is
+    # about the out-of-domain check, which never consults the cache.
+    spec = pb.ActionSpectrum(
         name="zzz_bad", wavelengths_nm=np.array([300.0, 310.0]),
         effectiveness=np.array([1.0, 0.5]), tier="provisional",
         source="test", sha256="x",
-    ))
-    spec = pb._cache["zzz_bad"]
+    )
     try:
         effectiveness_at(spec, np.array([500.0]))
     except ValueError as exc:
@@ -175,8 +177,8 @@ def test_score_monotonic_in_emel():
 def test_environmental_physics_invariant_to_weather_and_skin():
     from sunstack.opportunity import apply_outdoor_feasibility, attach_fitzpatrick
 
-    def row(**kw):
-        base = {
+    def row(**kw: object) -> pd.DataFrame:
+        base: dict[str, object] = {
             "tan_score_absolute_0_100": 44.0,
             "local_tan_score_0_100": 97.0,
             "atmospheric_quality_percentile_0_100": 94.0,
@@ -232,7 +234,6 @@ def test_source_disagreement_hits_confidence_not_physics():
 
 
 def test_tierB_manifest_validator_fails_loudly():
-    import pytest
 
     from sunstack.spectral import validate_tierB_manifest
 
@@ -246,10 +247,13 @@ def test_tierB_manifest_validator_fails_loudly():
     }
     assert validate_tierB_manifest(good) is good
     with pytest.raises(ValueError, match="missing fields"):
+        _ = validate_tierB_manifest({"spectral_emulator_version": "em-v1"})
         validate_tierB_manifest({"spectral_emulator_version": "em-v1"})
     with pytest.raises(ValueError, match="no held-out validation metrics"):
+        _ = validate_tierB_manifest({**good, "validation_metrics": {}})
         validate_tierB_manifest({**good, "validation_metrics": {}})
     with pytest.raises(ValueError, match="gates_passed"):
+        _ = validate_tierB_manifest({**good, "gates_passed": False})
         validate_tierB_manifest({**good, "gates_passed": False})
 
 
@@ -317,7 +321,6 @@ def _write_spectrum(tmpdir, stem, waves, effs):
 
 
 def test_action_spectrum_strict_validation_rejects_bad_files(tmp_path, monkeypatch):
-    import pytest
 
     import sunstack.photobiology as pb
 
@@ -349,7 +352,6 @@ def test_action_spectrum_strict_validation_rejects_bad_files(tmp_path, monkeypat
 
 
 def test_impossible_spectral_irradiance_fails_loudly():
-    import pytest
 
     from sunstack.photobiology import melanogenic_effective_irradiance
 
@@ -379,7 +381,6 @@ def test_run_manifest_metadata_contract():
 
 
 def test_strict_canonical_gate_refuses_provisional():
-    import pytest
 
     from sunstack.photobiology import require_canonical_spectrum
 
@@ -505,7 +506,6 @@ def test_apply_skin_plane_never_overwrites_environmental_physics():
 
 
 def test_resolve_skin_plane_rejects_impossible_geometry():
-    import pytest
 
     from sunstack.spectral import resolve_skin_plane
 
