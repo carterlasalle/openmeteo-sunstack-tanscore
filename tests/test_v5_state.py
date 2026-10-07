@@ -175,3 +175,75 @@ def test_no_cross_backend_clear_sky_transmission_ratio() -> None:
     out = recompute_derived_state(base)
     assert "delayed_pigmentation_transmission_ratio" not in out.columns
     assert "delayed_pigmentation_clear_sky_horizontal_wm2" not in out.columns
+
+
+def _products_frame(**over: object) -> pd.DataFrame:
+    """One clean 30-min product frame for the validate_final_products gates."""
+    base: dict[str, object] = {
+        "time": ["2026-10-07T12:00", "2026-10-07T12:30"],
+        "dt": pd.to_datetime(["2026-10-07 12:00", "2026-10-07 12:30"]),
+        "uvi_consensus": [4.0, 4.2], "uvi_cams": [4.1, 4.3], "uvi_epa": [3.9, 4.1],
+        "uvi_consensus_sources": [3, 3], "uvi_source_spread": [0.2, 0.2],
+        "tan_dose_30m_j_m2": [100.0, 110.0], "sed_30m": [0.1, 0.11],
+        "temperature_2m": [70.0, 71.0], "minimum_tan_temperature_f": [50.0, 50.0],
+        "time_utc": ["2026-10-07T16:00:00.000Z", "2026-10-07T16:30:00.000Z"],
+        "interval_end_utc": ["2026-10-07T16:00:00.000Z", "2026-10-07T16:30:00.000Z"],
+    }
+    base.update(over)
+    return pd.DataFrame(base)
+
+
+def _products_daily(abs_peak: float = 34.0, overall: float = 43.0) -> pd.DataFrame:
+    return pd.DataFrame({
+        "date": ["2026-10-07"], "day_absolute_peak_0_100": [abs_peak],
+        "day_overall_peak_0_100": [overall], "peak_uv_index": [4.2],
+        "peak_30m_tan_dose_j_m2": [110.0], "peak_30m_sed": [0.11],
+        "day_high_temperature_f": [71.0], "day_peak_wind_mph": [5.0],
+    })
+
+
+def test_final_products_clean_frame_has_no_issues() -> None:
+    from sunstack.validation import validate_final_products
+
+    out = validate_final_products(
+        _products_frame(), _products_frame(), _products_daily()
+    )
+    assert out == [], [i.message for i in out]
+
+
+def test_final_products_rejects_local_clock_stamped_utc() -> None:
+    """F-29, at RUN time: the 30-min `time_utc` is the local clock value with a
+    `Z` appended (08:00 local EDT published as 08:00Z, four hours from its own
+    interval_end_utc). The published-artifact gate catches it after the fact;
+    this one fails the run that produced it."""
+    from sunstack.validation import validate_final_products
+
+    bad = _products_frame(
+        time_utc=["2026-10-07T12:00:00.000Z", "2026-10-07T12:30:00.000Z"]
+    )
+    out = validate_final_products(_products_frame(), bad, _products_daily())
+    msgs = " ".join(i.message for i in out)
+    assert "time_utc" in msgs and "interval_end_utc" in msgs
+
+
+def test_final_products_rejects_non_finite_threshold() -> None:
+    """F-37: `temp < nan` is never true, so a NaN (or +/-inf) threshold silently
+    disables the cold floor while the summary reports the configured one."""
+    from sunstack.validation import validate_final_products
+
+    for bad_value in (float("nan"), float("inf"), float("-inf")):
+        bad = _products_frame(minimum_tan_temperature_f=[bad_value, 50.0])
+        out = validate_final_products(_products_frame(), bad, _products_daily())
+        assert any("not finite" in i.message for i in out), bad_value
+
+
+def test_final_products_rejects_strong_day_zeroed_by_a_block() -> None:
+    """F-27: a hard block removes a WINDOW, not the day's information. A day
+    with Abs 37.5 used to report Overall 0 and lose to a weaker-sun, dry site."""
+    from sunstack.validation import validate_final_products
+
+    out = validate_final_products(
+        _products_frame(), _products_frame(),
+        _products_daily(abs_peak=37.5, overall=0.0),
+    )
+    assert any("Overall 0" in i.message for i in out)

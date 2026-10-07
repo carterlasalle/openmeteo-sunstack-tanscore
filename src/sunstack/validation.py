@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import cast
 
+import numpy as np
 import pandas as pd
 
 from .config import TAN_SCORE_MODEL_VERSION
@@ -226,6 +227,46 @@ def validate_final_products(
                     "exact-hour temperature diverges hourly<->30min (weather loss)"))
     except (KeyError, ValueError, TypeError):
         pass
+    # 5. F-29: a field named `*_utc` must be a true UTC instant. On the
+    # backward-mean grid the row's instant IS its interval end, so `time_utc`
+    # must equal `interval_end_utc`; local wall clock with a `Z` appended is a
+    # silent site-offset error for anything joining on this key.
+    for label, frame in (("hourly", hourly), ("30min", half)):
+        if (frame.empty or "time_utc" not in frame.columns
+                or "interval_end_utc" not in frame.columns):
+            continue
+        try:
+            raw_utc, raw_end = frame["time_utc"], frame["interval_end_utc"]
+            bad = (raw_utc.notna() & raw_end.notna()
+                   & (raw_utc.astype(str) != raw_end.astype(str))).to_numpy(dtype=bool)
+            if bool(bad.any()):
+                pos = bad.tolist().index(True)
+                issues.append(ValidationIssue(
+                    "ERROR", f"tan_forecast_{label}",
+                    f"time_utc {raw_utc.iloc[pos]} != interval_end_utc {raw_end.iloc[pos]} at {frame['time'].iloc[pos]}"))
+        except (KeyError, ValueError, TypeError):
+            pass
+    # 6. F-37: `temp < nan` is never true, so a non-finite threshold silently
+    # disables the cold floor while the summary still reports the configured one.
+    for label, frame in (("hourly", hourly), ("30min", half)):
+        if frame.empty or "minimum_tan_temperature_f" not in frame.columns:
+            continue
+        # NaN counts here, not just +/-inf: `temp < nan` is False for every row,
+        # which is exactly how a NaN threshold read as 100% feasible.
+        vals = num(frame, "minimum_tan_temperature_f").to_numpy(dtype=float)
+        if bool((~np.isfinite(vals)).any()):
+            issues.append(ValidationIssue("ERROR", f"tan_forecast_{label}",
+                "minimum_tan_temperature_f is not finite: the cold floor is disabled (temp < nan is never true)"))
+    # 7. F-27: a hard block removes a WINDOW, not the day's information. A day
+    # with a strong Abs peak must not report Overall 0 while its sub-scores are
+    # shown beside it - that pairing ranked a weaker-sun, dry site above it.
+    for _, d in daily.iterrows():
+        peak, overall = d.get("day_absolute_peak_0_100"), d.get("day_overall_peak_0_100")
+        if not (_present(cast(object, peak)) and _present(cast(object, overall))):
+            continue
+        if float(cast(float, peak)) >= 35.0 and float(cast(float, overall)) <= 0.0:
+            issues.append(ValidationIssue("ERROR", "tan_daily_summary",
+                f"day {d.get('date')} reports Overall 0 with Abs {peak}: a hard block removed the day's information, not just its window"))
     return issues
 
 
