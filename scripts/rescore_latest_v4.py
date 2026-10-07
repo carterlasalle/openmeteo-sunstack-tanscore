@@ -80,9 +80,9 @@ def main() -> None:
         half = attach_fitzpatrick(half, None)
         daily = build_daily_summary(half)
         windows = best_tan_windows(scored)
-        daily_ics = build_calendar_ics(daily, "v4rescore", scored,
+        daily_ics = build_calendar_ics(daily, scored,
                                        site_slug=site.slug, tz_name=site.timezone)
-        ics30 = build_interval_ics(half, "v4rescore",
+        ics30 = build_interval_ics(half,
                                    site_slug=site.slug, tz_name=site.timezone)
 
         scored.to_parquet(out_dir / "tan_forecast_hourly_v4.parquet", index=False)

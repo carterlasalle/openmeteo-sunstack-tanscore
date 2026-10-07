@@ -339,11 +339,10 @@ def create_app(root: Path, run_live_fn: RunLiveFn | None = None) -> FastAPI:
             except FileNotFoundError as exc:
                 raise HTTPException(status_code=404, detail=str(exc))
             # Calendar ranking is environmental-horizontal; validated UI context is ignored.
-            _, hourly, _, daily, summary = filtered_payload(
+            _, hourly, _, daily, _ = filtered_payload(
                 root, st, min_temp, site, class_blocks=class_blocks)
             ics = build_calendar_ics(
                 daily,
-                str(summary.get("run", "")),
                 hourly,
                 site_slug=site.slug,
                 tz_name=site.timezone,

@@ -248,7 +248,7 @@ def export_static_site(
         json.dumps(_surface_payload()), encoding="utf-8"
     )
     _ = (out_dir / "calendar.ics").write_text(
-        build_calendar_ics(daily, str(summary.get("run", "")), hourly,
+        build_calendar_ics(daily, hourly,
                            site_slug=site.slug, tz_name=site.timezone),
         encoding="utf-8",
     )
@@ -274,7 +274,7 @@ def export_static_site(
     except (KeyError, ValueError, TypeError):
         pass
     _ = (out_dir / "calendar-30min.ics").write_text(
-        build_interval_ics(daylight, str(summary.get("run", "")),
+        build_interval_ics(daylight,
                            site_slug=site.slug, tz_name=site.timezone),
         encoding="utf-8",
     )

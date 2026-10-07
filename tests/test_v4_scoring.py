@@ -510,7 +510,9 @@ def test_doctor_checks_photobiology_resources(tmp_path: Path, capsys: pytest.Cap
     assert "local_reference_version.json" in out  # unknown-version note
 
 
-def test_doctor_flags_stale_local_reference(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+def test_doctor_flags_stale_local_reference(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+):
     import json
 
     _ = (Path(tmp_path) / "local_reference_version.json").write_text(json.dumps(
@@ -520,13 +522,16 @@ def test_doctor_flags_stale_local_reference(tmp_path: Path, capsys: pytest.Captu
     from sunstack import cli as _cli
     from sunstack import config as _config
 
-    real_paths = _cli.calibration_paths
-    _cli.calibration_paths = lambda root, slug=None: (
-        root / "x", Path(tmp_path), root / "y")
-    try:
-        _ = _cli.doctor(Path(tmp_path))
-    finally:
-        _cli.calibration_paths = real_paths
+    def _stub_paths(root: Path, site_slug: str | None = None) -> tuple[Path, Path, Path]:
+        # Stand-in for cli.calibration_paths. The slug does not vary the dirs
+        # here, but the parameter must keep the real name: the production call
+        # is positional today, so a mismatched stub would still pass while
+        # silently breaking the moment anything calls it by keyword.
+        _ = site_slug
+        return root / "x", Path(tmp_path), root / "y"
+
+    monkeypatch.setattr(_cli, "calibration_paths", _stub_paths)
+    _ = _cli.doctor(Path(tmp_path))
     out = capsys.readouterr().out
     assert "STALE" in out and "rebuild_v4_references" in out
     assert _config.TAN_SCORE_MODEL_VERSION in out
@@ -751,7 +756,7 @@ def test_interval_ics_closes_events_and_skips_night(tmp_path: Path):
         "is_day": [1, 1, 0],
         "subhour_source": ["interpolated_hourly"] * 3,
     })
-    ics = build_interval_ics(half, "20260915_004803")
+    ics = build_interval_ics(half)
     assert ics.count("BEGIN:VEVENT") == 3
     assert ics.count("END:VEVENT") == 3
 
@@ -1782,7 +1787,7 @@ def test_calendar_marks_partial_doses_and_leaves_legacy_clean():
         "sed_day_total": 30.75,
         "sed_complete": True,
     }])
-    ics = build_calendar_ics(daily, "20260926_000000")
+    ics = build_calendar_ics(daily)
     flat = ics.replace("\r\n ", "")
     # F-18: one unit everywhere, abbreviations expanded, and a description that
     # fits a lock screen - it used to emit fourteen lines carrying `J/m2`, a
@@ -1799,7 +1804,7 @@ def test_calendar_marks_partial_doses_and_leaves_legacy_clean():
     summary_line = next(line for line in flat.splitlines() if line.startswith("SUMMARY:"))
     assert summary_line == "SUMMARY:Best sun 11:30 AM-3:30 PM - 9253.2 J/m² pigment-weighted dose"
     legacy = daily.drop(columns=[c for c in daily.columns if "complete" in c])
-    legacy_ics = build_calendar_ics(legacy, "20260926_000000")
+    legacy_ics = build_calendar_ics(legacy)
     assert "(partial)" not in legacy_ics
 
     half = pd.DataFrame([{
@@ -1810,7 +1815,7 @@ def test_calendar_marks_partial_doses_and_leaves_legacy_clean():
         "sed_30m": 2.5,
         "sed_30m_complete": True,
     }])
-    ics30 = build_interval_ics(half, "20260926_000000")
+    ics30 = build_interval_ics(half)
     flat = ics30.replace("\r\n ", "")
     assert "TanDose30 900 J/m2 mel (partial)" in flat
     assert "SED30 2.5" in flat and "SED30 2.5 (partial)" not in flat

@@ -163,10 +163,9 @@ def daylight_payload_rows(frame: pd.DataFrame) -> pd.DataFrame:
     def _numeric(name: str) -> pd.Series:
         if name not in frame:
             return pd.Series(np.nan, index=frame.index, dtype=float)
-        numeric = pd.to_numeric(frame[name], errors="coerce")
-        if isinstance(numeric, pd.Series):
-            return numeric
-        return pd.Series(numeric, index=frame.index)
+        # `pd.to_numeric` advertises a scalar/ndarray union, but a Series in
+        # gives a Series out; building a Series from its result was dead code.
+        return pd.to_numeric(frame[name], errors="coerce")
 
     is_day = _numeric("is_day")
     if bool(is_day.notna().any()):
@@ -280,7 +279,6 @@ def _partial_marker(row, flag_col: str | None) -> str:
 
 def build_interval_ics(
     half_hour: pd.DataFrame,
-    run_tag: str,
     site_slug: str | None = None,
     tz_name: str | None = None,
 ) -> str:
@@ -355,7 +353,6 @@ def _calendar_window(
 
 def build_calendar_ics(
     daily: pd.DataFrame,
-    run_tag: str,
     hourly: pd.DataFrame | None = None,
     site_slug: str | None = None,
     tz_name: str | None = None,
@@ -678,7 +675,9 @@ const heroHours=b?rowsFor(DATA.hourly,b.date):[],heroHalf=b?rowsFor(DATA.half_ho
 const _winState=(()=>{if(!usableStart)return '';const now=new Date();const s=new Date(String(usableStart).slice(0,16)),e=usableEnd?new Date(String(usableEnd).slice(0,16)):null;if(e&&now>e)return 'this window has passed';if(now>=s)return 'happening now';return '';})();
 const _sameWin=String(strongStart||'').slice(0,16)===String(usableStart||'').slice(0,16);
 const _doseOf=o=>f0(o.best_usable_30m_dose_j_m2??o.strongest_30m_dose_j_m2??o.best_30m_tan_dose_j_m2);
-document.getElementById('hero').innerHTML=b?`<b>${dayName(b.date)}</b> is the best day in this run. Best window ${winStr(usableStart,usableEnd)} — ${_doseOf(b)} J/m² pigment-weighted dose, confidence <span title="0-100, how much to trust this row. It is cut when the UVI sources disagree - a spread of 1.0 or more starts reducing it. Not a probability, and not a quality judgement about the weather.">${f0(usableRow.tan_forecast_confidence_0_100)}</span>${_winState?', '+_winState:''}.${_sameWin?'':' Strongest window is '+winStr(strongStart,strongEnd)+' ('+f1(b.strongest_30m_dose_j_m2??b.best_30m_tan_dose_j_m2)+' J/m²) before schedule and comfort are applied.'}`:'No usable light in this run.';
+const _spf=+usableRow.skin_plane_factor,_tiltRaw=+((document.getElementById('skintilt')||{}).value||0);
+const _spBit=(Number.isFinite(_spf)&&Math.abs(_spf-1)>1e-6)?` On ${esc(surfaceName)}${Number.isFinite(_tiltRaw)&&_tiltRaw>0?`, tilted ${f0(_tiltRaw)}°`:''}: ${f0(_doseOf(b)*_spf)} J/m² in your plane (${_spf>1?'+':''}${Math.round((_spf-1)*100)}% vs the horizontal reference above; same ratio as skin_plane_factor in the data).`:' The figure above is the horizontal environmental reference for this location. Surface, tilt and skin type change your skin-plane exposure, not this reference; this run carries no plane adjustment for the current surface, so there is no second figure to show.';
+document.getElementById('hero').innerHTML=b?`<b>${dayName(b.date)}</b> is the best day in this run. Best window ${winStr(usableStart,usableEnd)} — ${_doseOf(b)} J/m² pigment-weighted dose, confidence <span title="0-100, how much to trust this row. It is cut when the UVI sources disagree - a spread of 1.0 or more starts reducing it. Not a probability, and not a quality judgement about the weather.">${f0(usableRow.tan_forecast_confidence_0_100)}</span>${_winState?', '+_winState:''}.${_sameWin?'':' Strongest window is '+winStr(strongStart,strongEnd)+' ('+f1(b.strongest_30m_dose_j_m2??b.best_30m_tan_dose_j_m2)+' J/m²) before schedule and comfort are applied.'}${_spBit}`:'No usable light in this run.';
 document.querySelectorAll('.daycell').forEach(el=>el.addEventListener('click',()=>{SEL=el.dataset.date;syncUrl(true);render();}));
 renderDay();{const rh=rowsFor(DATA.hourly,SEL),rq=rowsFor(DATA.half_hour,SEL);renderSunFig(rh,rq);}try{renderDoses();}catch(e){console.error('[sunstack] doses failed',e);show('Dose panel failed to render — see console.','error');}try{drawCharts();}catch(e){console.error('[sunstack] charts failed',e);show('Charts failed to render — see console.','error');}{const nb=document.getElementById('nerdBtn');if(nb){const on=document.body.classList.contains('show-nerd');nb.textContent=on?'Hide extra columns':'Show all columns';nb.setAttribute('aria-pressed',on?'true':'false');}}document.getElementById('debugtext').textContent=JSON.stringify(DATA.summary||{},null,2);
 {const ds=document.getElementById('debugsummary');if(ds){const s=DATA.summary||{};const keys=['site','location','site_name','generated','created_at','run_tag','build_sha','day','date','hourly_rows','half_hour_rows','rows','surface','surface_slug','spectral_backend','spectral_tier','fusion_version','confidence_version','window_rank_version','photobiology_action_spectrum_tier','calibration_dir','data_source'];const li=[];for(const k of keys){const v=s[k];if(v===undefined||v===null||v==='')continue;if(typeof v==='object')continue;li.push('<b>'+esc(String(k))+'</b> '+esc(String(v)));}ds.innerHTML=li.length?li.join(' · ')+'<br><span class="note">The full run summary is under Full JSON. This is provenance, not the observations the forecast came from.</span>':'<span class="note">No summary keys to show. The full run summary is under Full JSON.</span>';}}}

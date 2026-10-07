@@ -864,8 +864,8 @@ def test_calendar_feed_lists_each_window_once_with_stable_uids():
             {"date": "2026-09-16", "best_window_start": None, "best_window_end": None},
         ]
     )
-    first = build_calendar_ics(daily, "20260915_004803")
-    second = build_calendar_ics(daily, "20260915_010000")
+    first = build_calendar_ics(daily)
+    second = build_calendar_ics(daily)
     assert first.count("BEGIN:VEVENT") == 1
     assert "UID:sunstack-best-sunstack-2026-09-15@sunstack" in first
     # The usable physical 30-minute window, not the legacy broad window,
@@ -874,7 +874,10 @@ def test_calendar_feed_lists_each_window_once_with_stable_uids():
     assert "DTEND:20260915T170000Z" in first
     assert "SEQUENCE:0" in first
     # Same date UID across reruns: subscribed calendars update in place.
-    # SEQUENCE stays 0 (immutable events; audit: run-tag digits overflowed).
+    # Nothing run-specific may enter the event - the run tag used to be an
+    # input here and its digits overflowed 32-bit SEQUENCE, which is why it is
+    # gone from the signature entirely.
+    assert first == second, "same inputs must give a byte-identical calendar"
     assert "UID:sunstack-best-sunstack-2026-09-15@sunstack" in second
     assert "SEQUENCE:0" in second
     # Hourly-fed descriptions carry per-day UV peaks, not just the score.
@@ -886,7 +889,7 @@ def test_calendar_feed_lists_each_window_once_with_stable_uids():
             "predicted_uvb_wm2": [0.9, 1.0, 0.2],
         }
     )
-    rich = build_calendar_ics(daily, "20260915_004803", hourly)
+    rich = build_calendar_ics(daily, hourly)
     flat = rich.replace("\r\n ", "")
     assert "Peak UV 5.4 at 1:00 PM" in flat
     assert "Best usable sun 12:30 PM-1:00 PM - 800 J/m² pigment-weighted dose" in flat
@@ -1207,8 +1210,8 @@ def test_calendar_uids_are_namespaced_per_location():
             }
         ]
     )
-    sb = build_calendar_ics(daily, "20260915_004803")
-    pal = build_calendar_ics(daily, "20260915_004803", site_slug="pacific-palisades")
+    sb = build_calendar_ics(daily)
+    pal = build_calendar_ics(daily, site_slug="pacific-palisades")
     assert "UID:sunstack-best-sunstack-2026-09-15@sunstack" in sb
     assert "UID:sunstack-best-pacific-palisades-2026-09-15@pacific-palisades" in pal
 
@@ -2262,7 +2265,7 @@ def test_calendar_builders_skip_ragged_rows():
         {"time": None, "tan_score_absolute_0_100": 42.0},
         {"time": "not-a-time", "tan_score_absolute_0_100": 43.0},
     ])
-    ics = build_interval_ics(half, "20260915_004803")
+    ics = build_interval_ics(half)
     assert ics.count("BEGIN:VEVENT") == 1
     assert ics.count("END:VEVENT") == 1
 

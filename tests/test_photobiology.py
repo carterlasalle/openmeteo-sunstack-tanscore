@@ -269,7 +269,7 @@ def test_interval_ics_marks_native_vs_interpolated():
         "subhour_source": ["native_HRRR_radiation_weather_plus_interpolated_UV",
                            "interpolated_hourly"],
     })
-    ics = build_interval_ics(half, "20260915_004803")
+    ics = build_interval_ics(half)
     assert ics.count("BEGIN:VEVENT") == 2
     flat = ics.replace("\r\n ", "")
     assert "native HRRR" in flat and "interpolated hourly" in flat
