@@ -1187,7 +1187,9 @@ def test_daily_summary_keeps_status_and_wind_peaks():
     assert row["day_peak_gust_mph"] == 34.0
     assert row["day_high_feels_like_f"] == 74.0
     ui = Path("src/sunstack/serving.py").read_text(encoding="utf-8")
-    assert "<th>Temp</th><th>Wind</th>" in ui, "hourly table needs a Wind column"
+    assert ">Temp °F</th>" in ui and ">Wind mph</th>" in ui, (
+        "hourly table needs Temp and Wind columns, and F-15 puts the units in the header"
+    )
     assert "wind_gusts_10m" in ui and "windy" in ui, "gusty days/cells call out wind"
 
 
@@ -2322,6 +2324,31 @@ def test_render_static_html_falls_back_to_loaddata_anchor(monkeypatch: pytest.Mo
     monkeypatch.setattr("sunstack.ui.HTML", variant)
     html = render_static_html("20260923_000000")
     assert "loadData().then(initSkin);\n</script>" in html
+
+
+def test_rendered_page_javascript_parses(tmp_path: Path) -> None:
+    # The page is a large JS program embedded in a Python string. Nothing else
+    # checks that program parses: a missing brace is invisible to every Python
+    # test and ships a *blank* page - the module-level init() throws, so the
+    # loader never runs, DATA stays undefined, and the strip, both tables and
+    # the metadata summary all render empty with no console error a user would
+    # see. `node --check` is the cheapest thing that catches it.
+    import re
+    import shutil
+    import subprocess
+
+    from sunstack.output import render_static_html
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not available to parse the page script")
+    scripts: list[str] = re.findall(r"<script>(.*?)</script>", render_static_html("20260923_000000"), re.DOTALL)
+    assert scripts, "the page must ship an inline script"
+    for n, src in enumerate(scripts):
+        path = tmp_path / f"page{n}.js"
+        _ = path.write_text(src, encoding="utf-8")
+        check = subprocess.run([node, "--check", str(path)], capture_output=True, text=True, check=False)
+        assert check.returncode == 0, f"inline script {n} does not parse:\n{check.stderr[-800:]}"
 
 
 def test_percentile_helpers_reject_non_series_loudly():
