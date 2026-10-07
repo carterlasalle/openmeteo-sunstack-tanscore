@@ -136,7 +136,7 @@ def load_action_spectrum(stem: str = ACTION_SPECTRUM_STEM) -> ActionSpectrum:
         if not csv_path.exists():
             raise FileNotFoundError(
                 "ERROR photobiology: melanogenesis action spectrum unavailable: "
-                f"{csv_path}"
+                + f"{csv_path}"
             )
         df = pd.read_csv(csv_path)
         sha = hashlib.sha256(csv_path.read_bytes()).hexdigest()
@@ -167,7 +167,7 @@ def load_action_spectrum(stem: str = ACTION_SPECTRUM_STEM) -> ActionSpectrum:
     if waves.min() > lo + 1e-9 or waves.max() < hi - 1e-9:
         raise ValueError(
             f"ERROR photobiology: {stem} must cover {lo:.0f}-{hi:.0f} nm "
-            f"(covers {waves.min():.0f}-{waves.max():.0f} nm)"
+            + f"(covers {waves.min():.0f}-{waves.max():.0f} nm)"
         )
     if bool((eff <= 0).all()):
         raise ValueError(f"ERROR photobiology: {stem} is all-zero effectiveness")
@@ -175,7 +175,7 @@ def load_action_spectrum(stem: str = ACTION_SPECTRUM_STEM) -> ActionSpectrum:
     if recorded and recorded != sha:
         raise ValueError(
             f"ERROR photobiology: {stem}.csv checksum mismatch "
-            f"(file changed without regenerating metadata)"
+            + "(file changed without regenerating metadata)"
         )
     spec = ActionSpectrum(
         name=stem,
@@ -195,8 +195,8 @@ def require_canonical_spectrum(stem: str = ACTION_SPECTRUM_STEM) -> ActionSpectr
     if spec.tier != "canonical":
         raise RuntimeError(
             f"ERROR photobiology: strict mode requires the canonical spectrum but "
-            f"{stem} tier is {spec.tier!r}. Obtain CIE 103/3 in usable form; "
-            f"see data/research/action_spectra/{stem}.meta.json."
+            + f"{stem} tier is {spec.tier!r}. Obtain CIE 103/3 in usable form; "
+            + f"see data/research/action_spectra/{stem}.meta.json."
         )
     return spec
 
@@ -209,8 +209,10 @@ def effectiveness_at(spec: ActionSpectrum, wavelengths_nm: np.ndarray) -> np.nda
     corrupt the UVA/UVB biological ratio. Interpolate in log10 space.
     """
     w = np.asarray(wavelengths_nm, dtype=float)
-    lo = float(np.min(spec.wavelengths_nm))
-    hi = float(np.max(spec.wavelengths_nm))
+    # ndarray scalar reductions type as Any in these stubs; the domain bounds
+    # are validated floats by construction (load_action_spectrum).
+    lo = cast(float, spec.wavelengths_nm.min())
+    hi = cast(float, spec.wavelengths_nm.max())
     if bool(((w < lo - 1e-9) | (w > hi + 1e-9)).any()):
         raise ValueError(
             "ERROR photobiology: target wavelengths outside action-spectrum domain"
