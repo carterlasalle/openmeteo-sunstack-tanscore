@@ -69,14 +69,21 @@ def _parse_skin_type(raw: object) -> int | None:
     return value
 
 
+_MIN_TEMP_F_RANGE = (32.0, 80.0)
+
+
 def _finite_min_temp(value: float | None) -> float | None:
-    """Reject NaN/±inf thresholds.
+    """Reject NaN/±inf thresholds, and anything outside the advertised range.
 
     `min_temp=nan` was accepted with HTTP 200 and silently disabled the cold
     floor: `temp < nan` is False for every row, so a 43 °F hour that is blocked
     at the default 50 °F became 100 % feasible while the run summary still
     reported the default threshold (live audit 2026-10-06). FastAPI parses the
     parameter, so the check has to live here.
+
+    F-19: tilt and azimuth were range-checked while `min_temp` accepted -100 and
+    120. The page's own input advertises 32-80, so the API enforces the same
+    window rather than leaving one control inconsistent with its siblings.
     """
     if value is None:
         return None
@@ -84,6 +91,12 @@ def _finite_min_temp(value: float | None) -> float | None:
         raise HTTPException(
             status_code=400,
             detail=f"min_temp must be a finite number, got {value!r}",
+        )
+    lo, hi = _MIN_TEMP_F_RANGE
+    if not lo <= value <= hi:
+        raise HTTPException(
+            status_code=400,
+            detail=f"min_temp must be between {lo:g} and {hi:g} °F, got {value!r}",
         )
     return value
 
@@ -199,6 +212,10 @@ def create_app(root: Path, run_live_fn: RunLiveFn | None = None) -> FastAPI:
             # Source tables retain all rows; payload rows use astronomical daylight.
             hourly_ui = daylight_payload_rows(hourly)
             half_ui = daylight_payload_rows(half)
+            # F-21: the run's own summary has no request context, so its
+            # skin_type is null, while every row carries fitzpatrick_type. The
+            # served summary must name the skin type it was rendered for.
+            summary["skin_type"] = st
             return {
                 "run": str(run),
                 "daily": records(daily),

@@ -278,3 +278,42 @@ def test_refresh_and_calendar_validate_surface_without_reordering_environment(
     surfaced = client.get("/api/calendar.ics", params=surface_params)
     assert baseline.status_code == surfaced.status_code == 200
     assert _stable_calendar_lines(baseline.text) == _stable_calendar_lines(surfaced.text)
+
+
+def test_min_temp_is_bounded_to_the_advertised_range(tmp_path: Path) -> None:
+    """F-19: tilt and azimuth were range-checked while min_temp accepted -100
+    and 120. The page's own input advertises 32-80, so the API enforces the same
+    window instead of leaving one control inconsistent with its siblings."""
+    client = _client(_api_fixture(tmp_path))
+
+    for bad in ("-100", "120", "10", "95"):
+        r = client.get("/api/data", params={"min_temp": bad})
+        assert r.status_code == 400, (bad, r.status_code)
+        assert "between 32 and 80" in _detail(r), _detail(r)
+
+    # NaN keeps its own message: it is a different failure from out-of-range.
+    nan = client.get("/api/data", params={"min_temp": "nan"})
+    assert nan.status_code == 400
+    assert "finite" in _detail(nan), _detail(nan)
+
+    for ok in ("32", "50", "80"):
+        assert client.get("/api/data", params={"min_temp": ok}).status_code == 200, ok
+
+
+def test_summary_names_the_requested_skin_type(tmp_path: Path) -> None:
+    """F-21: summary.skin_type stayed null when skin_type=3 was requested, while
+    every row already carried fitzpatrick_type: 3."""
+    client = _client(_api_fixture(tmp_path))
+
+    asked = client.get("/api/data", params={"skin_type": "3"})
+    assert asked.status_code == 200
+    asked_summary = _payload(asked).get("summary")
+    assert isinstance(asked_summary, dict)
+    assert cast("dict[str, object]", asked_summary).get("skin_type") == 3
+
+    # Not requested stays null: the run's own summary has no request context.
+    plain = client.get("/api/data")
+    assert plain.status_code == 200
+    plain_summary = _payload(plain).get("summary")
+    assert isinstance(plain_summary, dict)
+    assert cast("dict[str, object]", plain_summary).get("skin_type") is None
