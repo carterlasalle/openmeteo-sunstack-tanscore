@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 
@@ -115,7 +117,7 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
         html,
         "function calUrl(qs){return 'webcal://'+location.host+'/api/calendar.ics?'+qs;}",
         "function calUrl(qs){var p=location.pathname;"
-        "p=p.slice(0,p.lastIndexOf('/')+1);return 'webcal://'+location.host+p+'calendar.ics';}",
+        + "p=p.slice(0,p.lastIndexOf('/')+1);return 'webcal://'+location.host+p+'calendar.ics';}",
     )
     return html
 
@@ -136,13 +138,12 @@ def reskin_static_dir(
     from .serving import resolve_site, site_nav
 
     page = Path(page_dir)
-    payload: dict[str, object] = json.loads(
-        (page / "data.json").read_text(encoding="utf-8")
-    )
+    payload = cast("dict[str, object]", json.loads((page / "data.json").read_text(encoding="utf-8")))
     summary = payload.get("summary")
-    run_tag = summary.get("run", "") if isinstance(summary, dict) else ""
+    summary_map = cast("dict[str, object]", summary) if isinstance(summary, dict) else None
+    run_tag = summary_map.get("run", "") if summary_map is not None else ""
     site = resolve_site(site_slug)
-    (page / "index.html").write_text(render_static_html(run_tag), encoding="utf-8")
+    _ = (page / "index.html").write_text(render_static_html(run_tag), encoding="utf-8")
     # Provenance guard: a reskin renders UI only. It must NEVER rewrite the
     # forecast identity stamped at generation time. The old code overwrote
     # build_sha here, letting a page claim a code revision that never
@@ -292,9 +293,11 @@ def write_excel(sheets: dict[str, pd.DataFrame], path: Path) -> None:
     # installed. We avoid making XLSX mandatory because CSV+Parquet are lossless and
     # much better for the very wide/member-heavy tables.
     try:
-        with pd.ExcelWriter(path) as writer:
+        writer = cast("pd.ExcelWriter[object]", pd.ExcelWriter(path))
+        with writer:
             for name, df in usable.items():
                 # Excel has a 1,048,576-row limit; cap only the convenience workbook.
-                df.head(1_000_000).to_excel(writer, sheet_name=name[:31], index=False)
+                to_excel = cast("Callable[..., None]", df.head(1_000_000).to_excel)
+                to_excel(writer, sheet_name=name[:31], index=False)
     except ImportError:
         pass

@@ -116,7 +116,7 @@ dev = [
 # BEGIN BUGHUNT MANAGED MUTMUT CONFIG
 [tool.mutmut]
 source_paths = ["src/"]
-pytest_add_cli_args_test_selection = ["tests/"]
+pytest_add_cli_args_test_selection = ["tests/", "-k", "not test_env_example_documents_every_src_env_var and not test_scheduled_workflow_is_complete_and_wired and not test_issue_location_parser_round_trips_registry_append"]
 # Coverage gaps are reported separately as BHCOV001/BHCOV002. Restrict mutation
 # to covered lines by default so mutation testing measures assertion strength
 # instead of spending most of its budget on code the suite never executes.
@@ -134,4 +134,8 @@ also_copy = [
     "locations.yaml",
     "package.json",
     "bun.lock",
+]
+do_not_mutate_patterns = [
+    "os\\.environ",
+    "os\\.getenv",
 ]

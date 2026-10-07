@@ -21,12 +21,29 @@ def _num(df: pd.DataFrame, name: str, default: float = np.nan) -> pd.Series[floa
     return num(df, name, default)
 
 
-RAIN_CODES = set(range(51, 68)) | {80, 81, 82}
+# F-27: precipitation codes are not one severity. A drizzle code (51/53) with a
+# trace of rain (0.024 mm/h) used to hard-block all 24 daylight half-hours and
+# drive the day's composite to exactly 0 while its Abs peak read 37.5 - which
+# then ranked a weaker-sun, dry site above it. Light precipitation is a
+# damp-surface advisory (halved multiplier); only the heavy forms below delete a
+# window, together with thunder.
+LIGHT_PRECIP_CODES = {51, 53, 56, 57, 61, 66, 80}
+HEAVY_PRECIP_CODES = {55, 63, 65, 67, 81, 82}
+# Interval sums arrive in mm on this frame; 0.5 mm/h is the "this is really
+# raining" line, well clear of a trace.
+HEAVY_PRECIP_MM = 0.5
+# `rain`/`showers` arrive in inches while `precipitation` arrives in mm; both
+# signals feed the same intensity decision, so they need one scale.
+MM_PER_INCH = 25.4
 SNOW_CODES = set(range(71, 78)) | {85, 86}
 # Contract §14.2: Open-Meteo WMO semantics include 97 (thunderstorm with
 # hail); {95,96,99} alone is incomplete.
 THUNDER_CODES = {95, 96, 97, 99}
 SNOW_DEPTH_BLOCK_M = 0.05
+# F-27: a hard block removes a WINDOW, not the day's information. Without this
+# floor a blocked half-hour drove the day's composite to exactly 0 while its own
+# Abs peak read 37.5 - and the day then lost to a weaker-sun, dry site.
+OVERALL_HAZARD_FLOOR = 0.15
 
 
 def _as_float(value: object) -> float:
@@ -129,10 +146,20 @@ def apply_outdoor_feasibility(
     wind = _num(out, "wind_speed_10m", 0).fillna(0)
     rh = _num(out, "relative_humidity_2m")
     code = _num(out, "weather_code").fillna(-1).round().astype(int)
-    rain_now = (
-        (rain > config.ACTIVE_PRECIP_IN_THRESHOLD)
-        | (showers > config.ACTIVE_PRECIP_IN_THRESHOLD)
-        | code.isin(RAIN_CODES)
+    # F-27: intensity decides a hard block, not the mere presence of a drizzle
+    # code. A trace (0.024 mm/h under code 53) read as a full block before.
+    precip_mm = _num(out, "precipitation", 0).fillna(0)
+    interval_precip = (rain > config.ACTIVE_PRECIP_IN_THRESHOLD) | (
+        showers > config.ACTIVE_PRECIP_IN_THRESHOLD
+    )
+    heavy_precip = (
+        (precip_mm >= HEAVY_PRECIP_MM)
+        | (rain * MM_PER_INCH >= HEAVY_PRECIP_MM)
+        | (showers * MM_PER_INCH >= HEAVY_PRECIP_MM)
+        | code.isin(HEAVY_PRECIP_CODES)
+    )
+    light_precip = (~heavy_precip) & (
+        interval_precip | (precip_mm > 0.0) | code.isin(LIGHT_PRECIP_CODES)
     )
     snow_now = (snow > config.ACTIVE_SNOW_IN_THRESHOLD) | code.isin(SNOW_CODES)
     thunder = code.isin(THUNDER_CODES)
@@ -147,7 +174,7 @@ def apply_outdoor_feasibility(
     # instantaneous "active rain at timestamp" claims. Instantaneous WMO
     # precipitating codes carry the current-condition block; interval sums
     # block the interval as precipitation-exposed.
-    hard_block = rain_now | snow_now | thunder | too_hot | too_cold | ground_snow
+    hard_block = heavy_precip | snow_now | thunder | too_hot | too_cold | ground_snow
     # Contract §14.1: essential missing weather is UNKNOWN, never perfect.
     # "Unknown" describes a ROW whose weather is incomplete — never a frame that
     # does not carry the field at all. An absent column is a wiring fault that
@@ -172,7 +199,8 @@ def apply_outdoor_feasibility(
     # without re-deriving it from the weather columns.
     reason_flags: dict[str, list[bool]] = {
         "missing_weather": missing_hard.tolist(),
-        "rain_interval": rain_now.tolist(),
+        "heavy_precipitation": heavy_precip.tolist(),
+        "light_precipitation": light_precip.tolist(),
         "snow_interval": snow_now.tolist(),
         "thunderstorm": thunder.tolist(),
         "too_hot": too_hot.tolist(),
@@ -204,6 +232,8 @@ def apply_outdoor_feasibility(
     multiplier *= 1.0 - config.PRECIP_PROBABILITY_PENALTY_MAX * (pop / 100.0) ** 1.2
     multiplier.loc[wind >= config.WIND_WARNING_MPH] *= 0.80
     multiplier.loc[wind >= config.WIND_STRONG_MPH] *= 0.65
+    # F-27: light precipitation is a damp-surface penalty, not a deletion.
+    multiplier.loc[light_precip] *= 0.5
     multiplier.loc[hard_block] = 0.0
     # Contract §14.1: essential missing weather is UNKNOWN — never perfect, and
     # never silently 0 either. A blocked row and an unknown row are different
@@ -221,7 +251,8 @@ def apply_outdoor_feasibility(
     # Every column shares `out`'s index, so position is the label: read each
     # series once into a typed list instead of one `.loc[label]` round-trip per
     # row, which is both untyped and O(rows) hashing.
-    _rain_l = rain_now.tolist()
+    _heavy_l = heavy_precip.tolist()
+    _light_l = light_precip.tolist()
     _snow_l = snow_now.tolist()
     _thunder_l = thunder.tolist()
     _ground_l = ground_snow.tolist()
@@ -238,8 +269,8 @@ def apply_outdoor_feasibility(
     for k in range(len(out)):
         rs: list[str] = []
         fs: list[str] = []
-        if _rain_l[k]:
-            rs.append("precipitation in interval/code")
+        if _heavy_l[k]:
+            rs.append("heavy precipitation in interval/code")
         if _snow_l[k]:
             rs.append("snowfall in interval/code")
         if _thunder_l[k]:
@@ -253,6 +284,8 @@ def apply_outdoor_feasibility(
         if not math.isnan(_temp_l[k]) and _temp_l[k] < min_temp:
             rs.append(f"temperature < {min_temp:.0f}F")
         if not rs:
+            if _light_l[k]:
+                fs.append("light precipitation — usable, expect damp")
             if not math.isnan(_feel_l[k]) and _feel_l[k] < config.COMFORTABLE_TAN_TEMP_F:
                 fs.append("cold")
             if not math.isnan(_temp_l[k]) and _temp_l[k] >= config.HEAT_WARNING_TEMP_F:
@@ -299,8 +332,15 @@ def apply_outdoor_feasibility(
     # Coverage honesty: the old overall_component_coverage count was removed
     # with the LEGACY Overall deprecation (§2.5); component transparency now
     # comes from model/spectral/source_coverage_fraction (§11.4) in tanscore.
+    # F-27: lift hard-blocked rows off exactly zero to the radiation floor, so a
+    # strong-sun day keeps its information instead of losing to a weaker-sun,
+    # dry site. Unknown weather stays NaN: `NaN < floor` is False, so it is not
+    # masked and never reads as a score (F-36).
+    _components = out["overall_components_unblocked_0_100"]
+    _floor = _components * OVERALL_HAZARD_FLOOR
+    _combined = _components * multiplier
     out["overall_tan_opportunity_0_100"] = (
-        (out["overall_components_unblocked_0_100"] * multiplier).clip(0, 100).round(1)
+        _combined.mask(_combined < _floor, _floor).clip(0, 100).round(1)
     )
     # No sun above the horizon means no opportunity, full stop. Mirrors the
     # night-zero clamp on predicted UVA/UVB; kills the log-math floor (~1)

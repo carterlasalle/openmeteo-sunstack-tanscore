@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol, cast
 
 import requests
 import requests_cache
@@ -17,15 +17,11 @@ except ImportError:
 
     def retry(
         session: requests.Session | None = None,
-        retries: int = 10,
-        backoff_factor: float = 0.1,
-        status_to_retry: tuple[int, ...] = (),
-        prefixes: tuple[str, ...] = (),
         **_kwargs: object,
     ) -> requests.Session:
-        # Mirrors retry_requests' signature so both branches of this try/except
-        # declare the same call surface; with the package absent the session is
-        # returned unwrapped rather than raising.
+        # Accepts retry_requests' keyword knobs (retries/backoff_factor) for
+        # call-site parity; with the package absent the session is returned
+        # unwrapped rather than raising.
         assert session is not None
         return session
 
@@ -87,19 +83,20 @@ class HttpResponse(Protocol):
     def text(self) -> str: ...
 
     def raise_for_status(self) -> None: ...
-    def json(self) -> Any: ...
+    # Arbitrary decoded JSON body: the caller narrows after parsing.
+    def json(self) -> object: ...
 
 
 class HttpSession(Protocol):
     """The slice of a requests session: one GET, as requests/httpx provide it."""
 
     def get(
-        self, url: str, /, *, params: dict[str, Any], timeout: int
+        self, url: str, /, *, params: QueryParams, timeout: int
     ) -> HttpResponse: ...
 
 
 def request(
-    session: HttpSession, name: str, endpoint: str, params: dict[str, Any],
+    session: HttpSession, name: str, endpoint: str, params: QueryParams,
     timeout: int = 120,
 ) -> FetchResult:
     started = time.perf_counter()
@@ -131,13 +128,17 @@ def request(
                 elapsed_ms=round((time.perf_counter() - started) * 1000.0, 1),
                 status_code=response.status_code,
             )
-        if isinstance(payload, dict) and payload.get("error"):
+        # Payload shape is only known at runtime; probe a copy so the error
+        # check reads a typed mapping without narrowing `payload` itself.
+        probe = payload
+        body = cast("dict[str, object]", probe) if isinstance(probe, dict) else None
+        if body is not None and body.get("error"):
             return FetchResult(
                 name=name,
                 endpoint=endpoint,
                 params=params,
                 payload=None,
-                error=str(payload.get("reason", "Open-Meteo error")),
+                error=str(body.get("reason", "Open-Meteo error")),
                 elapsed_ms=round((time.perf_counter() - started) * 1000.0, 1),
                 status_code=response.status_code,
             )
@@ -162,7 +163,7 @@ def request(
         )
 
 
-def _common() -> dict[str, Any]:
+def _common() -> QueryParams:
     return {
         "latitude": config.LATITUDE,
         "longitude": config.LONGITUDE,
@@ -174,7 +175,7 @@ def _common() -> dict[str, Any]:
     }
 
 
-def deterministic_params(model: str) -> dict[str, Any]:
+def deterministic_params(model: str) -> QueryParams:
     params = {
         **_common(),
         "forecast_days": config.FORECAST_DAYS,
@@ -187,7 +188,7 @@ def deterministic_params(model: str) -> dict[str, Any]:
     return params
 
 
-def profile_params(model: str) -> dict[str, Any]:
+def profile_params(model: str) -> QueryParams:
     return {
         **_common(),
         "forecast_days": min(config.FORECAST_DAYS, 10),
@@ -196,7 +197,7 @@ def profile_params(model: str) -> dict[str, Any]:
     }
 
 
-def hrrr_15min_params() -> dict[str, Any]:
+def hrrr_15min_params() -> QueryParams:
     return {
         **_common(),
         "models": "ncep_hrrr_conus",
@@ -205,7 +206,7 @@ def hrrr_15min_params() -> dict[str, Any]:
     }
 
 
-def ensemble_params(model: str) -> dict[str, Any]:
+def ensemble_params(model: str) -> QueryParams:
     return {
         **_common(),
         "forecast_days": config.FORECAST_DAYS,
@@ -215,7 +216,7 @@ def ensemble_params(model: str) -> dict[str, Any]:
     }
 
 
-def ensemble_mean_params(model: str) -> dict[str, Any]:
+def ensemble_mean_params(model: str) -> QueryParams:
     return {
         **_common(),
         "forecast_days": config.FORECAST_DAYS,
@@ -224,7 +225,7 @@ def ensemble_mean_params(model: str) -> dict[str, Any]:
     }
 
 
-def air_quality_params() -> dict[str, Any]:
+def air_quality_params() -> QueryParams:
     return {
         "latitude": config.LATITUDE,
         "longitude": config.LONGITUDE,
@@ -247,7 +248,7 @@ def fetch_all(cache_dir: Path, fresh: bool = True) -> list[FetchResult]:
     session = build_session(cache_dir, fresh=fresh)
     results: list[FetchResult] = []
 
-    def _get(name: str, endpoint: str, params: dict[str, Any]) -> FetchResult:
+    def _get(name: str, endpoint: str, params: QueryParams) -> FetchResult:
         res = request(session, name, endpoint, params)
         status = "OK" if res.payload is not None else f"FAIL: {res.error}"
         log.info("[%s] %s (%s ms)", name, status, res.elapsed_ms)
@@ -255,15 +256,15 @@ def fetch_all(cache_dir: Path, fresh: bool = True) -> list[FetchResult]:
         return res
 
     for model in config.DETERMINISTIC_MODELS:
-        _get(f"deterministic__{model}", FORECAST_URL, deterministic_params(model))
+        _ = _get(f"deterministic__{model}", FORECAST_URL, deterministic_params(model))
     for model in config.PROFILE_MODELS:
-        _get(f"profile__{model}", FORECAST_URL, profile_params(model))
-    _get("hrrr_15min", FORECAST_URL, hrrr_15min_params())
+        _ = _get(f"profile__{model}", FORECAST_URL, profile_params(model))
+    _ = _get("hrrr_15min", FORECAST_URL, hrrr_15min_params())
     for model in config.ENSEMBLE_MEMBER_MODELS:
-        _get(f"ensemble_members__{model}", ENSEMBLE_URL, ensemble_params(model))
+        _ = _get(f"ensemble_members__{model}", ENSEMBLE_URL, ensemble_params(model))
     for model in config.ENSEMBLE_MEAN_MODELS:
-        _get(f"ensemble_mean__{model}", ENSEMBLE_URL, ensemble_mean_params(model))
-    _get("air_quality", AIR_QUALITY_URL, air_quality_params())
+        _ = _get(f"ensemble_mean__{model}", ENSEMBLE_URL, ensemble_mean_params(model))
+    _ = _get("air_quality", AIR_QUALITY_URL, air_quality_params())
     return results
 
 
@@ -293,7 +294,7 @@ def probe_live(timeout: int = 20) -> list[FetchResult]:
         ("air_quality", AIR_QUALITY_URL, {**air_quality_params(), "forecast_days": 1}),
     ]
 
-    def _one(item: tuple[str, str, dict[str, Any]]) -> FetchResult:
+    def _one(item: tuple[str, str, QueryParams]) -> FetchResult:
         name, endpoint, params = item
         return request(requests.Session(), name, endpoint, params, timeout=timeout)
 
@@ -333,9 +334,11 @@ def _feed_use(name: str) -> str:
 
 def write_raw(results: list[FetchResult], raw_dir: Path) -> None:
     raw_dir.mkdir(parents=True, exist_ok=True)
-    manifest = []
+    # Manifest rows mix str/float/bool/None values, so the element type is
+    # object: an unannotated [] would erase every append and the dump.
+    manifest: list[dict[str, object]] = []
     for result in results:
-        entry = {
+        entry: dict[str, object] = {
             "name": result.name,
             "endpoint": result.endpoint,
             "params": result.params,
@@ -349,11 +352,11 @@ def write_raw(results: list[FetchResult], raw_dir: Path) -> None:
         manifest.append(entry)
         if result.payload is not None:
             _raw_text = json.dumps(result.payload, indent=2, allow_nan=True)
-            (raw_dir / f"{result.name}.json").write_text(_raw_text, encoding="utf-8")
+            _ = (raw_dir / f"{result.name}.json").write_text(_raw_text, encoding="utf-8")
             import hashlib as _hashlib
 
             entry["sha256"] = _hashlib.sha256(_raw_text.encode("utf-8")).hexdigest()[:16]
             entry["retrieved_at"] = datetime.now(UTC).isoformat()
-    (raw_dir / "manifest.json").write_text(
+    _ = (raw_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2), encoding="utf-8"
     )

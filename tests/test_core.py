@@ -217,16 +217,41 @@ def test_overall_merges_context_without_erasing_absolute_scale():
 
 
 def test_rain_snow_and_temperature_hard_block_outdoor_opportunity():
+    # F-27: only HEAVY precipitation deletes a window now (rain 0.2 in = 5 mm/h,
+    # code 65 = heavy rain). A drizzle code with a trace is a damp-surface
+    # penalty; see test_light_precipitation_is_a_penalty_not_a_deletion.
+    from sunstack.frame import num
+
     for kwargs in [
-        {"rain": 0.01, "weather_code": 61},
+        {"rain": 0.2, "weather_code": 65},
         {"snowfall": 0.1, "weather_code": 71},
         {"temperature_2m": 111.0},
         {"temperature_2m": 45.0},
     ]:
         out = apply_outdoor_feasibility(_opportunity_row(**kwargs))
         assert bool(out.loc[0, "outdoor_blocked"])
-        assert out.loc[0, "overall_tan_opportunity_0_100"] == 0
-        assert out.loc[0, "tan_score_absolute_0_100"] == 44.0
+        assert num(out, "outdoor_feasibility_0_100").iloc[0] == 0
+        # F-27: a hard block removes the WINDOW, not the day's information; a
+        # row used to read exactly 0 beside its own non-zero Abs peak.
+        assert num(out, "overall_tan_opportunity_0_100").iloc[0] > 0
+        assert num(out, "tan_score_absolute_0_100").iloc[0] == 44.0
+
+
+def test_light_precipitation_is_a_penalty_not_a_deletion():
+    """F-27, the audit's exact case: code 53 (moderate drizzle) with rain 0.0 in
+    and 0.024 mm of precipitation blocked all 24 daylight half-hours and drove
+    the day's composite to exactly 0 while its Abs peak read 37.5 - which then
+    ranked a weaker-sun, dry site above it."""
+    from sunstack.frame import num
+
+    out = apply_outdoor_feasibility(
+        _opportunity_row(weather_code=53, rain=0.0, precipitation=0.024)
+    )
+    assert not bool(out.loc[0, "outdoor_blocked"])
+    assert num(out, "outdoor_feasibility_0_100").iloc[0] > 0
+    assert num(out, "overall_tan_opportunity_0_100").iloc[0] > 0
+    assert "light_precipitation" in str(out.loc[0, "outdoor_feasibility_reason_codes"])
+    assert "light precipitation" in str(out.loc[0, "outdoor_flags"])
 
 
 def test_fitzpatrick_is_context_not_environmental_multiplier():
