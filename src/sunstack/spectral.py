@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -89,10 +90,10 @@ def dynamic_band_weights(
     # Cell-sum energy convention (§6.4/test_band_boundary_energy_conservation):
     # the production grid is 1-nm cells, so band energy is the cell sum, not
     # the trapezoidal integral (which spans 34 nm over the 35 UVB cells).
-    e_uvb = float(np.sum(e[uvb_m]))
-    e_uva = float(np.sum(e[uva_m]))
-    w_uvb = float(np.sum(e[uvb_m] * s[uvb_m]) / e_uvb) if e_uvb > 0 else float("nan")
-    w_uva = float(np.sum(e[uva_m] * s[uva_m]) / e_uva) if e_uva > 0 else float("nan")
+    e_uvb = float(cast(float, np.sum(e[uvb_m])))
+    e_uva = float(cast(float, np.sum(e[uva_m])))
+    w_uvb = float(cast(float, np.sum(e[uvb_m] * s[uvb_m]) / e_uvb)) if e_uvb > 0 else float("nan")
+    w_uva = float(cast(float, np.sum(e[uva_m] * s[uva_m]) / e_uva)) if e_uva > 0 else float("nan")
     return w_uvb, w_uva
 
 
@@ -109,8 +110,8 @@ def reconstruct_spectrum_tierC(
     uva = max(float(uva_wm2), 0.0)
     uvb = max(float(uvb_wm2), 0.0)
     e = np.zeros_like(SPECTRAL_WAVES_NM, dtype=float)
-    e[UVB_MASK] = uvb / int(UVB_MASK.sum())
-    e[UVA_MASK] = uva / int(UVA_MASK.sum())
+    e[UVB_MASK] = uvb / int(cast(int, UVB_MASK.sum()))
+    e[UVA_MASK] = uva / int(cast(int, UVA_MASK.sum()))
     return e
 
 
@@ -173,14 +174,17 @@ def skin_plane_factor(
     sky-view factor (1+cos tilt)/2 plus ground-reflected albedo*(1-cos tilt)/2.
     Tilt 0 returns exactly 1.0 (horizontal environmental reference).
     """
-    tilt = np.radians(float(tilt_deg))
+    tilt = cast(float, np.radians(float(tilt_deg)))
     if abs(tilt) < 1e-9:
         return 1.0
-    sza = np.radians(float(solar_zenith_deg))
-    saa = np.radians(float(solar_azimuth_deg - skin_azimuth_deg))
-    cos_inc = np.cos(sza) * np.cos(tilt) + np.sin(sza) * np.sin(tilt) * np.cos(saa)
+    sza = cast(float, np.radians(float(solar_zenith_deg)))
+    saa = cast(float, np.radians(float(solar_azimuth_deg - skin_azimuth_deg)))
+    cos_inc = cast(
+        float,
+        np.cos(sza) * np.cos(tilt) + np.sin(sza) * np.sin(tilt) * np.cos(saa),
+    )
     cos_inc = max(float(cos_inc), 0.0)
-    cos_sza = max(float(np.cos(sza)), 0.0)
+    cos_sza = max(float(cast(float, np.cos(sza))), 0.0)
     direct_h = max(float(direct_wm2), 0.0)
     diffuse_h = max(float(diffuse_wm2), 0.0)
     ghi_h = direct_h + diffuse_h
@@ -189,8 +193,8 @@ def skin_plane_factor(
     # Direct horizontal ~= DNI*cos(sza); recover DNI then project.
     dni = direct_h / cos_sza
     direct_plane = dni * cos_inc
-    sky_view = 0.5 * (1.0 + np.cos(tilt))
-    ground_view = 0.5 * (1.0 - np.cos(tilt))
+    sky_view = cast(float, 0.5 * (1.0 + np.cos(tilt)))
+    ground_view = cast(float, 0.5 * (1.0 - np.cos(tilt)))
     diffuse_plane = diffuse_h * sky_view + ghi_h * max(float(albedo), 0.0) * ground_view
     return float((direct_plane + diffuse_plane) / ghi_h)
 
@@ -367,9 +371,9 @@ def load_tierB_emulator(
     if key in _EMULATOR_CACHE:
         cached = _EMULATOR_CACHE[key]
         assert isinstance(cached, dict)
-        return cached
-    man = _json.loads(_Path(path).read_text(encoding="utf-8"))
-    validate_tierB_manifest(man)
+        return cast("dict[str, object]", cached)
+    man = cast("dict[str, object]", _json.loads(_Path(path).read_text(encoding="utf-8")))
+    _ = validate_tierB_manifest(man)
     bundle_path = _Path(path).parent / "emulator.joblib"
     if not bundle_path.exists():
         raise FileNotFoundError(
@@ -380,7 +384,7 @@ def load_tierB_emulator(
     if not isinstance(bundle, dict):
         raise TypeError("ERROR spectral: Tier-B bundle must be a mapping")
     _EMULATOR_CACHE[key] = bundle
-    return bundle
+    return cast("dict[str, object]", bundle)
 
 
 def predict_tierB_channels(
@@ -404,7 +408,7 @@ def predict_tierB_channels(
     feats = b.get("features")
     if not isinstance(feats, list) or not feats:
         raise ValueError("ERROR spectral: Tier-B bundle has no feature list")
-    x = features.reindex(columns=[str(c) for c in feats])
+    x = features.reindex(columns=[str(c) for c in cast("list[object]", feats)])
     mu = _np.asarray(b.get("x_mu"), dtype=float)
     sd = _np.asarray(b.get("x_sd"), dtype=float)
     xa = (_np.asarray(x.to_numpy(dtype=float)) - mu) / sd
@@ -535,13 +539,14 @@ def validate_tierB_manifest(manifest: dict[str, object]) -> dict[str, object]:
     emulator version, training-manifest checksum, libRadtran provenance,
     parameter ranges, and held-out validation metrics must all be present.
     """
-    if not isinstance(manifest, dict):
+    raw = cast(object, manifest)
+    if not isinstance(raw, dict):
         raise TypeError("ERROR spectral: Tier-B manifest must be a mapping")
     missing = [f for f in TIER_B_REQUIRED_MANIFEST_FIELDS if f not in manifest]
     if missing:
         raise ValueError(
             f"ERROR spectral: Tier-B manifest missing fields: {missing}. "
-            f"Build the corpus with scripts/build_spectral_corpus.py first."
+            + "Build the corpus with scripts/build_spectral_corpus.py first."
         )
     metrics = manifest["validation_metrics"]
     if not isinstance(metrics, dict) or not metrics:
@@ -553,8 +558,8 @@ def validate_tierB_manifest(manifest: dict[str, object]) -> dict[str, object]:
     if manifest.get("gates_passed") is not True:
         raise ValueError(
             "ERROR spectral: Tier-B manifest reports gates_passed="
-            f"{manifest.get('gates_passed')!r}; a gate-failing emulator can "
-            "never back a Tier-B claim. Keep Tier-C labeled until the §8.4 "
-            "held-out gates pass."
+            + f"{manifest.get('gates_passed')!r}; a gate-failing emulator can "
+            + "never back a Tier-B claim. Keep Tier-C labeled until the §8.4 "
+            + "held-out gates pass."
         )
     return manifest

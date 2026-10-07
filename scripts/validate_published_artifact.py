@@ -40,6 +40,8 @@ FATAL_CHECKS = [
     "no_stale_local_reference",
     "no_premanifest_model",
     "row_action_spectrum_identity",
+    "time_utc_is_true_utc",
+    "min_temp_threshold_finite",
 ]
 # Fields whose name says "value at the selected best window/time": each must
 # equal its source column on the row the daily row selects (best_30m_start),
@@ -503,6 +505,36 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
         if _has_signal and not _daylit:
             failures["daylight_fit_denominator"].append(
                 f"{r.get('time')}: night row in daylight payload")
+            break
+
+    # F-29: a field named `*_utc` must be a true UTC instant, not local wall
+    # clock with a `Z` appended. On the half-hour backward-mean grid the row's
+    # instant IS its interval end, so `time_utc` must equal `interval_end_utc`
+    # whenever the row carries one. The earlier defect was a silent 4-hour error
+    # for any consumer joining on this key.
+    for r in half_rows or rows:
+        t_utc = r.get("time_utc")
+        t_end = r.get("interval_end_utc")
+        if (
+            isinstance(t_utc, str)
+            and isinstance(t_end, str)
+            and t_utc
+            and t_end
+            and t_utc != t_end
+        ):
+            failures["time_utc_is_true_utc"].append(
+                f"{r.get('time')}: time_utc {t_utc} != interval_end_utc {t_end}")
+            break
+
+    # F-37: the cold threshold actually applied must be a real number on every
+    # row that carries it. `temp < nan` is never true, so a non-finite threshold
+    # silently disables the cold floor while the summary still reports the
+    # configured one.
+    for r in rows:
+        threshold = r.get("minimum_tan_temperature_f")
+        if threshold is not None and not _is_finite(threshold):
+            failures["min_temp_threshold_finite"].append(
+                f"{r.get('time')}: minimum_tan_temperature_f={threshold!r}")
             break
 
     failed = {k: v for k, v in failures.items() if v}

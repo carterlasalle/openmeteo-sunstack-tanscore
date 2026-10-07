@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import pairwise
-from typing import Any, Literal
+from typing import Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -102,33 +102,36 @@ REGISTRY: tuple[TemporalSemantics, ...] = (
 
 
 def interval_bounds(
-    stamps_utc: Any, support: SupportType, anchor: AnchorType, duration_s: float
+    stamps_utc: pd.Series, support: SupportType, anchor: AnchorType, duration_s: float
 ) -> pd.DataFrame:
     """Canonical [interval_start, interval_end) + midpoint for stamped values.
 
     Instant support yields zero-duration intervals at the stamp itself.
     """
+    # to_timedelta types as Any; the offsets are fixed-length Timedeltas.
     t = pd.to_datetime(stamps_utc, utc=True)
+    dur = pd.Timedelta(seconds=duration_s)
+    half = pd.Timedelta(seconds=duration_s / 2.0)
     if support == "instant" or duration_s <= 0:
         start = t
         end = t
         mid = t
     elif anchor == "interval_start":
         start = t
-        end = t + pd.to_timedelta(duration_s, unit="s")
-        mid = t + pd.to_timedelta(duration_s / 2.0, unit="s")
+        end = t + dur
+        mid = t + half
     elif anchor == "interval_end":
         end = t
-        start = t - pd.to_timedelta(duration_s, unit="s")
-        mid = t - pd.to_timedelta(duration_s / 2.0, unit="s")
+        start = t - dur
+        mid = t - half
     elif anchor == "interval_midpoint":
         mid = t
-        start = t - pd.to_timedelta(duration_s / 2.0, unit="s")
-        end = t + pd.to_timedelta(duration_s / 2.0, unit="s")
+        start = t - half
+        end = t + half
     else:  # valid_time anchor for interval support: treat stamp as end
         end = t
-        start = t - pd.to_timedelta(duration_s, unit="s")
-        mid = t - pd.to_timedelta(duration_s / 2.0, unit="s")
+        start = t - dur
+        mid = t - half
     return pd.DataFrame({
         "interval_start": start,
         "interval_end": end,
@@ -177,7 +180,8 @@ def align_training_intervals(
     if "interval_midpoint" not in power.columns or "interval_midpoint" not in predictors.columns:
         raise ValueError(
             "ERROR temporal: align_training_intervals requires interval_midpoint "
-            "on both frames (run power_hourly_to_intervals / openmeteo_hourly_to_intervals first)"
+            + "on both frames "
+            + "(run power_hourly_to_intervals / openmeteo_hourly_to_intervals first)"
         )
     left = power.sort_values("interval_midpoint").reset_index(drop=True)
     right = predictors.sort_values("interval_midpoint").reset_index(drop=True)
@@ -221,10 +225,12 @@ def integrate_interval_means_exact(
     valid = np.isfinite(dt) & np.isfinite(ebar) & (dt > 0)
     if not bool(valid.any()):
         return float("nan"), False, 0.0
-    dose = float(np.sum(dt[valid] * ebar[valid]))
+    # np.sum/np.clip on masked arrays type as Any in these stubs; the values
+    # are 0-d numeric sums over numeric arrays.
+    dose = cast(float, np.sum(dt[valid] * ebar[valid]))
     complete = bool(valid.all())
-    coverage = float(np.sum(dt[valid]) / np.sum(dt[dt > 0])) if bool((dt > 0).any()) else 0.0
-    return max(dose, 0.0), complete, float(np.clip(coverage, 0, 1))
+    coverage = cast(float, np.sum(dt[valid]) / np.sum(dt[dt > 0])) if bool((dt > 0).any()) else 0.0
+    return max(dose, 0.0), complete, cast(float, np.clip(coverage, 0, 1))
 
 
 def integrate_point_samples_trapezoid(
@@ -238,37 +244,44 @@ def integrate_point_samples_trapezoid(
     """
     t = np.asarray(secs, dtype=float)
     v = np.asarray(values_wm2, dtype=float)
-    order = np.argsort(t, kind="stable")
+    order = cast("np.ndarray", np.argsort(t, kind="stable"))
     t = t[order]
     v = v[order]
     valid = np.isfinite(t) & np.isfinite(v)
-    n_valid = int(valid.sum())
+    # Scalar ndarray indexing types as Any in these stubs, and that Any would
+    # poison the running sum; read the arrays once as typed lists (same order
+    # as the boolean mask they replace).
+    t_list = cast("list[float]", t.tolist())
+    v_list = cast("list[float]", v.tolist())
+    valid_list = cast("list[bool]", valid.tolist())
+    n_valid = sum(valid_list)
     if n_valid == 0:
         return float("nan"), False, 0.0
-    span = float(np.max(t[valid]) - np.min(t[valid])) if n_valid > 1 else 0.0
-    window = float(np.max(t) - np.min(t)) if len(t) > 1 else 0.0
+    span = cast(float, np.max(t[valid]) - np.min(t[valid])) if n_valid > 1 else 0.0
+    window = cast(float, np.max(t) - np.min(t)) if len(t) > 1 else 0.0
     if n_valid == 1:
         # One point over a nonzero requested window: unknown energy.
         if window > 0:
             return float("nan"), False, 0.0
         return 0.0, False, 0.0
     dose, covered, complete = 0.0, 0.0, True
-    idx = np.where(valid)[0]
+    idx = [i for i, ok in enumerate(valid_list) if ok]
     for a, b in pairwise(idx):
-        dt = float(t[b] - t[a])
+        dt = t_list[b] - t_list[a]
         if dt <= 0:
             continue
         if dt > max_gap_s:
             complete = False
             continue
-        dose += 0.5 * (v[a] + v[b]) * dt
+        dose += 0.5 * (v_list[a] + v_list[b]) * dt
         covered += dt
     coverage = (covered / span) if span > 0 else 1.0
-    return float(max(dose, 0.0)), bool(complete), float(np.clip(coverage, 0, 1))
+    return float(max(dose, 0.0)), bool(complete), cast(float, np.clip(coverage, 0, 1))
 
 
 def cams_accumulation_to_interval_means(
-    times_utc: Any, accumulated_j_m2: Any, cycle_ids: Any,
+    times_utc: pd.Series, accumulated_j_m2: pd.Series,
+    cycle_ids: pd.Series | np.ndarray,
 ) -> pd.DataFrame:
     """Difference CAMS accumulated downward UV within each forecast cycle.
 
@@ -278,17 +291,27 @@ def cams_accumulation_to_interval_means(
     start, in which case the caller passes it as an explicit row.
     """
     t = pd.to_datetime(times_utc, utc=True)
-    _coerced = pd.to_numeric(accumulated_j_m2, errors="coerce")
+    # to_numeric on a Series is a Series at runtime; the guard keeps the
+    # contract loud for any caller that hands over a bare sequence.
+    _coerced = cast(object, pd.to_numeric(accumulated_j_m2, errors="coerce"))
     assert isinstance(_coerced, pd.Series)
-    acc: np.ndarray = _coerced.to_numpy()
-    cyc: np.ndarray = pd.Series(np.asarray(cycle_ids)).astype(str).to_numpy(dtype=object)  # type: ignore[union-attr]
-    secs: np.ndarray = t.map(lambda x: x.timestamp() if not pd.isna(x) else float("nan")).to_numpy(dtype=float)  # type: ignore[union-attr]
-    order: np.ndarray = np.argsort(secs, kind="stable")
+    acc_arr = cast("np.ndarray", _coerced.to_numpy())
+    secs_arr = cast(
+        "np.ndarray",
+        t.map(lambda x: x.timestamp() if not pd.isna(x) else float("nan")).to_numpy(dtype=float),
+    )
+    cyc_arr = pd.Series(np.asarray(cycle_ids)).astype(str).to_numpy(dtype=object)
+    # ndarray scalar indexing types as Any in these stubs; read once as typed
+    # lists so the per-row difference arithmetic stays numeric.
+    acc = cast("list[float]", acc_arr.tolist())
+    secs = cast("list[float]", secs_arr.tolist())
+    cyc = cast("list[str]", cyc_arr.tolist())
+    order = cast("list[int]", np.argsort(secs_arr, kind="stable").tolist())
     out_rows: list[dict[str, object]] = []
     for pos in range(len(order)):
-        i = int(order[pos])
+        i = order[pos]
         # First row of each cycle: no backward difference exists.
-        prev = int(order[pos - 1]) if pos > 0 else -1
+        prev = order[pos - 1] if pos > 0 else -1
         ok = bool(prev >= 0 and cyc[prev] == cyc[i]
                   and np.isfinite(acc[prev]) and np.isfinite(acc[i]))
         if not ok:

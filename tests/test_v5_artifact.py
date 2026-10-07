@@ -190,7 +190,11 @@ def test_validator_passes_clean_fixture(tmp_path: Path) -> None:
     assert out["passed"] is True, out["failures"]
     checks = out["checks"]
     assert isinstance(checks, list)
-    assert len(cast(list[object], checks)) == 21
+    # The gate list is a contract: adding a fatal check is a deliberate act,
+    # silently dropping one is the regression this pin exists for.
+    assert len(cast(list[object], checks)) == 23, checks
+    assert "time_utc_is_true_utc" in cast(list[str], checks)
+    assert "min_temp_threshold_finite" in cast(list[str], checks)
 
 
 def test_validator_fails_row_without_action_spectrum_identity(tmp_path: Path) -> None:
@@ -206,6 +210,33 @@ def test_validator_fails_row_without_action_spectrum_identity(tmp_path: Path) ->
     assert "row_action_spectrum_identity" in _failures(out)
 
 
+def test_validator_fails_when_time_utc_is_local_clock_stamped_z(tmp_path: Path) -> None:
+    """F-29: a field named `*_utc` must be a true UTC instant. The shipped
+    defect was local wall clock with a `Z` appended, which left the half-hour
+    frame four hours off its own interval bounds and off the hourly frame."""
+    module = _load_validator()
+    bad = _good_artifact()
+    row = _row(bad, 1)
+    row["interval_start_utc"] = "2026-09-15T11:30:00.000Z"
+    row["interval_end_utc"] = "2026-09-15T12:00:00.000Z"
+    row["time_utc"] = "2026-09-15T08:00:00.000Z"  # local clock, mislabelled
+    out = _validate(module, tmp_path, bad)
+    assert out["passed"] is False
+    assert "time_utc_is_true_utc" in _failures(out)
+
+
+def test_validator_fails_when_applied_threshold_is_not_finite(tmp_path: Path) -> None:
+    """F-37: `temp < nan` is never true, so a non-finite threshold silently
+    disables the cold floor while the run summary still reports the configured
+    one - a blocked hour reads 100 % feasible."""
+    module = _load_validator()
+    bad = _good_artifact()
+    _row(bad, 1)["minimum_tan_temperature_f"] = float("nan")
+    out = _validate(module, tmp_path, bad)
+    assert out["passed"] is False
+    assert "min_temp_threshold_finite" in _failures(out)
+
+
 def test_validator_fails_row_with_divergent_action_spectrum(tmp_path: Path) -> None:
     """A row must not claim a different spectrum than the summary it ships under."""
     module = _load_validator()
@@ -214,6 +245,7 @@ def test_validator_fails_row_with_divergent_action_spectrum(tmp_path: Path) -> N
     out = _validate(module, tmp_path, bad)
     assert out["passed"] is False
     assert "row_action_spectrum_identity" in _failures(out)
+
 
 def test_validator_fails_diverged_fixture(tmp_path: Path) -> None:
     module = _load_validator()

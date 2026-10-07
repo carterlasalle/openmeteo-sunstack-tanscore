@@ -15,7 +15,18 @@ try:
     from retry_requests import retry
 except ImportError:
 
-    def retry(session, **_kwargs):
+    def retry(
+        session: requests.Session | None = None,
+        retries: int = 10,
+        backoff_factor: float = 0.1,
+        status_to_retry: tuple[int, ...] = (),
+        prefixes: tuple[str, ...] = (),
+        **_kwargs: object,
+    ) -> requests.Session:
+        # Mirrors retry_requests' signature so both branches of this try/except
+        # declare the same call surface; with the package absent the session is
+        # returned unwrapped rather than raising.
+        assert session is not None
         return session
 
 
@@ -25,20 +36,29 @@ FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 ENSEMBLE_URL = "https://ensemble-api.open-meteo.com/v1/ensemble"
 AIR_QUALITY_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
 
+# Query-parameter values the Open-Meteo APIs accept. Kept narrow (not Any) so
+# the param builders and the session Protocol keep their real types.
+QueryParams = dict[str, str | int | float]
+
 
 @dataclass(slots=True)
 class FetchResult:
     name: str
     endpoint: str
-    params: dict[str, Any]
-    payload: dict[str, Any] | list[dict[str, Any]] | None
+    params: QueryParams
+    # Raw decoded JSON body. The upstream shape is only known after parsing
+    # (mapping for forecast payloads, list for multi-model ones), so it is
+    # carried as object and narrowed by consumers.
+    payload: object
     error: str | None = None
     from_cache: bool = False
     elapsed_ms: float | None = None
     status_code: int | None = None
 
 
-def build_session(cache_dir: Path, expire_after: int = 900, fresh: bool = False):
+def build_session(
+    cache_dir: Path, expire_after: int = 900, fresh: bool = False
+) -> requests.Session:
     if fresh:
         return retry(requests.Session(), retries=5, backoff_factor=0.35)
     cache_dir.mkdir(parents=True, exist_ok=True)
