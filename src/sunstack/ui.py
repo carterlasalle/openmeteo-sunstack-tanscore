@@ -102,14 +102,22 @@ def _finite_min_temp(value: float | None) -> float | None:
 
 
 def _parse_surface(surface: object, extent: object) -> tuple[str, str]:
-    from .surface import SURFACE_EXTENT_MODES, resolve_surface
+    from .surface import PRESETS, SURFACE_EXTENT_MODES, resolve_surface
 
     slug = str(surface or "unknown").strip() or "unknown"
     mode = str(extent or "local").strip() or "local"
+    # F-20: `custom` is a CLI capability - it needs both reflectance flags, which
+    # this endpoint does not accept - so listing it as an allowed slug here
+    # advertised an option that could never work.
+    if slug == "custom":
+        raise ValueError(
+            "surface=custom needs explicit reflectances and is CLI-only: pass --surface-uva-reflectance and --surface-uvb-reflectance to `sunstack run`"
+        )
     try:
         prof = resolve_surface(slug)
     except ValueError as exc:
-        raise ValueError(str(exc)) from exc
+        allowed = sorted(s for s in PRESETS if s != "custom")
+        raise ValueError(f"unknown surface {slug!r}; allowed: {allowed}") from exc
     if mode not in SURFACE_EXTENT_MODES:
         raise ValueError(
             f"surface_extent must be one of {list(SURFACE_EXTENT_MODES)}, got {mode!r}")
