@@ -139,30 +139,35 @@ def reskin_static_dir(
 
     page = Path(page_dir)
     payload = cast("dict[str, object]", json.loads((page / "data.json").read_text(encoding="utf-8")))
-    summary = payload.get("summary")
-    summary_map = cast("dict[str, object]", summary) if isinstance(summary, dict) else None
-    run_tag = summary_map.get("run", "") if summary_map is not None else ""
+    # The committed payload's summary is only known to be a mapping at runtime;
+    # widen once so the guards below stay reachable for the checker.
+    raw_summary: object = payload.get("summary")
+    summary = (
+        cast("dict[str, object]", raw_summary) if isinstance(raw_summary, dict) else None
+    )
+    run_tag = summary.get("run", "") if summary is not None else ""
     site = resolve_site(site_slug)
     _ = (page / "index.html").write_text(render_static_html(run_tag), encoding="utf-8")
     # Provenance guard: a reskin renders UI only. It must NEVER rewrite the
     # forecast identity stamped at generation time. The old code overwrote
     # build_sha here, letting a page claim a code revision that never
     # generated its rows (shipped bug: ed14cad stamp on old-median rows).
-    if isinstance(summary, dict):
+    if summary is not None:
         summary["renderer_code_sha"] = build_sha()
-        summary.setdefault("forecast_code_sha",
-                           summary.get("forecast_generated_by", "unknown"))
+        if "forecast_code_sha" not in summary:
+            summary["forecast_code_sha"] = summary.get(
+                "forecast_generated_by", "unknown")
     payload["build_sha"] = (summary.get("forecast_code_sha")
-                            if isinstance(summary, dict) else build_sha())
-    (page / "data.json").write_text(json.dumps(payload), encoding="utf-8")
-    (page / "locations.json").write_text(
+                            if summary is not None else build_sha())
+    _ = (page / "data.json").write_text(json.dumps(payload), encoding="utf-8")
+    _ = (page / "locations.json").write_text(
         json.dumps({"locations": site_nav(site.slug)}), encoding="utf-8"
     )
-    (page / "skin.json").write_text(
+    _ = (page / "skin.json").write_text(
         json.dumps({str(i): fitzpatrick_context(i) for i in range(1, 7)}),
         encoding="utf-8",
     )
-    (page / "surfaces.json").write_text(
+    _ = (page / "surfaces.json").write_text(
         json.dumps(_surface_payload()), encoding="utf-8"
     )
     return {"page": str(page), "run": run_tag, "build_sha": payload["build_sha"]}
@@ -199,43 +204,50 @@ def export_static_site(
     )
     site = resolve_site(site_slug)
     entered = config.use_site(site)
-    entered.__enter__()
+    _ = entered.__enter__()
     try:
         run, hourly, half, daily, summary = filtered_payload(
             root, skin_type, min_temp_f, site,
             personal_mmd_j_m2, personal_mmd_basis,
         )
     finally:
-        entered.__exit__(None, None, None)
+        _ = entered.__exit__(None, None, None)
     hourly_ui = daylight_payload_rows(hourly)
     half_ui = daylight_payload_rows(half)
-    if isinstance(summary, dict):
-        summary.setdefault("forecast_code_sha", build_sha())
-        summary["renderer_code_sha"] = build_sha()
+    # filtered_payload returns a summary mapping; the runtime check stays (a
+    # mocked/stale caller could hand back something else) via a widened cast.
+    raw_summary = cast(object, summary)
+    summary_map = (
+        cast("dict[str, object]", raw_summary) if isinstance(raw_summary, dict) else None
+    )
+    if summary_map is not None:
+        if "forecast_code_sha" not in summary_map:
+            summary_map["forecast_code_sha"] = build_sha()
+        summary_map["renderer_code_sha"] = build_sha()
     payload: dict[str, object] = {
         "run": str(run),
         "daily": records(daily),
         "hourly": records(hourly_ui),
         "half_hour": records(half_ui),
         "summary": summary,
-        "build_sha": (summary.get("forecast_code_sha")
-                      if isinstance(summary, dict) else build_sha()),
+        "build_sha": (summary_map.get("forecast_code_sha")
+                      if summary_map is not None else build_sha()),
     }
     html = render_static_html(summary.get("run", ""), min_temp_f)
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "index.html").write_text(html, encoding="utf-8")
-    (out_dir / "data.json").write_text(json.dumps(payload), encoding="utf-8")
-    (out_dir / "locations.json").write_text(
+    _ = (out_dir / "index.html").write_text(html, encoding="utf-8")
+    _ = (out_dir / "data.json").write_text(json.dumps(payload), encoding="utf-8")
+    _ = (out_dir / "locations.json").write_text(
         json.dumps({"locations": site_nav(site.slug)}), encoding="utf-8"
     )
-    (out_dir / "skin.json").write_text(
+    _ = (out_dir / "skin.json").write_text(
         json.dumps({str(i): fitzpatrick_context(i) for i in range(1, 7)}),
         encoding="utf-8",
     )
-    (out_dir / "surfaces.json").write_text(
+    _ = (out_dir / "surfaces.json").write_text(
         json.dumps(_surface_payload()), encoding="utf-8"
     )
-    (out_dir / "calendar.ics").write_text(
+    _ = (out_dir / "calendar.ics").write_text(
         build_calendar_ics(daily, str(summary.get("run", "")), hourly,
                            site_slug=site.slug, tz_name=site.timezone),
         encoding="utf-8",
@@ -261,7 +273,7 @@ def export_static_site(
             daylight = half.loc[_mask]
     except (KeyError, ValueError, TypeError):
         pass
-    (out_dir / "calendar-30min.ics").write_text(
+    _ = (out_dir / "calendar-30min.ics").write_text(
         build_interval_ics(daylight, str(summary.get("run", "")),
                            site_slug=site.slug, tz_name=site.timezone),
         encoding="utf-8",

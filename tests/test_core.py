@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Required, TypedDict, cast, override
@@ -711,9 +711,9 @@ def test_request_diagnoses_empty_and_garbled_bodies():
         """Stand-in requests session; records what the helper asked for."""
 
         def __init__(self) -> None:
-            self.calls: list[tuple[str, dict[str, object], int]] = []
+            self.calls: list[tuple[str, Mapping[str, object], int]] = []
 
-        def get(self, endpoint: str, params: dict[str, object], timeout: int) -> Resp:
+        def get(self, endpoint: str, params: Mapping[str, object], timeout: int) -> Resp:
             self.calls.append((endpoint, params, timeout))
             return Resp()
 
@@ -734,9 +734,9 @@ def test_request_diagnoses_empty_and_garbled_bodies():
         """Same stand-in, but every response body is unparseable HTML."""
 
         def __init__(self) -> None:
-            self.calls: list[tuple[str, dict[str, object], int]] = []
+            self.calls: list[tuple[str, Mapping[str, object], int]] = []
 
-        def get(self, endpoint: str, params: dict[str, object], timeout: int) -> Resp:
+        def get(self, endpoint: str, params: Mapping[str, object], timeout: int) -> Resp:
             self.calls.append((endpoint, params, timeout))
             return Garbled()
 
