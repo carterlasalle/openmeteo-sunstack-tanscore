@@ -582,6 +582,9 @@ body.hide-class .daycell .cls{display:none}
 .sunfig svg{flex:0 1 auto;max-width:100%;height:auto;background:var(--surface2);border-radius:8px}
 .sunfig .cap{font-size:13px;max-width:34em}
 .sunfig .cap b{color:var(--sun)}
+details>summary{padding:5px 0;cursor:pointer}
+details>summary:focus-visible{outline:2px solid var(--sun);outline-offset:2px}
+label>input[type=checkbox]{width:16px;height:16px;vertical-align:-3px}
 .sunfig select{margin-top:8px}
 @media(max-width:640px){h1{font-size:26px}.hero{font-size:21px}.wrap{padding:18px 12px 50px}}
 </style></head><body><div class="wrap">
