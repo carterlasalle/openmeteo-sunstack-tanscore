@@ -308,9 +308,10 @@ _SCORE_SEMANTIC_TEXT = {
         "UVA/UVB model, not from UVI"
     ),
     "overall": (
-        "LEGACY composite (deprecated product heuristic, "
-        "absolute-dominant/capped, then outdoor feasibility); "
-        "ranking uses fixed-duration dose"
+        "absolute-dominant composite (70% worldwide strength + local rarity, "
+        "air clarity, confidence; capped at strength +20 so context cannot "
+        "lift weak radiation); interpretation only - ranking uses "
+        "fixed-duration dose"
     ),
     "tandose": (
         "model-defined action-spectrum-weighted cumulative "
