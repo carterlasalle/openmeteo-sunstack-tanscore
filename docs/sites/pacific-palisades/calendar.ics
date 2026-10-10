@@ -6,46 +6,46 @@ METHOD:PUBLISH
 X-WR-CALNAME:SunStack best sun windows
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-09@pacific-palisades
-DTSTAMP:20261010T013343Z
+DTSTAMP:20261010T043211Z
 SEQUENCE:0
 DTSTART:20261009T193000Z
 DTEND:20261009T200000Z
 SUMMARY:Best sun 12:30 PM-1:00 PM - 1489.7 J/m² pigment-weighted dose
 DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 1489.7 J/m² pigment-weighted
   dose. Absolute 46/100 (worldwide scale) · Local 92/100 (percentile within
-  this location). Peak UV 5.503 at 12:00 PM. Day total 15845.3 J/m² pigment
+  this location). Peak UV 5.503 at 12:00 PM. Day total 15836.8 J/m² pigment
  -weighted (partial). SED 33.96 (standard erythema dose) (partial). FAIR. T
  imes refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-10@pacific-palisades
-DTSTAMP:20261010T013343Z
+DTSTAMP:20261010T043211Z
 SEQUENCE:0
-DTSTART:20261010T203000Z
-DTEND:20261010T210000Z
-SUMMARY:Best sun 1:30 PM-2:00 PM - 929.8 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 1:30 PM-2:00 PM - 929.8 J/m² pigment-weighted d
- ose. Absolute 29/100 (worldwide scale) · Local 65/100 (percentile within t
- his location). Peak UV 4.564 at 1:00 PM. Day total 7607.4 J/m² pigment-wei
- ghted (partial). SED 27.103 (standard erythema dose) (partial). POOR. Time
- s refresh with each SunStack run.
+DTSTART:20261010T193000Z
+DTEND:20261010T200000Z
+SUMMARY:Best sun 12:30 PM-1:00 PM - 1315.9 J/m² pigment-weighted dose
+DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 1315.9 J/m² pigment-weighted
+  dose. Absolute 41/100 (worldwide scale) · Local 85/100 (percentile within
+  this location). Peak UV 4.564 at 1:00 PM. Day total 12096.8 J/m² pigment-
+ weighted (partial). SED 27.103 (standard erythema dose) (partial). FAIR. T
+ imes refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-11@pacific-palisades
-DTSTAMP:20261010T013343Z
+DTSTAMP:20261010T043211Z
 SEQUENCE:0
-DTSTART:20261011T203000Z
-DTEND:20261011T210000Z
-SUMMARY:Best sun 1:30 PM-2:00 PM - 1248.4 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 1:30 PM-2:00 PM - 1248.4 J/m² pigment-weighted 
- dose. Absolute 39/100 (worldwide scale) · Local 82/100 (percentile within 
- this location). Peak UV 5.121 at 2:00 PM. Day total 9140.5 J/m² pigment-we
- ighted (partial). SED 22.645 (standard erythema dose) (partial). POOR. Tim
- es refresh with each SunStack run.
+DTSTART:20261011T183000Z
+DTEND:20261011T190000Z
+SUMMARY:Best sun 11:30 AM-12:00 PM - 992.8 J/m² pigment-weighted dose
+DESCRIPTION:Best usable sun 11:30 AM-12:00 PM - 992.8 J/m² pigment-weighted
+  dose. Absolute 31/100 (worldwide scale) · Local 69/100 (percentile within
+  this location). Peak UV 5.121 at 2:00 PM. Day total 8730.7 J/m² pigment-w
+ eighted (partial). SED 22.645 (standard erythema dose) (partial). POOR. Ti
+ mes refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-12@pacific-palisades
-DTSTAMP:20261010T013343Z
+DTSTAMP:20261010T043211Z
 SEQUENCE:0
 DTSTART:20261012T203000Z
 DTEND:20261012T210000Z
@@ -58,7 +58,7 @@ DESCRIPTION:Best usable sun 1:30 PM-2:00 PM - 1083.5 J/m² pigment-weighted
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-13@pacific-palisades
-DTSTAMP:20261010T013343Z
+DTSTAMP:20261010T043211Z
 SEQUENCE:0
 DTSTART:20261013T193000Z
 DTEND:20261013T200000Z
@@ -71,7 +71,7 @@ DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 1380.8 J/m² pigment-weighted
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-14@pacific-palisades
-DTSTAMP:20261010T013343Z
+DTSTAMP:20261010T043211Z
 SEQUENCE:0
 DTSTART:20261014T190000Z
 DTEND:20261014T193000Z
@@ -84,7 +84,7 @@ DESCRIPTION:Best usable sun 12:00 PM-12:30 PM - 1347.8 J/m² pigment-weighte
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-15@pacific-palisades
-DTSTAMP:20261010T013343Z
+DTSTAMP:20261010T043211Z
 SEQUENCE:0
 DTSTART:20261015T193000Z
 DTEND:20261015T200000Z
@@ -97,7 +97,7 @@ DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 1357.9 J/m² pigment-weighted
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-16@pacific-palisades
-DTSTAMP:20261010T013343Z
+DTSTAMP:20261010T043211Z
 SEQUENCE:0
 DTSTART:20261016T193000Z
 DTEND:20261016T200000Z
@@ -110,7 +110,7 @@ DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 1382.8 J/m² pigment-weighted
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-17@pacific-palisades
-DTSTAMP:20261010T013343Z
+DTSTAMP:20261010T043211Z
 SEQUENCE:0
 DTSTART:20261017T193000Z
 DTEND:20261017T200000Z
@@ -123,7 +123,7 @@ DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 1376.9 J/m² pigment-weighted
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-18@pacific-palisades
-DTSTAMP:20261010T013343Z
+DTSTAMP:20261010T043211Z
 SEQUENCE:0
 DTSTART:20261018T193000Z
 DTEND:20261018T200000Z
@@ -136,7 +136,7 @@ DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 1356.4 J/m² pigment-weighted
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-19@pacific-palisades
-DTSTAMP:20261010T013343Z
+DTSTAMP:20261010T043211Z
 SEQUENCE:0
 DTSTART:20261019T193000Z
 DTEND:20261019T200000Z
@@ -149,7 +149,7 @@ DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 1316.4 J/m² pigment-weighted
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-20@pacific-palisades
-DTSTAMP:20261010T013343Z
+DTSTAMP:20261010T043211Z
 SEQUENCE:0
 DTSTART:20261020T193000Z
 DTEND:20261020T200000Z
@@ -162,7 +162,7 @@ DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 1302.8 J/m² pigment-weighted
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-21@pacific-palisades
-DTSTAMP:20261010T013343Z
+DTSTAMP:20261010T043211Z
 SEQUENCE:0
 DTSTART:20261021T193000Z
 DTEND:20261021T200000Z
@@ -175,7 +175,7 @@ DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 1303 J/m² pigment-weighted d
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-10-22@pacific-palisades
-DTSTAMP:20261010T013343Z
+DTSTAMP:20261010T043211Z
 SEQUENCE:0
 DTSTART:20261022T193000Z
 DTEND:20261022T200000Z
