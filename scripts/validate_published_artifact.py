@@ -32,6 +32,7 @@ FATAL_CHECKS = [
     "at_best_from_window",
     "feasibility_missingness_honest",
     "confidence_contract",
+    "half_hour_1h_equals_its_halves",
     "uvi_headline_matches_its_source",
     "source_counts_bounded",
     "surface_local_mode_invariant",
@@ -304,6 +305,30 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
 
     day_rows = _rows_of(daily)
     half_rows = _rows_of(half)
+    # A trailing 1-hour dose must equal its own two trailing half hours. Purely
+    # intra-table, so no convention question: an off-by-one leg in the trailing
+    # integration breaks this. Checked because the same column name means
+    # something different in the hourly table (undeclared support), which is how
+    # two disagreeing "1 hour" numbers ended up published side by side.
+    half_index = {
+        key: row for row in half_rows if (key := _stamp_key(row.get("time"))) is not None
+    }
+    for stamp, row in half_index.items():
+        hour = row.get("tan_dose_1h_j_m2")
+        if not _is_finite(hour):
+            continue
+        previous = half_index.get(_stamp_key(stamp, -30) or "")
+        if previous is None:
+            continue
+        first, second = previous.get("tan_dose_30m_j_m2"), row.get("tan_dose_30m_j_m2")
+        if not (_is_finite(first) and _is_finite(second)):
+            continue
+        if abs((_num(first) + _num(second)) - _num(hour)) > max(0.02, 0.002 * _num(hour)):
+            failures["half_hour_1h_equals_its_halves"].append(
+                f"{stamp}: tan_dose_1h {hour} != {first} + {second} "
+                f"({_num(first) + _num(second):.3f})"
+            )
+
     deprecated_names: set[str] = set()
     declared_deprecated = summary.get("deprecated_fields")
     if isinstance(declared_deprecated, list):

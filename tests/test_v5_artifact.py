@@ -190,9 +190,11 @@ def test_validator_passes_clean_fixture(tmp_path: Path) -> None:
     assert out["passed"] is True, out["failures"]
     checks = out["checks"]
     assert isinstance(checks, list)
-    # The gate list is a contract: adding a fatal check is a deliberate act,
-    # silently dropping one is the regression this pin exists for.
-    assert len(cast(list[object], checks)) == 24, checks
+    # The gate list is a contract: silently dropping a declared check is the
+    # regression this pin exists for, so compare against the module's own list
+    # rather than a magic number (which would also fail on every addition).
+    assert set(cast(list[str], checks)) == set(module.FATAL_CHECKS), checks
+    assert len(cast(list[object], checks)) == len(module.FATAL_CHECKS), checks
     assert "time_utc_is_true_utc" in cast(list[str], checks)
     assert "min_temp_threshold_finite" in cast(list[str], checks)
     assert "uvi_headline_matches_its_source" in cast(list[str], checks)
