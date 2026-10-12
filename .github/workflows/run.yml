@@ -163,7 +163,13 @@ jobs:
     # just produced from live data).
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Publishes every site in sequence, each with a full live pipeline (feeds,
+    # NASA POWER history, CAMS, calibration). Measured on 2026-10-12: the step
+    # was still running at the 60-minute mark and the job was cancelled, so the
+    # artifact never landed. 180 leaves room for two sites plus a slow feed day.
+    # The upgrade path, if this wall gets tight, is to share one history fetch
+    # across sites instead of repeating it per site - not to publish less often.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v7.0.1
 
