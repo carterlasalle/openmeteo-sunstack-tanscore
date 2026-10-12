@@ -1034,7 +1034,13 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path: Path):
         "display_name", "proxy_reflectance", "reflectance_low",
         "reflectance_high", "spectral_quality", "optical_model",
     }
-    assert "surfaces.json" in html and "reflected context" in html
+    assert "surfaces.json" in html and "reflectance proxy" in html
+    # The static page must own a client-side plane calculation, not print a
+    # broadband proxy relabelled as reflected UV (audit copy row "Surface
+    # reflection"; physics audit P0 "total shortwave treated as UVA/UVB").
+    assert "function planeFactor(" in html and "function planeForRow(" in html
+    assert "reflected UVA" in html and "reflected UVB" in html
+    assert "reflected context" not in html
     ics = (tmp_path / "site" / "calendar.ics").read_text()
     assert ics.count("BEGIN:VEVENT") == 1
     assert "UID:sunstack-best-south-bend-2026-09-15@south-bend" in ics
@@ -2354,6 +2360,148 @@ def test_rendered_page_javascript_parses(tmp_path: Path) -> None:
         _ = path.write_text(src, encoding="utf-8")
         check = subprocess.run([node, "--check", str(path)], capture_output=True, text=True, check=False)
         assert check.returncode == 0, f"inline script {n} does not parse:\n{check.stderr[-800:]}"
+
+
+def test_static_page_plane_math_matches_the_physics_module(tmp_path: Path) -> None:
+    # The static export recomputes the skin plane in the browser (a GitHub Pages
+    # artifact has no server). That second implementation is only honest if it
+    # agrees with the module the live API uses - factor, reflected UVA/UVB and
+    # the water Fresnel albedo. Both the raw material proxy (which weights the
+    # reflected bands) and the resolved albedo (which weights the plane factor)
+    # are pinned here, because swapping one for the other keeps the page
+    # plausible while doubling or halving water's reflected UV.
+    import json as _json
+    import shutil
+    import subprocess
+
+    import pandas as pd
+
+    from sunstack.output import render_static_html, surface_payload
+    from sunstack.spectral import apply_skin_plane
+    from sunstack.surface import water_fresnel_reflectance
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not available to run the page script")
+
+    html = render_static_html("20260923_000000")
+
+    def _extract(name: str) -> str:
+        start = html.index(f"function {name}(")
+        depth = 0
+        for i in range(html.index("{", start), len(html)):
+            if html[i] == "{":
+                depth += 1
+            elif html[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return html[start : i + 1]
+        raise AssertionError(f"{name} has no balanced body in the page")
+
+    js = "\n".join(
+        _extract(n) for n in ("fresnel", "planeFactor", "surfInfo", "planeForRow")
+    )
+
+    row = {
+        "sza": 49.7589342422,
+        "solar_elevation_deg": 40.2410657578,
+        "solar_azimuth_deg": 179.55,
+        "direct_radiation": 518.5,
+        "diffuse_radiation": 121.0,
+        "direct_normal_irradiance": 800.0,
+        "predicted_uva_wm2": 36.8947451012,
+        "predicted_uvb_wm2": 0.8987062568,
+        "melanogenic_effective_irradiance_wm2": 0.6077,
+    }
+    surfaces = surface_payload()
+    assert {"dry_beach_sand", "fresh_snow", "open_water", "unknown"} <= set(surfaces), (
+        "the static surface payload must ship the slugs the browser selects")
+
+    cases: list[tuple[str, float]] = [
+        ("unknown", 0.0),
+        ("dry_beach_sand", 45.0),
+        ("fresh_snow", 60.0),
+        ("open_water", 45.0),
+        ("open_water", 20.0),
+        ("grass_summer", 30.0),
+    ]
+
+    harness = tmp_path / "harness.js"
+    _ = harness.write_text(
+        """const fs=require('fs');
+const cfg=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+eval(fs.readFileSync(process.argv[3],'utf8'));
+SURFACES=cfg.surfaces;
+const els={surface:{value:''},skintilt:{value:'0'},skinaz:{value:'180'}};
+document={getElementById:function(id){return els[id]||null;}};
+const out=cfg.cases.map(function(c){
+  els.surface.value=c.surface;
+  els.skintilt.value=String(c.tilt);
+  const p=planeForRow(cfg.row);
+  const info=cfg.surfaces[c.surface]||{};
+  return {factor:p.factor,refl_uva:p.refl_uva,refl_uvb:p.refl_uvb,name:p.name,
+          fresnel:fresnel(cfg.row.sza*Math.PI/180,+(info.proxy_reflectance||0))};
+});
+process.stdout.write(JSON.stringify(out));
+""",
+        encoding="utf-8",
+    )
+    js_path = tmp_path / "plane.js"
+    _ = js_path.write_text(js, encoding="utf-8")
+    cfg_path = tmp_path / "cfg.json"
+    _ = cfg_path.write_text(
+        _json.dumps({
+            "row": row,
+            "surfaces": surfaces,
+            "cases": [{"surface": s, "tilt": t} for s, t in cases],
+        }),
+        encoding="utf-8",
+    )
+
+    run = subprocess.run(
+        [node, str(harness), str(cfg_path), str(js_path)],
+        capture_output=True, text=True, check=False,
+    )
+    assert run.returncode == 0, run.stderr[-800:]
+    got = cast("list[dict[str, float]]", _json.loads(run.stdout))
+    assert len(got) == len(cases)
+
+    frame = pd.DataFrame([row])
+    for (surf, tilt), g in zip(cases, got, strict=True):
+        want = apply_skin_plane(
+            frame.copy(), tilt_deg=tilt, azimuth_deg=180.0,
+            surface_slug=surf,
+        )
+        label = f"{surf}@{tilt}"
+        got_factor = float(cast("float", want["skin_plane_factor"].iloc[0]))
+        assert abs(float(g["factor"]) - got_factor) < 2e-4, (
+            f"{label}: client factor {g['factor']} != module {got_factor}")
+        for js_key, col in (
+            ("refl_uva", "skin_plane_ground_reflected_uva_wm2"),
+            ("refl_uvb", "skin_plane_ground_reflected_uvb_wm2"),
+        ):
+            want_v = float(cast("float", want[col].iloc[0]))
+            assert abs(float(g[js_key]) - want_v) < 1e-4, (
+                f"{label}: client {js_key} {g[js_key]} != module {want_v}")
+
+    # The Fresnel path is a separate implementation; check it directly too.
+    for sza in (10.0, 40.0, 49.7589342422, 80.0):
+        c = dict(row)
+        c["sza"] = sza
+        _ = cfg_path.write_text(
+            _json.dumps({"row": c, "surfaces": surfaces,
+                         "cases": [{"surface": "open_water", "tilt": 45.0}]}),
+            encoding="utf-8",
+        )
+        run = subprocess.run(
+            [node, str(harness), str(cfg_path), str(js_path)],
+            capture_output=True, text=True, check=False,
+        )
+        assert run.returncode == 0, run.stderr[-800:]
+        one = cast("list[dict[str, float]]", _json.loads(run.stdout))[0]
+        want_fr = float(water_fresnel_reflectance(sza * 3.141592653589793 / 180, 0.033))
+        assert abs(float(one["fresnel"]) - want_fr) < 1e-9, (
+            f"client fresnel {one['fresnel']} != module {want_fr} at sza {sza}")
 
 
 def test_percentile_helpers_reject_non_series_loudly():

@@ -15,7 +15,7 @@ def swap_once(text: str, old: str, new: str) -> str:
     return text.replace(old, new)
 
 
-def _surface_payload() -> dict[str, dict[str, object]]:
+def surface_payload() -> dict[str, dict[str, object]]:
     from .surface import PRESETS
 
     fields = (
@@ -89,22 +89,25 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
             "try{const r=await fetch('./surfaces.json');SURFACES=await r.json();}catch(e){SURFACES=null;}"
             "if(SURFACES)window.__staticSurface=true;"
             "const skin=document.getElementById('skin');if(skin)skin.addEventListener('change',showSkin);"
-            "const surfaceSel=document.getElementById('surface');if(surfaceSel)surfaceSel.title=(surfaceSel.title||'')+' Static page: local client-side reflection only; broad/homogeneous extent needs backend RT.';"
-            "for(const id of ['surface','skintilt','skinaz']){const el=document.getElementById(id);if(el)el.addEventListener('change',showSurface);}"
+            "const surfaceSel=document.getElementById('surface');if(surfaceSel)surfaceSel.title=(surfaceSel.title||'')+' Static page: reflectance is computed in this browser, so only local surfaces are supported.';"
+            "for(const id of ['surface','skintilt','skinaz']){const el=document.getElementById(id);if(el)el.addEventListener('change',()=>{if(DATA&&DATA.daily)render();else showSurface();});}"
             "showSkin();showSurface();}"
             "function showSkin(){const el=document.getElementById('skin'),box=document.getElementById('skinnote');if(!el||!box||!SKIN)return;"
             "const info=SKIN[el.value||''];if(!info){box.style.display='none';return;}"
             "box.textContent=info.fitzpatrick_label+': '+info.skin_response_note;box.style.display='';}"
             "function surfaceBox(){const pv=document.getElementById('provenance');if(!pv)return null;let s=document.getElementById('surfacecontext');"
             "if(!s){s=document.createElement('span');s.id='surfacecontext';pv.insertBefore(document.createTextNode(' · '),pv.firstChild);pv.insertBefore(s,pv.firstChild);}return s;}"
+            "function surfInfo(){const el=document.getElementById('surface');if(!el||!SURFACES)return null;const info=SURFACES[el.value||''];return info||null;}"
+            "function fresnel(incRad,base){const n=1.34;const ci=Math.max(0,Math.min(1,Math.cos(Math.max(0,Math.min(Math.PI/2,incRad)))));const st=Math.min(1,Math.sqrt(Math.max(0,1-ci*ci))/n),ct=Math.sqrt(Math.max(0,1-st*st));const rs=Math.pow((ci-n*ct)/(ci+n*ct+1e-12),2),rp=Math.pow((n*ci-ct)/(n*ci+ct+1e-12),2);return Math.min(1,0.5*(rs+rp)+base);}"
+            "function planeFactor(row,tiltDeg,azDeg,alb){const t=tiltDeg*Math.PI/180;if(Math.abs(tiltDeg)<1e-9)return 1.0;const sza=(+row.sza!=null&&Number.isFinite(+row.sza))?+row.sza:90-(+row.solar_elevation_deg||0);const sz=sza*Math.PI/180,sa=((+row.solar_azimuth_deg||180)-azDeg)*Math.PI/180;const ci=Math.max(0,Math.cos(sz)*Math.cos(t)+Math.sin(sz)*Math.sin(t)*Math.cos(sa)),cs=Math.max(0,Math.cos(sz));const dRaw=+row.direct_radiation,dh=Math.max(0,Number.isFinite(dRaw)?dRaw:(Number.isFinite(+row.direct_normal_irradiance)?+row.direct_normal_irradiance*0.5:0)),fh=Math.max(0,+row.diffuse_radiation||0),gh=dh+fh;if(gh<=1e-9||cs<=1e-6)return 1.0;const dni=dh/cs,dp=dni*ci,sv=0.5*(1+Math.cos(t)),gv=0.5*(1-Math.cos(t));return (dp+fh*sv+gh*Math.max(0,alb)*gv)/gh;}"
+            "function planeForRow(row){const el=document.getElementById('surface'),info=surfInfo();const rawTilt=+((document.getElementById('skintilt')||{}).value||0),tilt=Number.isFinite(rawTilt)?Math.max(0,Math.min(180,rawTilt)):0,az=+((document.getElementById('skinaz')||{}).value||'180')||180;const sza=(+row.sza!=null&&Number.isFinite(+row.sza))?+row.sza:90-(+row.solar_elevation_deg||0);let alb=0;if(info&&info.optical_model==='water_fresnel'){alb=fresnel(sza*Math.PI/180,+(info.proxy_reflectance||0.033));}else if(info&&info.optical_model!=='none'){alb=+(info.proxy_reflectance||0);}const f=planeFactor(row,tilt,az,alb);const gv=0.5*(1-Math.cos(tilt*Math.PI/180));const uva=Math.max(0,+row.predicted_uva_wm2||0),uvb=Math.max(0,+row.predicted_uvb_wm2||0);const ru=uva*(info?+info.proxy_reflectance||0:0)*gv,rb=uvb*(info?+info.proxy_reflectance||0:0)*gv;return {factor:f,tilt:tilt,az:az,refl_uva:ru,refl_uvb:rb,name:(info&&info.display_name)||(el&&el.value)||'Unknown surface',proxy:info?+info.proxy_reflectance:NaN,model:info?info.optical_model:'none'};}"
+            "function activeRow(){const dl=DATA.daily||[],d=dl.find(x=>x.date===SEL)||bestDay();if(!d)return {};const st=d.best_usable_30m_start||d.strongest_30m_start;const hv=rowsFor(DATA.half_hour,d.date);return (st&&hv.find(x=>String(x.time).slice(0,16)===String(st).slice(0,16)))||hv[0]||rowsFor(DATA.hourly,d.date)[0]||{};}"
             "function showSurface(){const box=surfaceBox(),el=document.getElementById('surface');if(!box||!el||!SURFACES||!DATA)return;"
-            "const info=SURFACES[el.value||''];if(!info)return;const row=rowsFor(DATA.hourly,SEL)[0]||((DATA.hourly||[])[0]||{}),name=info.display_name||el.value,s=DATA.summary||{};"
+            "const info=surfInfo();if(!info)return;const row=activeRow(),name=info.display_name||el.value,s=DATA.summary||{};"
             "const tail=' · spectral '+esc(row.spectral_backend||s.spectral_backend||'—')+' (tier '+esc(row.spectral_tier||s.photobiology_action_spectrum_tier||'—')+') · fusion '+esc(s.fusion_version||'—')+' · confidence '+esc(s.confidence_version||'—')+' · rank '+esc(s.window_rank_version||'—');"
             "if(row.surface_extent_mode==='broad'){box.textContent='Surface '+name+' · broad extent requires backend RT'+tail;return;}"
-            "const rawTilt=+((document.getElementById('skintilt')||{}).value||0),tilt=Number.isFinite(rawTilt)?Math.max(0,Math.min(180,rawTilt)):0,azimuth=(document.getElementById('skinaz')||{}).value||'180';"
-            "let ghi=+row.shortwave_radiation;if(!Number.isFinite(ghi)){const direct=+row.direct_radiation,diffuse=+row.diffuse_radiation;ghi=(Number.isFinite(direct)?direct:0)+(Number.isFinite(diffuse)?diffuse:0);}"
-            "const reflected=ghi*(+info.proxy_reflectance)*((1-Math.cos(tilt*Math.PI/180))/2);"
-            "box.textContent='Surface '+name+' (client-side) · proxy '+((+info.proxy_reflectance)*100).toFixed(2)+'% · reflected context '+f2(reflected)+' W/m² broadband proxy · tilt '+tilt+'° azimuth '+azimuth+'°'+tail;}"
+            "const p=planeForRow(row);"
+            "box.textContent='Surface '+p.name+' (computed in your browser) · reflectance proxy '+((+p.proxy)*100).toFixed(2)+'% · reflected UVA '+f2(p.refl_uva)+' W/m² · reflected UVB '+f2(p.refl_uvb)+' W/m² · tilt '+p.tilt+'° azimuth '+p.az+'° from north · plane gain '+(p.factor>1?'+':'')+Math.round((p.factor-1)*100)+'%'+(p.tilt<1e-9?' · flat, upward-facing plane has no ground view, so material choice has no effect at tilt 0':'')+tail;}"
             "async function loadData(){"
         ),
     )
@@ -168,7 +171,7 @@ def reskin_static_dir(
         encoding="utf-8",
     )
     _ = (page / "surfaces.json").write_text(
-        json.dumps(_surface_payload()), encoding="utf-8"
+        json.dumps(surface_payload()), encoding="utf-8"
     )
     return {"page": str(page), "run": run_tag, "build_sha": payload["build_sha"]}
 
@@ -245,7 +248,7 @@ def export_static_site(
         encoding="utf-8",
     )
     _ = (out_dir / "surfaces.json").write_text(
-        json.dumps(_surface_payload()), encoding="utf-8"
+        json.dumps(surface_payload()), encoding="utf-8"
     )
     _ = (out_dir / "calendar.ics").write_text(
         build_calendar_ics(daily, hourly,
