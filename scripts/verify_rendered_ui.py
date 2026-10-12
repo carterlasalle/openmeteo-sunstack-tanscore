@@ -660,17 +660,23 @@ def compare_baseline(shots: Path, baseline: Path) -> None:
 
       mkdir -p <baseline> && cp <shots>/*.png <baseline>/
 
-    Pillow is imported here rather than declared: the rest of the script works
-    without it, and a missing Pillow is a notice, not a crash.
+    Pillow is optional only while no baseline exists: once the baseline is
+    seeded, a missing Pillow is a failure, because "skipped" would report success
+    while checking nothing.
     """
+    if not baseline.is_dir() or not any(baseline.glob("*.png")):
+        record("pixel baseline compared", True, f"no baseline seeded yet at {baseline}")
+        return
     try:
         image_module = importlib.import_module("PIL.Image")
         image_chops = importlib.import_module("PIL.ImageChops")
     except ImportError:
-        record("pixel baseline compared", True, "skipped: Pillow not installed")
-        return
-    if not baseline.is_dir() or not any(baseline.glob("*.png")):
-        record("pixel baseline compared", True, f"no baseline seeded yet at {baseline}")
+        record(
+            "pixel baseline compared",
+            False,
+            "baseline is seeded but Pillow is not installed - run this step with "
+            "`uv run --with pillow` rather than skipping the comparison",
+        )
         return
     for shot in sorted(shots.glob("*.png")):
         want = baseline / shot.name
