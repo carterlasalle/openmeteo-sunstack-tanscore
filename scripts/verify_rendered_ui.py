@@ -436,6 +436,45 @@ def _checks(
         cal_title,
     )
 
+    # 6b. the CSV export must carry what the page shows: same day, same dose
+    # column, same values (audit Phase 2 item 5: calendar/export consistency).
+    csv_text = ""
+    try:
+        with page.expect_download() as download_info:
+            page.click('button[onclick="exportDayCsv()"]')
+        csv_text = Path(str(download_info.value.path())).read_text(encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001 - reported, not swallowed
+        record("day CSV export downloads", False, str(exc)[:120])
+    if csv_text:
+        lines = csv_text.splitlines()
+        columns = lines[0].split(",")
+        record(
+            "day CSV header names the dose column the table shows",
+            "tan_dose_30m_j_m2" in columns and "time" in columns,
+            columns[:8],
+        )
+        exported = {}
+        for line in lines[1:]:
+            parts = line.split(",")
+            exported[parts[0]] = parts[columns.index("tan_dose_30m_j_m2")] if len(parts) > 1 else ""
+        payload_rows = {
+            str(r["time"])[:16]: r.get("tan_dose_30m_j_m2") for r in payload["half_hour"]
+        }
+        checked = 0
+        mismatched = []
+        for stamp, value in exported.items():
+            want = payload_rows.get(stamp[:16])
+            if want is None or value == "":
+                continue
+            checked += 1
+            if abs(float(value) - float(want)) > 1e-6:
+                mismatched.append((stamp, value, want))
+        record(
+            "day CSV dose values equal the payload they came from",
+            checked > 0 and not mismatched,
+            f"{checked} rows checked; mismatches {mismatched[:2]}",
+        )
+
     # 7. calendar artifact
     href = page.evaluate("() => (document.querySelector('a[href*=\"calendar\"]')||{}).href || ''")
     ics = (site_dir / "calendar.ics").read_text(encoding="utf-8")
