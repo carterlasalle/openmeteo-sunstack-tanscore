@@ -744,7 +744,19 @@ def verify(site_dir: Path, shots_dir: Path) -> None:
         httpd.shutdown()
 
 
-def compare_baseline(shots: Path, baseline: Path) -> None:
+def fixture_identity(site_dir: Path) -> str:
+    """Hash what the screenshots are OF (page + payload), not the pixels."""
+    import hashlib
+
+    digest = hashlib.sha256()
+    for name in ("index.html", "data.json"):
+        target = site_dir / name
+        if target.exists():
+            digest.update(target.read_bytes())
+    return digest.hexdigest()
+
+
+def compare_baseline(shots: Path, baseline: Path, site_dir: Path) -> None:
     """Compare this run's screenshots with a stored baseline, if one exists.
 
     A pixel baseline is only meaningful when it was produced on the SAME renderer
@@ -760,6 +772,19 @@ def compare_baseline(shots: Path, baseline: Path) -> None:
     """
     if not baseline.is_dir() or not any(baseline.glob("*.png")):
         record("pixel baseline compared", True, f"no baseline seeded yet at {baseline}")
+        return
+    # A baseline is only evidence about the fixture it was captured from. Without
+    # this, changing the page turns every screenshot into a "regression" and the
+    # gate can never tell that apart from a real one.
+    marker = baseline / "fixture.sha256"
+    expected = fixture_identity(site_dir)
+    if not marker.is_file() or marker.read_text(encoding="utf-8").strip() != expected:
+        record(
+            "pixel baseline compared",
+            False,
+            "baseline belongs to a different fixture (the page or payload changed); "
+            "re-seed it from this run's shots and commit the new PNGs",
+        )
         return
     try:
         image_module = importlib.import_module("PIL.Image")
@@ -841,10 +866,13 @@ def main(argv: list[str] | None = None) -> int:
     shots = Path(ns.shots_dir) if ns.shots_dir else Path(ns.out).parent / "rendered_ui"
     shots.mkdir(parents=True, exist_ok=True)
     verify(Path(ns.site_dir), shots)
+    (shots / "fixture.sha256").write_text(
+        fixture_identity(Path(ns.site_dir)), encoding="utf-8"
+    )
     global _viewport_label
     _viewport_label = ""  # the baseline covers every viewport's screenshots
     if ns.baseline:
-        compare_baseline(shots, Path(ns.baseline))
+        compare_baseline(shots, Path(ns.baseline), Path(ns.site_dir))
     else:
         record("pixel baseline compared", True, "no --baseline given")
     return write_report(Path(ns.out), Path(ns.site_dir), shots)
