@@ -544,26 +544,32 @@ def _checks(
 
     fusion_rows = [(r, pr) for r, pr in pairs if isinstance(pr.get("uvi_fusion"), (int, float))]
     if fusion_rows:
-        bad = [
-            (r["time"], r["cells"].get("Fusion"), pr["uvi_fusion"])
-            for r, pr in fusion_rows
-            if _shown(r["cells"].get("Fusion", "")) is None
-            or abs(_shown(r["cells"].get("Fusion", "")) - float(pr["uvi_fusion"])) > 0.051
-        ]
+        mismatched: list[tuple[str, object, object]] = []
+        for row, payload_row in fusion_rows:
+            want_fusion = payload_row.get("uvi_fusion")
+            if not isinstance(want_fusion, (int, float)):
+                continue
+            shown = _shown(row["cells"].get("Fusion", ""))
+            if shown is None or abs(shown - float(want_fusion)) > 0.051:
+                mismatched.append((row["time"], row["cells"].get("Fusion"), want_fusion))
         record(
             "Fusion column shows the fused UVI the payload publishes",
-            not bad,
-            f"{len(fusion_rows)} rows checked; mismatches {bad[:2]}",
+            not mismatched,
+            f"{len(fusion_rows)} rows checked; mismatches {mismatched[:2]}",
         )
 
-    spread_rows = [(r, pr) for r, pr in pairs if isinstance(pr.get("uvi_source_spread"), (int, float))]
+    spread_rows = [
+        (r, pr) for r, pr in pairs if isinstance(pr.get("uvi_source_spread"), (int, float))
+    ]
     if spread_rows:
-        bad_spread = [
-            (r["time"], r["cells"].get("ΔUV"), pr["uvi_source_spread"])
-            for r, pr in spread_rows
-            if _shown(r["cells"].get("ΔUV", "")) is None
-            or abs(_shown(r["cells"].get("ΔUV", "")) - float(pr["uvi_source_spread"])) > 0.051
-        ]
+        bad_spread: list[tuple[str, object, object]] = []
+        for row, payload_row in spread_rows:
+            want_spread = payload_row.get("uvi_source_spread")
+            if not isinstance(want_spread, (int, float)):
+                continue
+            shown = _shown(row["cells"].get("ΔUV", ""))
+            if shown is None or abs(shown - float(want_spread)) > 0.051:
+                bad_spread.append((row["time"], row["cells"].get("ΔUV"), want_spread))
         record(
             "ΔUV column shows the source spread the payload publishes",
             not bad_spread,
@@ -572,25 +578,29 @@ def _checks(
 
         # the UV∘ cell appends the min-max envelope exactly when the payload row
         # has two visible sources and a spread at or above the disagree flag
-        want_range = [
-            (r, pr) for r, pr in spread_rows
-            if float(pr["uvi_source_spread"]) >= 1.0
-            and sum(1 for k in ("uv_index", "uvi_cams", "uvi_epa")
-                    if isinstance(pr.get(k), (int, float))) >= 2
-        ]
-        misfiled = [
-            (r["time"], "range shown without the payload spread", r["cells"].get("UV∘"))
-            for r, pr in spread_rows if r not in [x[0] for x in want_range]
-            and ("–" in r["cells"].get("UV∘", "") or "\u2013" in r["cells"].get("UV∘", ""))
-        ] + [
-            (r["time"], "envelope missing where the payload has one", r["cells"].get("UV∘"))
-            for r, pr in want_range
-            if "–" not in r["cells"].get("UV∘", "")
-        ]
+        def _wants_envelope(payload_row: dict[str, object]) -> bool:
+            spread = payload_row.get("uvi_source_spread")
+            if not isinstance(spread, (int, float)) or float(spread) < 1.0:
+                return False
+            visible = sum(
+                1 for key in ("uv_index", "uvi_cams", "uvi_epa")
+                if isinstance(payload_row.get(key), (int, float))
+            )
+            return visible >= 2
+
+        misfiled: list[tuple[str, str, object]] = []
+        for row, payload_row in spread_rows:
+            cell = row["cells"].get("UV∘", "")
+            if _wants_envelope(payload_row):
+                if "\u2013" not in cell:
+                    misfiled.append((row["time"], "envelope missing where the payload has one", cell))
+            elif "\u2013" in cell:
+                misfiled.append((row["time"], "envelope shown without the payload spread", cell))
         record(
             "UV column shows the source envelope exactly where the payload has one",
             not misfiled,
-            f"{len(want_range)} rows should show an envelope; {misfiled[:2]}",
+            f"{sum(1 for _, pr in spread_rows if _wants_envelope(pr))} rows should show an envelope; "
+            f"{misfiled[:2]}",
         )
 
     # 7. calendar artifact
