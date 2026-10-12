@@ -60,7 +60,7 @@ OpenApiCase = schemathesis.Case[
 
 # `positive_data_acceptance` is exported as `CheckClass | CheckFunction`; it is a
 # function, so one cast names that (a library typing gap, not a suppression).
-_positive_acceptance_check = cast("CheckFunction", positive_data_acceptance)
+_positive_acceptance_check = cast(CheckFunction, positive_data_acceptance)
 
 # Rejections a schema-driven client cannot avoid, each a rule about the
 # *relationship* between values that the OpenAPI format has no way to state -
@@ -159,10 +159,10 @@ def _positive_acceptance(
     # contract under test.
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.filter_too_much],
 )
-@given(cast("SearchStrategy[OpenApiCase]", _schema.as_strategy()))
+@given(cast(SearchStrategy[OpenApiCase], _schema.as_strategy()))
 def test_api_contract(case: OpenApiCase) -> None:
     """Every generated case must satisfy the schema it was generated from."""
     _ = case.call_and_validate(
         excluded_checks=[_positive_acceptance_check],
-        additional_checks=[cast("CheckFunction", _positive_acceptance)],
+        additional_checks=[cast(CheckFunction, _positive_acceptance)],
     )
