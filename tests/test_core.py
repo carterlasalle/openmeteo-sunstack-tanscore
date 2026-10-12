@@ -452,6 +452,8 @@ def test_30min_keeps_object_typed_radiation_split():
         "solar_azimuth_deg": [130.0, 150.0, 180.0, 210.0, 230.0, 250.0],
         "albedo": [0.2] * 6,
         "uv_index": [5.0, 7.0, 8.0, 7.5, 5.5, 3.0],
+        "predicted_uva_wm2": [25.0, 35.0, 42.0, 40.0, 30.0, 18.0],
+        "predicted_uvb_wm2": [0.2, 0.3, 0.35, 0.33, 0.25, 0.15],
         "tan_score_absolute_0_100": [40.0, 60.0, 70.0, 65.0, 45.0, 25.0],
     })
     # Native HRRR covers only the 10:00 and 12:00 stamps (minutes 0/30).

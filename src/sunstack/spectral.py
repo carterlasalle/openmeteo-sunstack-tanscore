@@ -269,13 +269,26 @@ def apply_skin_plane(
     saz = _num(out, "solar_azimuth_deg").fillna(180.0)
     direct = _num(out, "direct_radiation").fillna(_num(out, "direct_normal_irradiance").fillna(0.0) * 0.5)
     diffuse = _num(out, "diffuse_radiation").fillna(0.0)
-    alb = _num(out, "albedo").fillna(0.2)
+    from .surface import water_fresnel_reflectance as _fresnel
+    # Local ground bounce uses the SELECTED material, not regional albedo:
+    # the plane factor must move when the material changes. Water uses its
+    # Fresnel model (geometry-dependent specular); unknown/none asserts no
+    # correction instead of silently inheriting a regional 0.2 albedo.
+    proxy = float(surface.proxy_reflectance)
+    if surface.optical_model == "water_fresnel":
+        inc = np.radians(np.clip(sza.to_numpy(dtype=float), 0.0, 89.9))
+        ground_alb = _fresnel(inc, diffuse_baseline=proxy)
+    else:
+        ground_alb = np.full(len(out), proxy if surface.optical_model != "none" else 0.0)
+    # Regional albedo stays the atmospheric-RT background; the plane's own
+    # ground term is the local material. No double counting by construction:
+    # skin_plane_factor sees exactly one ground term (the local one).
     factors = [
         skin_plane_factor(
             plane.tilt_deg, float(z), float(a), plane.azimuth_deg,
-            float(d), float(f), float(al),
+            float(d), float(f), float(g),
         )
-        for z, a, d, f, al in zip(sza, saz, direct, diffuse, alb)
+        for z, a, d, f, g in zip(sza, saz, direct, diffuse, np.asarray(ground_alb, dtype=float))
     ]
     out["skin_plane_factor"] = np.round(factors, 4)
     e_mel = _num(out, "melanogenic_effective_irradiance_wm2")
@@ -285,18 +298,25 @@ def apply_skin_plane(
     out["skin_plane_standard"] = (
         f"tilt {plane.tilt_deg:g}deg az {plane.azimuth_deg:g}deg (horizontal reference preserved)"
     )
-    # Explicit local reflected components (§12.8): Lambertian ground view ×
-    # local surface proxy × horizontal broadband, kept separate from the
-    # horizontal environmental fields. Flat plane: zero by geometry.
+    # Band-correct reflected components (§12.8): local ground view × material
+    # proxy × BAND downwelling (predicted UVA/UVB), never total shortwave.
+    # A scalar proxy is a degraded flat reflectance: the same proxy weights
+    # both bands, but each band multiplies only its own downwelling, so no
+    # band can exceed its own incident energy. Flat plane: zero by geometry.
+    w_uvb, w_uva = band_effective_weights()
     gv = _ground_view(plane.tilt_deg)
-    ghi = _num(out, "shortwave_radiation").fillna(
-        direct.fillna(0.0) + diffuse.fillna(0.0))
-    refl_uva = ghi * surface.proxy_reflectance * gv
-    refl_uvb = ghi * surface.proxy_reflectance * gv
+    uva_down = _num(out, "predicted_uva_wm2").fillna(0.0)
+    uvb_down = _num(out, "predicted_uvb_wm2").fillna(0.0)
+    if surface.optical_model == "none":
+        refl_uva = uva_down * 0.0
+        refl_uvb = uvb_down * 0.0
+    else:
+        refl_uva = uva_down * proxy * gv
+        refl_uvb = uvb_down * proxy * gv
     out["skin_plane_ground_reflected_uva_wm2"] = np.round(refl_uva, 4)
     out["skin_plane_ground_reflected_uvb_wm2"] = np.round(refl_uvb, 4)
     out["skin_plane_ground_reflected_delayed_pigmentation_wm2"] = np.round(
-        refl_uvb * 0.562322 + refl_uva * 0.002774, 5)
+        refl_uvb * w_uvb + refl_uva * w_uva, 5)
     return out
 
 

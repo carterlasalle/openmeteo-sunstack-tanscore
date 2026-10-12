@@ -1215,18 +1215,20 @@ def best_fixed_dose_window(
         if not ok_grid:
             continue
         seg = e_vals.iloc[window_idx]
-        if bool(seg.isna().any()):
+        legs_idx = window_idx[1:]
+        leg_seg = seg.iloc[1:]
+        if bool(leg_seg.isna().any()):
             continue
-        if bool((seg <= 0).all()):
+        if bool((leg_seg <= 0).all()):
             continue  # night/zero window: no physical stimulus to rank
-        if usable_only and isinstance(blocked, pd.Series) and bool(blocked.iloc[window_idx].any()):
+        if usable_only and isinstance(blocked, pd.Series) and bool(blocked.iloc[legs_idx].any()):
             continue
-        if usable_only and not bool(complete.iloc[window_idx].all()):
+        if usable_only and not bool(complete.iloc[legs_idx].all()):
             continue  # unknown weather is not a recommendation
-        if usable_only and in_class is not None and bool(in_class.iloc[window_idx].any()):
+        if usable_only and in_class is not None and bool(in_class.iloc[legs_idx].any()):
             continue  # the user is busy: never headline a window they cannot take
         if (comfort_rank is not None and comfort_min is not None
-                and bool((comfort_rank.iloc[window_idx] < comfort_min).any())):
+                and bool((comfort_rank.iloc[legs_idx] < comfort_min).any())):
             continue
         vals = [float(seg.iloc[j]) for j in range(len(seg))]
         # Rectangular: the window [start, start+duration) covers the

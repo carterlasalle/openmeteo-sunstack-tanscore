@@ -67,8 +67,9 @@ def test_unknown_weather_excludes_a_window_from_usable_ranking() -> None:
     from sunstack.opportunity import apply_outdoor_feasibility, best_fixed_dose_window
 
     times = pd.date_range("2026-06-21 12:00", periods=5, freq="30min")
-    # Unknown weather spans the middle three stamps, so EVERY 30-minute window
-    # of the two-stamp grid includes at least one unknown stamp.
+    # Unknown weather spans the middle three stamps. Legs-only gating means a
+    # window is unknown only when its own physical legs are unknown: the last
+    # candidate [13:30,14:00) has clean legs and stays usable.
     frame = pd.DataFrame({
         "dt": times,
         "time_utc": times,
@@ -89,9 +90,9 @@ def test_unknown_weather_excludes_a_window_from_usable_ranking() -> None:
     })
     out = apply_outdoor_feasibility(frame)
     assert not bool(_bools(out, "outdoor_feasibility_complete")[2])
-    # No window is usable while its inputs are unknown — but the strongest
-    # physical window still exists, so the radiation answer is not lost.
-    assert best_fixed_dose_window(out, 30, usable_only=True) is None
+    # The clean-legged last window stays usable; the unknown spans stay out.
+    usable = best_fixed_dose_window(out, 30, usable_only=True)
+    assert usable is not None and str(usable[0]) == "2026-06-21 13:30:00"
     strongest = best_fixed_dose_window(out, 30, usable_only=False)
     assert strongest is not None and np.isfinite(strongest[2])
 

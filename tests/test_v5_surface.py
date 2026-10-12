@@ -13,9 +13,6 @@ def _num(frame: pd.DataFrame, name: str, i: int = 0) -> float:
     return vals[i]
 
 
-def _texts(frame: pd.DataFrame, name: str) -> list[str]:
-    return cast("list[str]", frame[name].tolist())
-
 
 def _env_frame() -> pd.DataFrame:
     return pd.DataFrame({
@@ -26,6 +23,8 @@ def _env_frame() -> pd.DataFrame:
         "direct_radiation": [500.0, 500.0],
         "diffuse_radiation": [200.0, 200.0],
         "shortwave_radiation": [700.0, 700.0],
+        "predicted_uva_wm2": [42.0, 42.0],
+        "predicted_uvb_wm2": [0.35, 0.35],
         "albedo": [0.2, 0.2],
     })
 
@@ -108,7 +107,13 @@ def test_local_surface_never_changes_horizontal_environment() -> None:
     g = _num(grass, "skin_plane_ground_reflected_delayed_pigmentation_wm2")
     s = _num(sand, "skin_plane_ground_reflected_delayed_pigmentation_wm2")
     assert s > g > 0
-
+    # End-to-end: the material reaches the actual skin-plane exposure, and
+    # no reflected band exceeds its own downwelling.
+    ge = _num(grass, "skin_plane_e_mel_wm2")
+    se = _num(sand, "skin_plane_e_mel_wm2")
+    assert se > ge > 0
+    assert _num(sand, "skin_plane_ground_reflected_uva_wm2") <= 42.0
+    assert _num(sand, "skin_plane_ground_reflected_uvb_wm2") <= 0.35
 
 def test_flat_plane_zero_ground_view() -> None:
     from sunstack.spectral import apply_skin_plane

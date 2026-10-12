@@ -68,12 +68,44 @@ def test_hard_blocked_strongest_excluded_from_usable_but_retained() -> None:
     from sunstack.opportunity import best_fixed_dose_window
 
     day = _day()
-    day.loc[0, "outdoor_blocked"] = True  # block the strongest slot
+    day.loc[1, "outdoor_blocked"] = True  # block the strongest leg
     usable = best_fixed_dose_window(day, 30, usable_only=True)
     strongest = best_fixed_dose_window(day, 30, usable_only=False)
     assert usable is not None and strongest is not None
     assert str(usable[0]) != str(strongest[0])
     assert str(strongest[0]) == "2026-06-21 10:00:00"
+
+def test_blocked_bounding_stamp_does_not_disqualify_clean_legs() -> None:
+    from sunstack.opportunity import best_fixed_dose_window
+
+    day = pd.DataFrame({
+        "dt": pd.to_datetime([
+            "2026-06-21T12:30", "2026-06-21T13:00", "2026-06-21T13:30"]),
+        "melanogenic_effective_irradiance_wm2": [0.4, 1.0, 1.0],
+        "tan_forecast_confidence_0_100": [50.0, 50.0, 50.0],
+        "outdoor_blocked": [True, False, False],
+        "outdoor_feasibility_complete": [True, True, True],
+    })
+    # The blocked stamp bounds [12:00,12:30), outside candidate [12:30,13:00).
+    win = best_fixed_dose_window(day, 30, usable_only=True)
+    assert win is not None
+    assert str(win[0]) == "2026-06-21 12:30:00"
+
+
+def test_blocked_physical_leg_still_disqualifies() -> None:
+    from sunstack.opportunity import best_fixed_dose_window
+
+    day = pd.DataFrame({
+        "dt": pd.to_datetime([
+            "2026-06-21T12:30", "2026-06-21T13:00", "2026-06-21T13:30"]),
+        "melanogenic_effective_irradiance_wm2": [0.4, 1.0, 1.0],
+        "tan_forecast_confidence_0_100": [50.0, 50.0, 50.0],
+        "outdoor_blocked": [False, True, False],
+        "outdoor_feasibility_complete": [True, True, True],
+    })
+    win = best_fixed_dose_window(day, 30, usable_only=True)
+    assert win is not None
+    assert str(win[0]) == "2026-06-21 13:00:00"
 
 
 def test_comfortable_window_excludes_hard_blocked_and_warm_slots() -> None:
@@ -87,15 +119,17 @@ def test_comfortable_window_excludes_hard_blocked_and_warm_slots() -> None:
     usable = best_fixed_dose_window(day, 30, usable_only=True)
     comfortable = best_fixed_dose_window(day, 30, usable_only=True, comfort_min=2)
     assert strongest is not None and usable is not None and comfortable is not None
+    # Gate legs, not bounding stamps: [10:00,10:30) is a clean 0.8x1800=1440
+    # leg, so it stays usable; comfort needs warm+ legs, won at [10:30,11:00).
     assert [str(window[0]) for window in (strongest, usable, comfortable)] == [
         "2026-06-21 10:00:00",
+        "2026-06-21 10:00:00",
         "2026-06-21 10:30:00",
-        "2026-06-21 11:00:00",
     ]
     row = build_daily_summary(day).iloc[0]
-    assert _cell_text(row, "best_comfortable_usable_30m_start") == "2026-06-21T11:00:00"
-    assert _cell_text(row, "best_comfortable_usable_30m_end") == "2026-06-21T11:30:00"
-    assert row["best_comfortable_usable_30m_dose_j_m2"] == 720.0
+    assert _cell_text(row, "best_comfortable_usable_30m_start") == "2026-06-21T10:30:00"
+    assert _cell_text(row, "best_comfortable_usable_30m_end") == "2026-06-21T11:00:00"
+    assert row["best_comfortable_usable_30m_dose_j_m2"] == 1080.0
 
 
 def test_comfort_min_breaks_equal_dose_ties() -> None:
@@ -109,7 +143,10 @@ def test_comfort_min_breaks_equal_dose_ties() -> None:
     sun_warmed_or_better = best_fixed_dose_window(day, 30, comfort_min=2)
     assert cool_or_better is not None and sun_warmed_or_better is not None
     assert str(cool_or_better[0]) == "2026-06-21 10:00:00"
-    assert str(sun_warmed_or_better[0]) == "2026-06-21 11:00:00"
+    # comfort_min=2 needs both physical legs warm+ (rank>=2): [10:00,10:30)
+    # has legs [cool,warm]=[1,2] so it fails; earliest passing is
+    # [10:30,11:00) with legs [warm,sun-warmed].
+    assert str(sun_warmed_or_better[0]) == "2026-06-21 10:30:00"
 
 def test_confidence_only_breaks_defined_ties() -> None:
     from sunstack.opportunity import best_fixed_dose_window
