@@ -570,7 +570,7 @@ def test_best_hour_dose_integrates_full_hour():
     assert abs(got["sed_best_window"] - 0.15 * 3600 / 100) < 1e-9
 
 
-def test_best_30m_dose_belongs_to_forward_interval():
+def test_best_30m_dose_belongs_to_the_interval_ending_at_the_best_row():
     from sunstack.doses import add_interval_doses
     from sunstack.opportunity import build_daily_summary
 
@@ -590,9 +590,14 @@ def test_best_30m_dose_belongs_to_forward_interval():
         "predicted_uvb_wm2": [0.5] * 5,
     })
     out = build_daily_summary(add_interval_doses(frame))
-    # Best slot starts 11:30; its forward half hour [11:30, 12:00) doses the
-    # 1.0->0.0 leg: 0.5*1.0*1800 = 900, not the trailing 1800 ending at 11:30.
-    assert abs(num(out, "best_30m_tan_dose_j_m2").iloc[0] - 900.0) < 1e-6
+    # The best row is the 11:30 stamp (Overall 90). Per interval-contract-v1 a
+    # stamp is the interval END, so its trailing half hour is [11:00, 11:30),
+    # where E_mel is 1.0 at both ends: 1.0 * 1800 = 1800 J/m^2. Reading t+30m
+    # (the old behaviour) took the [11:30, 12:00) leg instead - the 1.0 -> 0.0
+    # drop, 900 J/m^2 - and reported it as this slot's dose.
+    assert abs(num(out, "best_30m_tan_dose_j_m2").iloc[0] - 1800.0) < 1e-6
+    # the slot's start, one width before the stamp that carries it
+    assert str(out["best_30m_start"].iloc[0]) == "2026-06-21T11:00:00"
 
 
 def test_day_totals_use_wall_date_without_time_utc(monkeypatch: pytest.MonkeyPatch):

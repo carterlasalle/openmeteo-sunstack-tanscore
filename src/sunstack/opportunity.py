@@ -1341,11 +1341,15 @@ def build_daily_summary(
         except (ImportError, ValueError, KeyError, RuntimeError):
             _day_doses, _win_doses = {}, {}
         # Best-30m / best-hour interval doses from trailing columns when present.
-        # Trailing columns END at their row stamp: the dose for the forward
-        # interval [t, t+30m) selected as best_30m_start=t lives on the row at
-        # t+30m, so read there (searching the full day grid g, since t+30m can
-        # sit outside the daylight slice). Missing end stamp -> NaN, never a
-        # neighboring slot's dose relabeled.
+        # The artifact's contract is that a stamp is the interval END: every
+        # published row carries interval_start_utc/interval_end_utc with
+        # end - start = the level's width (interval-contract-v1, SCIENCE §7
+        # "trailing 15 m / 30 m / 1 h"), and the sibling best_usable_30m_* fields
+        # read the same way. So the best row's own trailing column IS its slot's
+        # dose, and best_30m_start is that slot's start, one width earlier.
+        # Reading t+30m here (the old behaviour) reported the *next* slot's dose:
+        # for 2026-10-12 that was 1000.854 J/m^2 for a best row whose own trailing
+        # dose is 1104.7.
         def _col_at(col: str, stamp: object, _grid: pd.DataFrame = g) -> float:
             try:
                 # Normalise once to a DatetimeIndex: `to_datetime` is a union of
@@ -1367,7 +1371,7 @@ def build_daily_summary(
                 return pd.to_datetime(v, unit="s")
             return pd.to_datetime(str(v))
         _best_dt = _as_ts(best["dt"] if "dt" in best else daylight["dt"].iloc[0])
-        _best_end = _best_dt + pd.Timedelta(minutes=30)
+        _best_slot_start = _best_dt - pd.Timedelta(minutes=30)
         _bh_ts = _as_ts(best_hour) if best_hour is not None else pd.Timestamp("NaT")
         best_hour_end = (_bh_ts + pd.Timedelta(minutes=60)) if best_hour is not None else None
         try:
@@ -1408,9 +1412,9 @@ def build_daily_summary(
                 "day_confidence_at_peak_0_100": round(
                     float(best.get("tan_forecast_confidence_0_100", np.nan)), 1
                 ),
-                "best_30m_start": _best_dt.isoformat(),
-                "best_30m_tan_dose_j_m2": _col_at("tan_dose_30m_j_m2", _best_end),
-                "best_30m_sed": _col_at("sed_30m", _best_end),
+                "best_30m_start": _best_slot_start.isoformat(),
+                "best_30m_tan_dose_j_m2": _col_at("tan_dose_30m_j_m2", _best_dt),
+                "best_30m_sed": _col_at("sed_30m", _best_dt),
                 "best_hour_start": _as_ts(best_hour).isoformat()
                 if best_hour is not None
                 else None,

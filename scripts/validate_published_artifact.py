@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TypedDict, cast
 
@@ -82,6 +82,21 @@ def _num(x: object) -> float:
     if isinstance(x, str):
         return float(x)
     return float(x)
+
+
+def _stamp_key(value: object, minutes: int = 0) -> str | None:
+    """Normalise a published stamp to a minute key, optionally shifted.
+
+    Published stamps come in two widths ("2026-10-12T14:00" and
+    "...T13:30:00"), so comparison has to go through a parsed form.
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return (parsed + timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M")
 
 
 def _rows_of(items: list[object]) -> list[dict[str, object]]:
@@ -289,8 +304,6 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
 
     day_rows = _rows_of(daily)
     half_rows = _rows_of(half)
-    # §22.17 setup: the artifact declares its own deprecated names; ranking
-    # keys must not name one of them (or a column that is not published).
     deprecated_names: set[str] = set()
     declared_deprecated = summary.get("deprecated_fields")
     if isinstance(declared_deprecated, list):
