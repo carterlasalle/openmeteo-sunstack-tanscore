@@ -9,8 +9,10 @@ name: forecast-run
       timezone: "America/Indiana/Indianapolis"
   workflow_dispatch:
   push:
+    # NOT "docs/**": site-refresh commits the regenerated site back to main, so
+    # matching it here makes every forecast-run trigger the next one. The run
+    # itself publishes docs/, and the schedule plus code pushes still gate it.
     paths:
-      - "docs/**"
       - "scripts/verify_rendered_ui.py"
       - "src/sunstack/**"
       - "data/research/**"
@@ -156,6 +158,10 @@ jobs:
           exit 1
 
   run:
+    # The publish job commits the regenerated artifact; it must never run on a
+    # pull request (no write token there, and it only publishes the artifact it
+    # just produced from live data).
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

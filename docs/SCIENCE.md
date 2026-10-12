@@ -337,6 +337,19 @@ does not move confidence. None alter delayed-pigmentation
 irradiance, SED, or dose. `strong_sun_probability_0_100` remains a separate
 useful-sun probability.
 
+Those numbers are a heuristic, not a calibrated interval, and they were measured
+against independent spectra on 2026-10-12: joining the previous-runs forecast to
+209 WOUDC Brewer scans at Uccle (2026-07-12..2026-10-12) on solar zenith angle
+puts the measured error at 1.3-2.7 UVI depending on sun height, while
+`uvi_expected_abs_error` promises 0.35 UVI at lead 0. The published ±1.5x band
+therefore covers 11% of the paired scans, not ~95%. The lead term stays
+unverified - the public previous-runs endpoint returned no
+`uv_index_previous_dayN` columns for any model tried - and no fitted error model
+is shipped, because one station, one season and an unresolved point-versus-grid
+cloud confound would manufacture a confident-looking model. Reproduce with
+`scripts/calibrate_uvi_error_from_measured.py`; numbers and method in
+`docs/validation/uvi_error_calibration.md`.
+
 ---
 
 ## 5. Local and Atmosphere — percentiles, not physics
@@ -609,7 +622,10 @@ architectural response) · POWER truth itself modeled (attributions
 corroborating, not definitive) · clear-sky seam closed by shared code path ·
 no libRadtran corpus/emulator here (scaffold + contract only) · TanResponse
 unfitted by gate · EPA integer rounding at low sun · pre-v4 payloads render
-with legacy provenance + em-dash doses.
+with legacy provenance + em-dash doses. · expected-error model uncalibrated
+against independent measurement (measured 1.3-2.7 UVI against 0.35 promised at
+lead 0, so the ±1.5x band covers 11% of 209 paired Brewer scans - §4.2 and
+`docs/validation/uvi_error_calibration.md`).
 
 ## Appendix A — pipeline map
 
