@@ -1064,9 +1064,16 @@ def parse_class_blocks(raw: object) -> ClassBlocks:
             raise ValueError(f"classes entry dow must be 0-4 (Mon-Fri), got {dow}")
         start, end = _mins(block)
         if not 0 <= start < end <= 1440:
-            raise ValueError(f"classes entry must satisfy 0 <= start < end <= 1440, got {start}-{end}")
+            raise ValueError(f"{CLASSES_ORDER_MESSAGE}, got {start}-{end}")
         blocks.setdefault(dow, []).append((start, end))
     return blocks
+
+
+# The one rejection a schema-driven client cannot be stopped from triggering: a
+# "start < end" rule compares two fields, and JSON Schema has no cross-field
+# comparison. Exported so the contract fuzzer can recognise *this* 400 as the
+# documented rule rather than a schema over-promise (see tests/test_api_contract.py).
+CLASSES_ORDER_MESSAGE = "classes entry must satisfy 0 <= start < end <= 1440"
 
 
 def _in_class(dt: object, blocks: ClassBlocks | None = None) -> bool:

@@ -1,0 +1,14 @@
+id: neighbouring-row-index
+valid:
+  # Index by a computed position, not a relative step.
+  - |
+    row = frame.iloc[position]
+  # Shift by a column count is not a time step.
+  - |
+    aligned = frame.shift(axis=1)
+invalid:
+  # The off-by-one primitive, forward and back.
+  - |
+    nxt = stamps.iloc[i + 1]
+  - |
+    previous = values.iloc[index - 1]

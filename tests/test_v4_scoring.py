@@ -1359,8 +1359,12 @@ def test_api_data_personal_mmd(tmp_path: Path):
     bad = client.get("/api/data", params={
         "location": "south-bend", "personal_mmd": "2000",
         "personal_mmd_basis": "FOLKLORE"})
-    assert bad.status_code == 400
-    assert "one of" in str(cast("dict[str, object]", bad.json())["detail"])
+    # A basis outside the published set is rejected by the schema (422); the
+    # "basis required iff mmd given" rule relates two parameters and stays a
+    # handler 400, because OpenAPI cannot express that dependency.
+    assert bad.status_code == 422
+    assert "SUNSTACK_EFFECTIVE_DOSE_MEASURED" in str(
+        cast("dict[str, object]", bad.json())["detail"])
     unlabeled = client.get("/api/data", params={
         "location": "south-bend", "personal_mmd": "2000"})
     assert unlabeled.status_code == 400
@@ -1382,8 +1386,9 @@ def test_api_refresh_rejects_bad_mmd_without_running(tmp_path: Path):
     bad = client.post("/api/refresh", params={
         "location": "south-bend", "personal_mmd": "2000",
         "personal_mmd_basis": "FOLKLORE"})
-    assert bad.status_code == 400
-    assert "one of" in str(cast("dict[str, object]", bad.json())["detail"])
+    assert bad.status_code == 422
+    assert "SUNSTACK_EFFECTIVE_DOSE_MEASURED" in str(
+        cast("dict[str, object]", bad.json())["detail"])
 
 
 def test_export_bakes_personal_mmd_when_asked(tmp_path: Path):

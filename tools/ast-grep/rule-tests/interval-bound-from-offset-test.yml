@@ -1,0 +1,16 @@
+id: interval-bound-from-offset
+valid:
+  # The support declaration itself: a row's bounds, not a slot lookup.
+  - |
+    interval_end = _as_utc(out["dt"])
+    out["interval_start_utc"] = interval_end - pd.Timedelta(minutes=30)
+  # An offset whose target is not named like a bound.
+  - |
+    shifted = stamps + pd.Timedelta(minutes=30)
+invalid:
+  # The line the off-by-one lived on: the row after the best slot.
+  - |
+    _best_end = _best_dt + pd.Timedelta(minutes=30)
+  # Same shape, the other direction, reading a slot start.
+  - |
+    _window_start = _best_dt - pd.Timedelta(minutes=30)

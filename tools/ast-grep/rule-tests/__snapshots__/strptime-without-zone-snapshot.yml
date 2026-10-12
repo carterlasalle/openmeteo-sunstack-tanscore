@@ -1,0 +1,23 @@
+id: strptime-without-zone
+snapshots:
+  ? |
+    parsed = datetime.strptime(value, "%Y%m%dT%H%M%SZ")
+  : labels:
+    - source: datetime.strptime(value, "%Y%m%dT%H%M%SZ")
+      style: primary
+      start: 9
+      end: 51
+  ? |
+    parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M")
+  : labels:
+    - source: datetime.strptime(value, "%Y-%m-%dT%H:%M")
+      style: primary
+      start: 9
+      end: 51
+  ? |
+    stamp = datetime.strptime(text, "%Y%m%dT%H%M%S")
+  : labels:
+    - source: datetime.strptime(text, "%Y%m%dT%H%M%S")
+      style: primary
+      start: 8
+      end: 48

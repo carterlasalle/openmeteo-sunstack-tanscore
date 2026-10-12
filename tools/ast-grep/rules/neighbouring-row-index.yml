@@ -11,8 +11,11 @@ note: |
 rule:
   any:
     - pattern: $OBJ.iloc[$IDX]
+    # shift() steps along rows by default; axis= (a column shift) is not this.
     - pattern: $OBJ.shift($N)
     - pattern: $OBJ.shift($N, $$$REST)
 constraints:
   IDX:
     regex: "[-+]"
+  N:
+    regex: "^-?[0-9]+$"

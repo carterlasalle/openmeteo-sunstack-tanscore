@@ -16,22 +16,28 @@ human rather than a failure.
 ```bash
 uv run ast-grep scan            # the whole tree
 uv run ast-grep scan path.py    # one file
+uv run ast-grep test            # do the rules still match what they claim?
 ```
 
 ## Validate a rule before trusting it
 
 A rule that never fires is worse than no rule: it reports "clean" forever. Every
-rule here was checked against the revision that *had* the defect, and the check
-is repeatable:
+rule has a native test in `rule-tests/` covering what it must match **and what it
+must not**, and `ast-grep test` runs them:
 
 ```bash
-# the off-by-one rule, against the code before the fix
-git show d581a28^:src/sunstack/opportunity.py > /tmp/old_opportunity.py
-uv run ast-grep scan --json /tmp/old_opportunity.py | python3 -m json.tool | grep ruleId
+uv run ast-grep test
+# test result: ok. 4 passed; 0 failed;
 ```
 
-That run reports `L1370 interval-bound-from-offset  _best_end = _best_dt +
-pd.Timedelta(minutes=30)` — the line the bug lived on. The first version of that
-rule matched nothing anywhere, because it looked for the `Timedelta` in the same
-call as the column read while the two live on different lines; the control run is
-what caught it.
+Each test's `valid:` cases are the rule's precision: `.shift(axis=1)` is a column
+shift, `%z` in a format string means the parse produced an aware value, and
+`out["interval_start_utc"] = end - Timedelta(...)` is the documented support
+declaration rather than a slot lookup. Getting those wrong is how a scan turns
+into noise nobody reads.
+
+The first version of `interval-bound-from-offset` matched nothing anywhere: it
+looked for the `Timedelta` in the same call as the column read while the two live
+on different lines. The test cases are what caught it — an earlier attempt to
+validate the rule against `git show <old revision>` failed in CI with exit 128,
+because a shallow checkout has no history to show.

@@ -1,0 +1,16 @@
+id: neighbouring-row-index
+snapshots:
+  ? |
+    nxt = stamps.iloc[i + 1]
+  : labels:
+    - source: stamps.iloc[i + 1]
+      style: primary
+      start: 6
+      end: 24
+  ? |
+    previous = values.iloc[index - 1]
+  : labels:
+    - source: values.iloc[index - 1]
+      style: primary
+      start: 11
+      end: 33

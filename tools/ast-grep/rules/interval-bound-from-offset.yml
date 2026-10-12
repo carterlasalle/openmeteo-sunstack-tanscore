@@ -23,4 +23,8 @@ rule:
     - pattern: $VAR = pd.Timedelta($$$W) + $BASE
 constraints:
   VAR:
+    # A plain name. Writing a declared support into a payload column
+    # (`out["interval_start_utc"] = interval_end - ...`) is the documented
+    # boundary declaration, not a slot lookup, so subscripts are excluded.
+    kind: identifier
     regex: "(start|end|stamp|mid|bound|interval)"

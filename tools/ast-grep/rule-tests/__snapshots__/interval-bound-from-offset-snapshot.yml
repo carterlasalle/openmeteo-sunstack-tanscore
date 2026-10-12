@@ -1,0 +1,16 @@
+id: interval-bound-from-offset
+snapshots:
+  ? |
+    _best_end = _best_dt + pd.Timedelta(minutes=30)
+  : labels:
+    - source: _best_end = _best_dt + pd.Timedelta(minutes=30)
+      style: primary
+      start: 0
+      end: 47
+  ? |
+    _window_start = _best_dt - pd.Timedelta(minutes=30)
+  : labels:
+    - source: _window_start = _best_dt - pd.Timedelta(minutes=30)
+      style: primary
+      start: 0
+      end: 51

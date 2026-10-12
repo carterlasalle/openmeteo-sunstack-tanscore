@@ -1,0 +1,20 @@
+id: strptime-without-zone
+valid:
+  # Aware: the format carries the offset directive.
+  - |
+    stamp = datetime.strptime(text, "%Y-%m-%d %H:%M:%S%z")
+  - |
+    stamp = datetime.strptime(text, "%Y%m%dT%H%M%S%Z")
+  # Not strptime at all.
+  - |
+    stamp = datetime.fromisoformat("2026-10-12T17:30:00+00:00")
+invalid:
+  # Naive: the shape that needed a timezone patched on later.
+  - |
+    stamp = datetime.strptime(text, "%Y%m%dT%H%M%S")
+  - |
+    parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M")
+  # A literal Z is not a directive - this still parses naive, and it is the
+  # exact format the .ics reader used.
+  - |
+    parsed = datetime.strptime(value, "%Y%m%dT%H%M%SZ")

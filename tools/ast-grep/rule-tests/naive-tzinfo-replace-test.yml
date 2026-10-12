@@ -1,0 +1,9 @@
+id: naive-tzinfo-replace
+valid:
+  # Explicit conversion, the fix for the shape below.
+  - |
+    local = stamp.astimezone(ZoneInfo(tz_name))
+invalid:
+  # Asserting a zone the value never carried.
+  - |
+    local = datetime.fromisoformat(str(value)).replace(tzinfo=ZoneInfo(tz_name))

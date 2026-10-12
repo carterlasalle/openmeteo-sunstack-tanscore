@@ -206,24 +206,29 @@ def _stable_calendar_lines(text: str) -> list[str]:
 def test_data_rejects_bad_surface_extent_and_skin_plane(tmp_path: Path):
     client = _client(_api_fixture(tmp_path))
 
+    # These are 422s, not the handler's old 400s: the domains now live in the
+    # OpenAPI schema (the same rule F-19 applied to min_temp - a client or
+    # generated SDK reads the schema, so it owns the bound), and validation
+    # rejects the value before a handler runs. The message names the domain.
     bad_surface = client.get("/api/data", params={"surface": "nope"})
-    assert bad_surface.status_code == 400
+    assert bad_surface.status_code == 422
     assert "grass_summer" in _detail(bad_surface)
 
     bad_extent = client.get("/api/data", params={"surface_extent": "planet"})
-    assert bad_extent.status_code == 400
+    assert bad_extent.status_code == 422
     assert "surface_extent" in _detail(bad_extent)
 
     bad_tilt = client.get("/api/data", params={"skin_tilt_deg": "200"})
-    assert bad_tilt.status_code == 400
-    assert "[0, 180]" in _detail(bad_tilt)
+    assert bad_tilt.status_code == 422
+    assert "180" in _detail(bad_tilt)
 
     # `broad` promised homogeneous-area radiative transfer and used to be
-    # accepted with a 200 while only stamping metadata (audit §2). It is refused
-    # now, so the label can never stand in for physics that never ran.
+    # accepted with a 200 while only stamping metadata (audit §2). It is not an
+    # accepted value at all now: `surface_extent` publishes only `local`, so the
+    # label can never stand in for physics that never ran.
     broad = client.get("/api/data", params={"surface_extent": "broad"})
-    assert broad.status_code == 400, broad.text
-    assert "radiative transfer" in _detail(broad), _detail(broad)
+    assert broad.status_code == 422, broad.text
+    assert "local" in _detail(broad), _detail(broad)
 
 
 def test_surface_context_preserves_horizontal_values(tmp_path: Path):
@@ -365,8 +370,11 @@ def test_broad_surface_extent_is_refused_not_mislabelled(tmp_path: Path) -> None
 
     client = _client(_api_fixture(tmp_path))
     r = client.get("/api/data", params={"surface": "dry_beach_sand", "surface_extent": "broad"})
-    assert r.status_code == 400, r.status_code
-    assert "broad" in _detail(r) and "radiative transfer" in _detail(r), _detail(r)
+    # The API refuses `broad` at the schema (422), not with the explanatory 400
+    # above: `surface_extent` publishes only `local`, so it cannot be requested
+    # here at all. The reason still holds on the CLI path, validated above.
+    assert r.status_code == 422, r.status_code
+    assert "local" in _detail(r), _detail(r)
 
 
 def test_a_day_without_a_usable_window_is_not_graded() -> None:

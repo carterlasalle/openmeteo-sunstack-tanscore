@@ -90,23 +90,14 @@ jobs:
             --config tools/semgrep/sunstack.yml --metrics=off --error --quiet src scripts
 
       - name: ast-grep rule self-check
-        # The four scans are searches, but they must at least parse and fire:
-        # this asserts the rule set loads and the off-by-one rule still matches
-        # the revision that had the bug (a rule that matches nothing anywhere is
-        # worse than no rule).
+        # The four scans are searches, but they must at least parse and fire. This
+        # runs the native fixtures in tools/ast-grep/rule-tests, each derived from
+        # the defect the rule came from, so a rule that stops matching fails here.
+        # (Replaying a git revision was the first attempt and cannot work in CI,
+        # whose checkout is shallow: `git show` exited 128 with no history.)
         run: |
+          uv run ast-grep test
           uv run ast-grep scan --json > /tmp/current.json
-          git show d581a28^:src/sunstack/opportunity.py > /tmp/old_opportunity.py
-          uv run ast-grep scan --json /tmp/old_opportunity.py > /tmp/old.json
-          python3 - <<'PY'
-          import json
-          rules = {d["ruleId"] for d in json.load(open("/tmp/old.json"))}
-          assert "interval-bound-from-offset" in rules, (
-              "the off-by-one rule no longer matches the revision that had the bug; "
-              f"it is reporting clean forever. matched: {sorted(rules)}"
-          )
-          print(f"rules matched on the pre-fix revision: {sorted(rules)}")
-          PY
 
       - name: Upload ast-grep findings
         if: always()
@@ -160,7 +151,11 @@ jobs:
       - name: semgrep (p/python + this repo's rules) -> SARIF
         run: |
           uvx --from semgrep semgrep scan             --config p/python --config tools/semgrep/sunstack.yml             --metrics=off --sarif -o /tmp/semgrep.sarif src scripts || true
-          python3 - <<'PY'
+          # The Python lines sit at the block's own indentation, so YAML strips
+          # it to column 0 and Python reads valid code. An indented `<<'PY'`
+          # terminator is never matched by bash and fails the step (shellcheck
+          # SC1039/SC1072).
+          python3 -c '
           import json
           try:
               data = json.load(open("/tmp/semgrep.sarif"))
@@ -172,7 +167,7 @@ jobs:
           print(f"semgrep findings: {len(results)}")
           for rule, number in counts.most_common(10):
               print(f"  {number:4d}  {rule}")
-          PY
+          '
 
       - name: Upload reports
         if: always()
@@ -204,24 +199,29 @@ jobs:
         run: uv sync --locked
 
       - name: Schemathesis against the FastAPI surface
+        # `schemathesis run` has no `--app` option in 4.27, so the ASGI app goes
+        # through the pytest integration in tests/test_api_contract.py, which
+        # builds the run directory the API reads and stubs the live-run seam.
+        env:
+          SUNSTACK_SCHEMATHESIS_EXAMPLES: "40"
         run: |
-          uv run schemathesis run --app tools/schemathesis_app.py:app \
-            --checks all --max-examples 40 --report-junit-path /tmp/schemathesis.xml || true
+          uv run pytest tests/test_api_contract.py -q -p no:randomly \
+            --junit-xml=/tmp/schemathesis.xml || true
 
       - name: Report
         if: always()
         run: |
           if [ -f /tmp/schemathesis.xml ]; then
-            python3 - <<'PY'
-            import xml.etree.ElementTree as ET
-            root = ET.parse("/tmp/schemathesis.xml").getroot()
-            cases = root.iter("testcase")
-            total = failures = 0
-            for case in cases:
-                total += 1
-                failures += 1 if len(list(case)) else 0
-            print(f"schemathesis: {total} cases, {failures} failing (advisory)")
-            PY
+            # Same `-c '...'` shape as above, for the same reason: pytest's JUnit
+            # report has one <testcase> per property test, and a <failure> child
+            # marks a failure.
+            python3 -c '
+          import xml.etree.ElementTree as ET
+          root = ET.parse("/tmp/schemathesis.xml").getroot()
+          cases = list(root.iter("testcase"))
+          failures = sum(1 for case in cases if len(list(case)))
+          print(f"schemathesis: {len(cases)} cases, {failures} failing (advisory)")
+          '
           fi
 
       - name: Upload the report

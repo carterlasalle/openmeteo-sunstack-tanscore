@@ -500,7 +500,13 @@ def build_calendar_ics(
     return head + ("\r\n" + body if body else "") + "\r\nEND:VCALENDAR\r\n"
 
 
-_PERSONAL_MMD_BASES = ("SUNSTACK_EFFECTIVE_DOSE_MEASURED", "SOURCE_SPECTRUM_MEASURED",
+# A cross-parameter rule OpenAPI cannot state: "basis is required iff mmd is
+# given" relates two query parameters, and the format has no per-parameter
+# dependency. Exported so the contract fuzzer recognises this 400 as the
+# documented rule (see tests/test_api_contract.py).
+PERSONAL_MMD_BASIS_MESSAGE = "personal_mmd_basis must be one of"
+
+PERSONAL_MMD_BASES = ("SUNSTACK_EFFECTIVE_DOSE_MEASURED", "SOURCE_SPECTRUM_MEASURED",
                        "OBJECTIVE_ESTIMATE", "COARSE_ESTIMATE")
 
 
@@ -524,9 +530,9 @@ def parse_personal_mmd(personal_mmd: object,
     if not np.isfinite(value) or value <= 0:
         raise ValueError(
             f"personal_mmd must be a positive finite dose, got {mmd_text!r}")
-    if basis_text not in _PERSONAL_MMD_BASES:
+    if basis_text not in PERSONAL_MMD_BASES:
         raise ValueError(
-            f"personal_mmd_basis must be one of {list(_PERSONAL_MMD_BASES)} when personal_mmd is given, got {basis_text!r}")
+            f"{PERSONAL_MMD_BASIS_MESSAGE} {list(PERSONAL_MMD_BASES)} when personal_mmd is given, got {basis_text!r}")
     return value, basis_text
 
 

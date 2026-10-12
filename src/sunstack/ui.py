@@ -30,6 +30,8 @@ daily_uv_peaks = _serving_mod.daily_uv_peaks
 parse_personal_mmd = _serving_mod.parse_personal_mmd
 
 from .opportunity import ClassBlocks
+from .serving import PERSONAL_MMD_BASES
+from .surface import PRESETS, SURFACE_EXTENT_MODES
 
 
 def _parse_classes(raw: object) -> ClassBlocks:
@@ -76,26 +78,107 @@ def _parse_skin_type(raw: object) -> int | None:
 # contract clients and generated SDKs actually read, so it owns the bound now).
 _MIN_TEMP_F_LOW, _MIN_TEMP_F_HIGH = 32.0, 80.0
 
-# `classes` is a JSON array of [day, start, end] blocks; empty means "no
-# schedule". The wire shape belongs in the schema, so an obvious non-array is a
-# 422 before a handler runs instead of a 400 from the parser.
+# `classes` is a JSON array of blocks; empty means "no schedule". A regex can
+# only pre-filter the obvious non-array, so the *published* schema declares the
+# parameter as JSON content below: a pattern saying "^\\[.*\\]$" promises that any
+# bracketed string is well formed, and a fuzzer (rightly) held us to that by
+# sending "[<garbage>]" and getting a 400 for data the contract called valid.
 _CLASSES_PATTERN = r"^$|^\[.*\]$"
 _CLASSES_DESC = (
     'JSON array of {"dow": 0-4, "start": "HH:MM", "end": "HH:MM"} blocks '
     "(empty string = no schedule)"
 )
+# The parser also accepts explicit minutes ({"dow": 0, "start_min": 540,
+# "end_min": 1020}); both spellings are declared so the schema stays the contract.
+_CLASSES_JSON_SCHEMA: dict[str, object] = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "dow": {"type": "integer", "minimum": 0, "maximum": 4},
+            "start": {"type": "string", "pattern": r"^([01][0-9]|2[0-3]):[0-5][0-9]$"},
+            "end": {"type": "string", "pattern": r"^([01][0-9]|2[0-3]):[0-5][0-9]$"},
+            "start_min": {"type": "integer", "minimum": 0, "maximum": 1440},
+            "end_min": {"type": "integer", "minimum": 0, "maximum": 1440},
+        },
+        "required": ["dow"],
+        "anyOf": [
+            {"required": ["start", "end"]},
+            {"required": ["start_min", "end_min"]},
+        ],
+    },
+}
+
+
+def _declare_classes_as_json(spec: dict[str, object]) -> dict[str, object]:
+    """Rewrite the `classes` parameter to JSON content in a generated OpenAPI spec.
+
+    FastAPI has no `Query(content=...)`; a parameter carries either `schema` or
+    `content`, and only the latter can say "this string is a JSON document of
+    this shape". Without it the published contract promises more than the
+    handler accepts (see _CLASSES_PATTERN above).
+    """
+    paths = spec.get("paths")
+    if not isinstance(paths, dict):
+        return spec
+    for item in cast("dict[str, object]", paths).values():
+        if not isinstance(item, dict):
+            continue
+        for operation in cast("dict[str, object]", item).values():
+            if not isinstance(operation, dict):
+                continue
+            params = cast("dict[str, object]", operation).get("parameters")
+            if not isinstance(params, list):
+                continue
+            for param in cast("list[object]", params):
+                if not isinstance(param, dict):
+                    continue
+                entry = cast("dict[str, object]", param)
+                if entry.get("name") != "classes":
+                    continue
+                entry.pop("schema", None)
+                entry["content"] = {
+                    "application/json": {"schema": _CLASSES_JSON_SCHEMA}
+                }
+    return spec
 
 # Fitzpatrick selector: the page's <select> offers empty (unset) or 1-6, and the
 # handler rejects anything else, so the schema states the same closed domain.
 _SKIN_TYPE_PATTERN = r"^$|^[1-6]$"
 
+# These domains are declared in the schema, not enforced only in the handler.
+# F-19 set the precedent with min_temp: "the schema is the contract clients and
+# generated SDKs actually read, so it owns the bound now". A fuzzer generated a
+# schema-valid `skin_tilt_deg=best_30m_sed` and correctly called the 400 a
+# contract breach - the parameter was declared as a free string.
+# `custom` is CLI-only (needs reflectances this endpoint does not accept), so it
+# is not in the published enum either.
+_SURFACE_ENUM = sorted(s for s in PRESETS if s != "custom")
+# `broad` needs homogeneous-area radiative transfer, which this build refuses,
+# so it is not an accepted value.
+_EXTENT_ENUM = [m for m in SURFACE_EXTENT_MODES if m != "broad"]
+# Declared as anchored alternations rather than `Query(enum=...)`: this FastAPI's
+# `enum` kwarg reaches the published schema but is not enforced at runtime, so a
+# bad slug still fell through to the handler's 400. A pattern is enforced (422),
+# exactly as _SKIN_TYPE_PATTERN above. Each alternation is built from the same
+# tuple the surface module validates against, so the two cannot drift.
+_SURFACE_PATTERN = "^(" + "|".join(_SURFACE_ENUM) + ")$"
+_EXTENT_PATTERN = "^(" + "|".join(_EXTENT_ENUM) + ")$"
+# The basis is only read when personal_mmd is present; "" means "not given".
+_MMD_BASIS_PATTERN = "^$|^(" + "|".join(PERSONAL_MMD_BASES) + ")$"
+
 # Status codes every read endpoint can deliberately return. 503 is the fresh
 # install: no run has been published yet, which the message tells the user to
 # fix by running one - it is not a server fault.
 _READ_RESPONSES: dict[int | str, dict[str, object]] = {
-    400: {"description": "invalid query parameter (schedule JSON, surface, tilt, MMD)"},
+    400: {
+        "description": (
+            "schedule JSON, or a personal-MMD basis that the format cannot require"
+        )
+    },
     404: {"description": "unknown location"},
     503: {"description": "no forecast run published yet"},
+    500: {"description": "unexpected server error"},
 }
 
 
@@ -180,12 +263,12 @@ def create_app(root: Path, run_live_fn: RunLiveFn | None = None) -> FastAPI:
             default=None, ge=_MIN_TEMP_F_LOW, le=_MIN_TEMP_F_HIGH
         ),
         location: str = Query(default=""),
-        personal_mmd: str = Query(default=""),
-        personal_mmd_basis: str = Query(default=""),
-        surface: str = Query(default="unknown"),
-        surface_extent: str = Query(default="local"),
-        skin_tilt_deg: str = Query(default=""),
-        skin_azimuth_deg: str = Query(default=""),
+        personal_mmd: float | None = Query(default=None, gt=0),
+        personal_mmd_basis: str = Query(default="", pattern=_MMD_BASIS_PATTERN),
+        surface: str = Query(default="unknown", pattern=_SURFACE_PATTERN),
+        surface_extent: str = Query(default="local", pattern=_EXTENT_PATTERN),
+        skin_tilt_deg: float | None = Query(default=None, ge=0, le=180),
+        skin_azimuth_deg: float | None = Query(default=None, ge=0, le=360),
         classes: str = Query(default="", pattern=_CLASSES_PATTERN, description=_CLASSES_DESC),
     ):
         try:
@@ -261,19 +344,19 @@ def create_app(root: Path, run_live_fn: RunLiveFn | None = None) -> FastAPI:
             ]
         }
 
-    @app.post("/api/refresh")
+    @app.post("/api/refresh", responses=_READ_RESPONSES)
     def refresh(
         skin_type: str = Query(default="", pattern=_SKIN_TYPE_PATTERN),
         min_temp: float | None = Query(
             default=None, ge=_MIN_TEMP_F_LOW, le=_MIN_TEMP_F_HIGH
         ),
         location: str = Query(default=""),
-        personal_mmd: str = Query(default=""),
-        personal_mmd_basis: str = Query(default=""),
-        surface: str = Query(default="unknown"),
-        surface_extent: str = Query(default="local"),
-        skin_tilt_deg: str = Query(default=""),
-        skin_azimuth_deg: str = Query(default=""),
+        personal_mmd: float | None = Query(default=None, gt=0),
+        personal_mmd_basis: str = Query(default="", pattern=_MMD_BASIS_PATTERN),
+        surface: str = Query(default="unknown", pattern=_SURFACE_PATTERN),
+        surface_extent: str = Query(default="local", pattern=_EXTENT_PATTERN),
+        skin_tilt_deg: float | None = Query(default=None, ge=0, le=180),
+        skin_azimuth_deg: float | None = Query(default=None, ge=0, le=360),
     ):
         try:
             mmd, basis = parse_personal_mmd(personal_mmd, personal_mmd_basis)
@@ -329,10 +412,10 @@ def create_app(root: Path, run_live_fn: RunLiveFn | None = None) -> FastAPI:
             default=None, ge=_MIN_TEMP_F_LOW, le=_MIN_TEMP_F_HIGH
         ),
         location: str = Query(default=""),
-        surface: str = Query(default="unknown"),
-        surface_extent: str = Query(default="local"),
-        skin_tilt_deg: str = Query(default=""),
-        skin_azimuth_deg: str = Query(default=""),
+        surface: str = Query(default="unknown", pattern=_SURFACE_PATTERN),
+        surface_extent: str = Query(default="local", pattern=_EXTENT_PATTERN),
+        skin_tilt_deg: float | None = Query(default=None, ge=0, le=180),
+        skin_azimuth_deg: float | None = Query(default=None, ge=0, le=360),
         classes: str = Query(default="", pattern=_CLASSES_PATTERN, description=_CLASSES_DESC),
     ):
         try:
@@ -368,6 +451,15 @@ def create_app(root: Path, run_live_fn: RunLiveFn | None = None) -> FastAPI:
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    # Publish `classes` as JSON content rather than a bracketed-string pattern.
+    # Wrapped, not replaced: the spec stays FastAPI's, only this parameter's
+    # spelling changes.
+    openapi_original = app.openapi
+
+    def _openapi() -> dict[str, object]:
+        return _declare_classes_as_json(openapi_original())
+
+    app.openapi = _openapi
     return app
 
 

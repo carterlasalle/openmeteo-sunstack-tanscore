@@ -1,9 +1,11 @@
 # ast-grep scans for the shapes that produced the interval bugs in this project.
 #
 # These are searches, not gates: they mark candidates for a human. Each rule in
-# tools/ast-grep/rules comes from a defect that shipped, and each is validated
-# against the revision that had the defect (see tools/ast-grep/README.md), so a
-# hit is worth a look rather than a style opinion:
+# tools/ast-grep/rules comes from a defect that shipped, and each has a native
+# test in tools/ast-grep/rule-tests that pins what it must and must not match -
+# so `ast-grep test` fails if a rule ever stops firing. Validating against a git
+# revision was the first attempt and does not work in CI, whose checkout is
+# shallow: it exited 128 with no history to show.
 #
 #   strptime-without-zone         naive parse -> timezone patched on later
 #   naive-tzinfo-replace          the patch itself
@@ -11,6 +13,9 @@
 #                                 uses exist and are documented inline)
 #   neighbouring-row-index        the same off-by-one as a primitive
 #
-# Run: uv run ast-grep scan
+# Run: uv run ast-grep scan      (findings)
+#      uv run ast-grep test      (do the rules still match?)
 ruleDirs:
   - tools/ast-grep/rules
+testConfigs:
+  - testDir: tools/ast-grep/rule-tests

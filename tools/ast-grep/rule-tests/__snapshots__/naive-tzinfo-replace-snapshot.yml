@@ -1,0 +1,9 @@
+id: naive-tzinfo-replace
+snapshots:
+  ? |
+    local = datetime.fromisoformat(str(value)).replace(tzinfo=ZoneInfo(tz_name))
+  : labels:
+    - source: datetime.fromisoformat(str(value)).replace(tzinfo=ZoneInfo(tz_name))
+      style: primary
+      start: 8
+      end: 76
