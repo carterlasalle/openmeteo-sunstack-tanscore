@@ -211,7 +211,7 @@ Minimum target version identities:
 - `spectral_degraded_backend = tierC-broadband-proxy-v2`
 - `surface_model_version = uv-surface-v1`
 - `fusion_version = calibrated-uvi-fusion-v2`
-- `confidence_version = calibrated-error-v1`
+- `confidence_version = heuristic-reliability-v1` (was calibrated-error-v1; the model is a handwritten heuristic)
 - `window_rank_version = fixed-duration-dose-v2`
 - `global_reference_version = global-mel-ref-v2` only after rebuilding the corpus
 

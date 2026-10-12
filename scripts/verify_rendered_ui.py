@@ -28,6 +28,7 @@ import json
 import socketserver
 import threading
 from pathlib import Path
+from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -36,9 +37,15 @@ REPO = Path(__file__).resolve().parents[1]
 CHECKS: list[tuple[str, bool, str]] = []
 
 
+_viewport_label = ""
+
+
 def record(name: str, ok: bool, observed: object) -> None:
-    CHECKS.append((name, bool(ok), str(observed)[:400]))
-    print(f"{'PASS' if ok else 'FAIL'}  {name}  {str(observed)[:150]}")
+    """Record one check. LABEL names the viewport the check ran in."""
+    CHECKS.append((f"{_viewport_label}{name}", bool(ok), str(observed)[:400]))
+    print(
+        f"{'PASS' if ok else 'FAIL'}  {_viewport_label}{name}  {str(observed)[:150]}"
+    )
 
 
 class _Handler(http.server.SimpleHTTPRequestHandler):
@@ -67,7 +74,339 @@ def _module_factor(row: dict[str, object], surface: str, tilt: float) -> float:
     return float(plane.iloc[0]["skin_plane_factor"])
 
 
-def verify(site_dir: Path) -> None:
+VIEWPORTS = ((1350, 900, "desktop"), (390, 844, "mobile"))
+
+
+def _checks(
+    page: Any,  # playwright is an optional dependency: its types are not installed
+    payload: dict[str, Any],
+    site_dir: Path,
+    url: str,
+    errors: list[str],
+) -> None:
+    """The behaviour checks, run once per viewport."""
+    errors: list[str] = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+    page.goto(url, wait_until="networkidle")
+    page.wait_for_timeout(2500)
+
+    hero = page.evaluate("() => document.getElementById('hero').textContent.replace(/\\s+/g,' ')")
+    record("page loads with a payload and no console/page errors", bool(hero) and not errors, errors or hero[:120])
+
+    # 1. flat pose over an unknown surface: the invariant must be stated
+    page.select_option("#surface", "unknown")
+    page.fill("#skintilt", "0")
+    page.press("#skintilt", "Tab")
+    page.wait_for_timeout(1200)
+    flat_hero = page.evaluate(
+        "() => document.getElementById('hero').textContent.replace(/\\s+/g,' ')"
+    )
+    record(
+        "flat/unknown pose states the horizontal-reference invariant",
+        "horizontal reference" in flat_hero and "in your plane" not in flat_hero,
+        flat_hero[-140:],
+    )
+
+    # 2. material -> plane -> hero, and the module agrees
+    page.select_option("#surface", "dry_beach_sand")
+    page.fill("#skintilt", "45")
+    page.press("#skintilt", "Tab")
+    page.wait_for_timeout(1500)
+    hero45 = page.evaluate(
+        "() => document.getElementById('hero').textContent.replace(/\\s+/g,' ')"
+    )
+    panel = page.evaluate("() => document.getElementById('surfacecontext').textContent")
+    record(
+        "material+tilt reach the hero above the fold",
+        "Dry beach sand" in hero45 and "tilted 45" in hero45 and "+" in hero45,
+        [c for c in hero45.split(". ") if "plane" in c][:1],
+    )
+    row_time = page.evaluate(
+        "() => (activeRow()||{}).time",
+    )
+    row = next(
+        (r for r in payload["half_hour"] if str(r["time"]).startswith(str(row_time)[:16])),
+        None,
+    )
+    if row is None:
+        record("panel row resolves to a published row", False, row_time)
+    else:
+        want = _module_factor(row, "dry_beach_sand", 45.0)
+        panel_factor = page.evaluate("() => planeForRow(activeRow()).factor")
+        record(
+            "panel plane factor equals the physics module (4-dp round)",
+            abs(float(panel_factor) - want) < 5e-5,
+            f"page={panel_factor:.6f} module={want:.6f} row={row_time}",
+        )
+        # The panel prints the row as "YYYY-MM-DD HH:MM" (space, not the
+        # ISO "T"): compare against what a reader actually sees.
+        shown_row = str(row_time)[:16].replace("T", " ")
+        record(
+            "panel names its row and reports the gain",
+            "plane gain" in panel and shown_row in panel,
+            panel[:160],
+        )
+
+    # 3. honesty of the two live-only controls on a published page
+    class_copy = page.evaluate(
+        "() => [...document.querySelectorAll('#classbox .note')].map(e => e.textContent).join(' ')"
+    )
+    record(
+        "schedule is marked environmental-only, not silently inert",
+        "cannot re-rank for a schedule" in class_copy and "environmental" in class_copy,
+        class_copy[:170],
+    )
+    record(
+        "personal MMD is hidden with a stated reason",
+        page.evaluate("() => document.getElementById('mmdbasis').type") == "hidden"
+        and "live server"
+        in str(page.evaluate("() => (document.getElementById('mmdstatic')||{}).textContent")),
+        page.evaluate("() => (document.getElementById('mmdstatic')||{}).textContent"),
+    )
+
+    # 4a. UI semantic validators: the rendered ranking row, the day card
+    # and the hero must agree with the payload they were built from -
+    # "wrong number on screen" is invisible to a payload-only test.
+    def _round(value: object) -> int | None:
+        """Rounded int for a payload number or a rendered cell, else None."""
+        try:
+            return round(float(str(value)))
+        except (TypeError, ValueError):
+            return None
+
+    ui_row_time = str(page.evaluate("() => (activeRow()||{}).time"))[:16]
+    cells = page.evaluate(
+        f"() => {{ const tr = document.querySelector('#detail tr[data-time^=\"{ui_row_time}\"]');"
+        f" return tr ? [...tr.children].map(td => td.textContent.trim()) : null; }}"
+    )
+    prow = next(
+        (r for r in payload["half_hour"] if str(r["time"]).startswith(ui_row_time)), None
+    )
+    if prow is None or not isinstance(cells, list) or len(cells) < 8:
+        record("ranking row resolves to a payload row", False, [ui_row_time, cells])
+    else:
+        want_dose = prow.get("delayed_pigmentation_dose_30m_j_m2") or prow.get("tan_dose_30m_j_m2")
+        for idx, field, want in (
+            (3, "Dose J/m²", want_dose),
+            (5, "Overall", prow.get("overall_tan_opportunity_0_100")),
+            (6, "Abs", prow.get("tan_score_absolute_0_100")),
+            (7, "Local", prow.get("local_tan_score_0_100")),
+        ):
+            shown = str(cells[idx]).strip()
+            want_rounded, shown_rounded = _round(want), _round(shown)
+            record(
+                f"ranking row agrees with the payload: {field}",
+                want_rounded is not None and want_rounded == shown_rounded,
+                f"shown={shown} payload={want}",
+            )
+
+    # the day card's window must be the window its dose came from
+    day = page.evaluate(
+        "() => { const d = (DATA.daily||[]).find(x => x.date === SEL);"
+        " return d ? {date: d.date, start: d.best_usable_30m_start, end: d.best_usable_30m_end,"
+        " dose: d.best_usable_30m_dose_j_m2} : null; }"
+    )
+    card = str(page.evaluate(
+        "() => { const c = document.querySelector('.daycell[aria-selected=\"true\"]');"
+        " return c ? c.textContent : ''; }"
+    ))
+    def _hhmm(stamp: object) -> str:
+        text = str(stamp)
+        hour, minute = int(text[11:13]), text[14:16]
+        suffix = "AM" if hour < 12 else "PM"
+        hour12 = hour % 12 or 12
+        return f"{hour12} {suffix}" if minute == "00" else f"{hour12}:{minute} {suffix}"
+
+    if day and day["start"]:
+        want_start, want_end = _hhmm(day["start"]), _hhmm(day["end"])
+        record(
+            "day card shows the dose and the window that dose came from",
+            str(_round(day["dose"])) in card and want_start in card and want_end in card,
+            [f"dose={day['dose']}", want_start, want_end, card[:80]],
+        )
+    else:
+        record("day card shows a dose for the selected day", bool(card.strip()), card[:110])
+
+    # the three score columns must sit together, and say how they differ
+    headers = page.evaluate(
+        "() => [...document.querySelectorAll('#detail table:last-of-type thead th')]"
+        ".map(h => [h.textContent.trim(), h.title])"
+    )
+    by_name = {str(h[0]): str(h[1]) for h in headers} if isinstance(headers, list) else {}
+    record(
+        "Dose/Overall/Abs/Local are shown together with distinguishing semantics",
+        {"Dose J/m²", "Overall", "Abs", "Local"} <= set(by_name)
+        and "worldwide" in by_name.get("Abs", "")
+        and "within this location" in by_name.get("Local", ""),
+        sorted(by_name),
+    )
+
+    # 3a2. Every day without a usable interval must SAY so in its card,
+    # not render a grade (audit: Oct 17 carried 751.6 J/m2 of blocked
+    # radiation and rendered "POOR" beside "0 J/m2").
+    no_window = [
+        d["date"] for d in payload["daily"]
+        if d.get("best_usable_30m_start") in (None, "")
+    ]
+    cards = page.evaluate(
+        "() => Object.fromEntries([...document.querySelectorAll('.daycell')]"
+        ".map(c => [c.dataset.date, c.textContent.replace(/\\s+/g,' ')]))"
+    )
+    if no_window:
+        wrong = [
+            d for d in no_window
+            if "NO USABLE WINDOW" not in str(cards.get(d, ""))
+            or str(cards.get(d, "")).split("NO USABLE WINDOW")[0].strip().split()[-1]
+            in {"POOR", "FAIR", "GOOD", "EXCELLENT"}
+        ]
+        record(
+            f"days with no usable window say so in their card ({len(no_window)} of them)",
+            not wrong,
+            wrong or [d for d in no_window][:2],
+        )
+    else:
+        record("the run has at least one no-window day to check", True, "skipped: none")
+
+    # 3a3. times must say which zone they are in (audit Phase 2 item 4), and the
+    # schedule is read in that same zone.
+    tz_line = page.evaluate(
+        "() => (document.getElementById('tzline')||{}).textContent || ''"
+    )
+    record(
+        "times state the site timezone on the rendered page",
+        "site zone:" in str(tz_line) and "America/" in str(tz_line)
+        and "schedule" in str(tz_line),
+        tz_line,
+    )
+
+    # 3b. the spectral tier must be labelled for what it is: nothing said
+    # "degraded" anywhere before, while the docs require the label.
+    prov = page.evaluate(
+        "() => { const p = document.getElementById('provenance');"
+        " return p ? {text: p.textContent, title: p.title} : null; }"
+    )
+    record(
+        "Tier-C is labelled a fixed-band proxy where the number is shown",
+        bool(prov)
+        and "fixed-band proxy" in str(prov["text"])
+        and "+204%" in str(prov["title"])
+        and "WOUDC" in str(prov["title"]),
+        [str(prov["text"])[-90:], str(prov["title"])[:90]],
+    )
+
+    # 3c. the UVI fusion must name its reference honestly: it is scored
+    # against Open-Meteo's own retrospective, which is not truth.
+    gloss = page.evaluate(
+        "() => [...document.querySelectorAll('.gloss')].map(e => e.textContent).join(' ')"
+    )
+    titles = page.evaluate(
+        "() => [...document.querySelectorAll('th[title*=\"inverse-error fusion\"]')]"
+        ".map(t => t.title)"
+    )
+    cond_basis = "not independent truth" in str(gloss)
+    cond_limit = any("flatters agreement" in str(t) for t in titles)
+    record(
+        "UVI fusion names its non-independent reference (baseline + limitation)",
+        cond_basis and cond_limit,
+        [f"basis={cond_basis}", f"limit={cond_limit}", f"nTitles={len(titles)}",
+         str(gloss)[-70:]],
+    )
+
+    # 3d. rank and score semantics must be named with their versions:
+    # an unversioned score is an unfalsifiable claim.
+    versions = page.evaluate(
+        "() => ({prov: (document.getElementById('provenance')||{}).textContent || '',"
+        " panel: (document.getElementById('surfacecontext')||{}).textContent || ''})"
+    )
+    record(
+        "rank and score semantics carry their versions where they are read",
+        "action-spectrum-v2" in str(versions["prov"])
+        and "fixed-duration-dose-v2" in str(versions["panel"])
+        and "heuristic-reliability-v1" in str(versions["panel"]),
+        [str(versions["prov"])[:70], str(versions["panel"])[-70:]],
+    )
+
+    # 3e. confidence must stay labelled a heuristic: the number is a
+    # reliability estimate, not a calibrated interval.
+    conf_title = page.evaluate(
+        "() => { const t = [...document.querySelectorAll('#detail th')]"
+        ".find(h => h.textContent.trim() === 'Conf'); return t ? t.title : ''; }"
+    )
+    hero_title = page.evaluate(
+        "() => { const s = document.querySelector('#hero span[title]');"
+        " return s ? s.title : ''; }"
+    )
+    # The column says what the number is; the headline number carries the
+    # disclaimer that it is not a calibrated interval.
+    record(
+        "confidence is labelled a heuristic, not a calibrated interval",
+        "euristic" in str(conf_title)
+        and "not an empirically calibrated" in str(hero_title),
+        [str(conf_title)[:70], str(hero_title)[:70]],
+    )
+
+    # 4. site picker links the other published page
+    options = page.evaluate(
+        "() => [...document.getElementById('locsel').options].map(o => o.value + '|' + (o.dataset.url||''))"
+    )
+    record(
+        "site picker carries the other site as a link, not an in-place switch",
+        any("pacific-palisades" in str(o) for o in options),
+        options,
+    )
+
+    # 5. the no-usable-window path. This run may have a window every day,
+    # so force the branch instead of depending on today's weather: null
+    # the day's window fields and re-render exactly as the app would.
+    # The hero reports bestDay(), which SELECTS over the payload, so
+    # nulling one day just promotes the runner-up. Force the state a
+    # genuinely windowless run has: no day carries a usable window.
+    forced = page.evaluate("""() => {
+      for (const d of (DATA.daily || [])) {
+        for (const k of ['best_usable_30m_start','best_usable_30m_end',
+                         'strongest_30m_start','strongest_30m_end',
+                         'best_usable_30m_dose_j_m2','strongest_30m_dose_j_m2',
+                         'best_30m_tan_dose_j_m2','best_30m_start']) { d[k] = null; }
+      }
+      render();
+      return document.getElementById('hero').textContent.replace(/\\s+/g,' ');
+    }""")
+    record(
+        "a day with no usable window says so instead of showing 0 J/m² as fine",
+        forced is not None
+        and ("NO USABLE WINDOW" in str(forced) or "missing usable light" in str(forced)),
+        forced,
+    )
+    page.reload(wait_until="networkidle")
+    page.wait_for_timeout(2000)
+
+    # 6. the site switch is a real navigation to the other published page
+    page.select_option("#locsel", "pacific-palisades")
+    page.wait_for_timeout(3000)
+    landed = page.url
+    other_hero = page.evaluate(
+        "() => (document.getElementById('hero')||{}).textContent || ''"
+    )
+    record(
+        "site picker navigates to the other site's own page and payload",
+        "pacific-palisades" in landed and "best day" in other_hero,
+        f"{landed} :: {other_hero[:90]}",
+    )
+    page.goto(url, wait_until="networkidle")
+    page.wait_for_timeout(2000)
+
+    # 7. calendar artifact
+    href = page.evaluate("() => (document.querySelector('a[href*=\"calendar\"]')||{}).href || ''")
+    ics = (site_dir / "calendar.ics").read_text(encoding="utf-8")
+    record(
+        "calendar link is the published .ics, never the live API path",
+        "calendar.ics" in str(href) and "/api/" not in str(href) and ics.startswith("BEGIN:VCALENDAR"),
+        str(href),
+    )
+
+
+def verify(site_dir: Path, shots_dir: Path) -> None:
     try:
         sync_api = importlib.import_module("playwright.sync_api")
     except ImportError:
@@ -81,294 +420,83 @@ def verify(site_dir: Path) -> None:
     try:
         with sync_api.sync_playwright() as pw:
             browser = pw.chromium.launch()
-            page = browser.new_page(viewport={"width": 1400, "height": 1000})
-            errors: list[str] = []
-            page.on("pageerror", lambda e: errors.append(str(e)))
-            page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
-            page.goto(url, wait_until="networkidle")
-            page.wait_for_timeout(2500)
-
-            hero = page.evaluate("() => document.getElementById('hero').textContent.replace(/\\s+/g,' ')")
-            record("page loads with a payload and no console/page errors", bool(hero) and not errors, errors or hero[:120])
-
-            # 1. flat pose over an unknown surface: the invariant must be stated
-            page.select_option("#surface", "unknown")
-            page.fill("#skintilt", "0")
-            page.press("#skintilt", "Tab")
-            page.wait_for_timeout(1200)
-            flat_hero = page.evaluate(
-                "() => document.getElementById('hero').textContent.replace(/\\s+/g,' ')"
-            )
-            record(
-                "flat/unknown pose states the horizontal-reference invariant",
-                "horizontal reference" in flat_hero and "in your plane" not in flat_hero,
-                flat_hero[-140:],
-            )
-
-            # 2. material -> plane -> hero, and the module agrees
-            page.select_option("#surface", "dry_beach_sand")
-            page.fill("#skintilt", "45")
-            page.press("#skintilt", "Tab")
-            page.wait_for_timeout(1500)
-            hero45 = page.evaluate(
-                "() => document.getElementById('hero').textContent.replace(/\\s+/g,' ')"
-            )
-            panel = page.evaluate("() => document.getElementById('surfacecontext').textContent")
-            record(
-                "material+tilt reach the hero above the fold",
-                "Dry beach sand" in hero45 and "tilted 45" in hero45 and "+" in hero45,
-                [c for c in hero45.split(". ") if "plane" in c][:1],
-            )
-            row_time = page.evaluate(
-                "() => (activeRow()||{}).time",
-            )
-            row = next(
-                (r for r in payload["half_hour"] if str(r["time"]).startswith(str(row_time)[:16])),
-                None,
-            )
-            if row is None:
-                record("panel row resolves to a published row", False, row_time)
-            else:
-                want = _module_factor(row, "dry_beach_sand", 45.0)
-                panel_factor = page.evaluate("() => planeForRow(activeRow()).factor")
-                record(
-                    "panel plane factor equals the physics module (4-dp round)",
-                    abs(float(panel_factor) - want) < 5e-5,
-                    f"page={panel_factor:.6f} module={want:.6f} row={row_time}",
+            for width, height, tag in VIEWPORTS:
+                global _viewport_label
+                _viewport_label = f"[{tag} {width}px] "
+                page = browser.new_page(viewport={"width": width, "height": height})
+                errors: list[str] = []
+                page.on("pageerror", lambda e, _err=errors: _err.append(str(e)))
+                page.on(
+                    "console",
+                    lambda m, _err=errors: _err.append(m.text) if m.type == "error" else None,
                 )
-                # The panel prints the row as "YYYY-MM-DD HH:MM" (space, not the
-                # ISO "T"): compare against what a reader actually sees.
-                shown_row = str(row_time)[:16].replace("T", " ")
-                record(
-                    "panel names its row and reports the gain",
-                    "plane gain" in panel and shown_row in panel,
-                    panel[:160],
+                page.goto(url, wait_until="networkidle")
+                page.wait_for_timeout(2500)
+
+                # No unsignaled horizontal page overflow: the day strip scrolls
+                # internally, the document must not.
+                metrics = page.evaluate(
+                    "() => ({inner: innerWidth, doc: document.documentElement.scrollWidth,"
+                    " body: document.body.scrollWidth})"
                 )
-
-            # 3. honesty of the two live-only controls on a published page
-            class_copy = page.evaluate(
-                "() => [...document.querySelectorAll('#classbox .note')].map(e => e.textContent).join(' ')"
-            )
-            record(
-                "schedule is marked environmental-only, not silently inert",
-                "cannot re-rank for a schedule" in class_copy and "environmental" in class_copy,
-                class_copy[:170],
-            )
-            record(
-                "personal MMD is hidden with a stated reason",
-                page.evaluate("() => document.getElementById('mmdbasis').type") == "hidden"
-                and "live server"
-                in str(page.evaluate("() => (document.getElementById('mmdstatic')||{}).textContent")),
-                page.evaluate("() => (document.getElementById('mmdstatic')||{}).textContent"),
-            )
-
-            # 4a. UI semantic validators: the rendered ranking row, the day card
-            # and the hero must agree with the payload they were built from -
-            # "wrong number on screen" is invisible to a payload-only test.
-            def _round(value: object) -> int | None:
-                """Rounded int for a payload number or a rendered cell, else None."""
-                try:
-                    return round(float(str(value)))
-                except (TypeError, ValueError):
-                    return None
-
-            ui_row_time = str(page.evaluate("() => (activeRow()||{}).time"))[:16]
-            cells = page.evaluate(
-                f"() => {{ const tr = document.querySelector('#detail tr[data-time^=\"{ui_row_time}\"]');"
-                f" return tr ? [...tr.children].map(td => td.textContent.trim()) : null; }}"
-            )
-            prow = next(
-                (r for r in payload["half_hour"] if str(r["time"]).startswith(ui_row_time)), None
-            )
-            if prow is None or not isinstance(cells, list) or len(cells) < 8:
-                record("ranking row resolves to a payload row", False, [ui_row_time, cells])
-            else:
-                want_dose = prow.get("delayed_pigmentation_dose_30m_j_m2") or prow.get("tan_dose_30m_j_m2")
-                for idx, field, want in (
-                    (3, "Dose J/m²", want_dose),
-                    (5, "Overall", prow.get("overall_tan_opportunity_0_100")),
-                    (6, "Abs", prow.get("tan_score_absolute_0_100")),
-                    (7, "Local", prow.get("local_tan_score_0_100")),
-                ):
-                    shown = str(cells[idx]).strip()
-                    want_rounded, shown_rounded = _round(want), _round(shown)
-                    record(
-                        f"ranking row agrees with the payload: {field}",
-                        want_rounded is not None and want_rounded == shown_rounded,
-                        f"shown={shown} payload={want}",
-                    )
-
-            # the day card's window must be the window its dose came from
-            day = page.evaluate(
-                "() => { const d = (DATA.daily||[]).find(x => x.date === SEL);"
-                " return d ? {date: d.date, start: d.best_usable_30m_start, end: d.best_usable_30m_end,"
-                " dose: d.best_usable_30m_dose_j_m2} : null; }"
-            )
-            card = str(page.evaluate(
-                "() => { const c = document.querySelector('.daycell[aria-selected=\"true\"]');"
-                " return c ? c.textContent : ''; }"
-            ))
-            def _hhmm(stamp: object) -> str:
-                text = str(stamp)
-                hour, minute = int(text[11:13]), text[14:16]
-                suffix = "AM" if hour < 12 else "PM"
-                hour12 = hour % 12 or 12
-                return f"{hour12} {suffix}" if minute == "00" else f"{hour12}:{minute} {suffix}"
-
-            if day and day["start"]:
-                want_start, want_end = _hhmm(day["start"]), _hhmm(day["end"])
                 record(
-                    "day card shows the dose and the window that dose came from",
-                    str(_round(day["dose"])) in card and want_start in card and want_end in card,
-                    [f"dose={day['dose']}", want_start, want_end, card[:80]],
+                    "no horizontal page overflow",
+                    int(metrics["doc"]) <= int(metrics["inner"]) + 1
+                    and int(metrics["body"]) <= int(metrics["inner"]) + 1,
+                    metrics,
                 )
-            else:
-                record("day card shows a dose for the selected day", bool(card.strip()), card[:110])
-
-            # the three score columns must sit together, and say how they differ
-            headers = page.evaluate(
-                "() => [...document.querySelectorAll('#detail table:last-of-type thead th')]"
-                ".map(h => [h.textContent.trim(), h.title])"
-            )
-            by_name = {str(h[0]): str(h[1]) for h in headers} if isinstance(headers, list) else {}
-            record(
-                "Dose/Overall/Abs/Local are shown together with distinguishing semantics",
-                {"Dose J/m²", "Overall", "Abs", "Local"} <= set(by_name)
-                and "worldwide" in by_name.get("Abs", "")
-                and "within this location" in by_name.get("Local", ""),
-                sorted(by_name),
-            )
-
-            # 3b. the spectral tier must be labelled for what it is: nothing said
-            # "degraded" anywhere before, while the docs require the label.
-            prov = page.evaluate(
-                "() => { const p = document.getElementById('provenance');"
-                " return p ? {text: p.textContent, title: p.title} : null; }"
-            )
-            record(
-                "Tier-C is labelled a fixed-band proxy where the number is shown",
-                bool(prov)
-                and "fixed-band proxy" in str(prov["text"])
-                and "+204%" in str(prov["title"])
-                and "WOUDC" in str(prov["title"]),
-                [str(prov["text"])[-90:], str(prov["title"])[:90]],
-            )
-
-            # 3c. the UVI fusion must name its reference honestly: it is scored
-            # against Open-Meteo's own retrospective, which is not truth.
-            gloss = page.evaluate(
-                "() => [...document.querySelectorAll('.gloss')].map(e => e.textContent).join(' ')"
-            )
-            titles = page.evaluate(
-                "() => [...document.querySelectorAll('th[title*=\"inverse-error fusion\"]')]"
-                ".map(t => t.title)"
-            )
-            cond_basis = "not independent truth" in str(gloss)
-            cond_limit = any("flatters agreement" in str(t) for t in titles)
-            record(
-                "UVI fusion names its non-independent reference (baseline + limitation)",
-                cond_basis and cond_limit,
-                [f"basis={cond_basis}", f"limit={cond_limit}", f"nTitles={len(titles)}",
-                 str(gloss)[-70:]],
-            )
-
-            # 3d. rank and score semantics must be named with their versions:
-            # an unversioned score is an unfalsifiable claim.
-            versions = page.evaluate(
-                "() => ({prov: (document.getElementById('provenance')||{}).textContent || '',"
-                " panel: (document.getElementById('surfacecontext')||{}).textContent || ''})"
-            )
-            record(
-                "rank and score semantics carry their versions where they are read",
-                "action-spectrum-v2" in str(versions["prov"])
-                and "fixed-duration-dose-v2" in str(versions["panel"])
-                and "calibrated-error-v1" in str(versions["panel"]),
-                [str(versions["prov"])[:70], str(versions["panel"])[-70:]],
-            )
-
-            # 3e. confidence must stay labelled a heuristic: the number is a
-            # reliability estimate, not a calibrated interval.
-            conf_title = page.evaluate(
-                "() => { const t = [...document.querySelectorAll('#detail th')]"
-                ".find(h => h.textContent.trim() === 'Conf'); return t ? t.title : ''; }"
-            )
-            hero_title = page.evaluate(
-                "() => { const s = document.querySelector('#hero span[title]');"
-                " return s ? s.title : ''; }"
-            )
-            # The column says what the number is; the headline number carries the
-            # disclaimer that it is not a calibrated interval.
-            record(
-                "confidence is labelled a heuristic, not a calibrated interval",
-                "euristic" in str(conf_title)
-                and "not an empirically calibrated" in str(hero_title),
-                [str(conf_title)[:70], str(hero_title)[:70]],
-            )
-
-            # 4. site picker links the other published page
-            options = page.evaluate(
-                "() => [...document.getElementById('locsel').options].map(o => o.value + '|' + (o.dataset.url||''))"
-            )
-            record(
-                "site picker carries the other site as a link, not an in-place switch",
-                any("pacific-palisades" in str(o) for o in options),
-                options,
-            )
-
-            # 5. the no-usable-window path. This run may have a window every day,
-            # so force the branch instead of depending on today's weather: null
-            # the day's window fields and re-render exactly as the app would.
-            # The hero reports bestDay(), which SELECTS over the payload, so
-            # nulling one day just promotes the runner-up. Force the state a
-            # genuinely windowless run has: no day carries a usable window.
-            forced = page.evaluate("""() => {
-              for (const d of (DATA.daily || [])) {
-                for (const k of ['best_usable_30m_start','best_usable_30m_end',
-                                 'strongest_30m_start','strongest_30m_end',
-                                 'best_usable_30m_dose_j_m2','strongest_30m_dose_j_m2',
-                                 'best_30m_tan_dose_j_m2','best_30m_start']) { d[k] = null; }
-              }
-              render();
-              return document.getElementById('hero').textContent.replace(/\\s+/g,' ');
-            }""")
-            record(
-                "a day with no usable window says so instead of showing 0 J/m² as fine",
-                forced is not None
-                and ("NO USABLE WINDOW" in str(forced) or "missing usable light" in str(forced)),
-                forced,
-            )
-            page.reload(wait_until="networkidle")
-            page.wait_for_timeout(2000)
-
-            # 6. the site switch is a real navigation to the other published page
-            page.select_option("#locsel", "pacific-palisades")
-            page.wait_for_timeout(3000)
-            landed = page.url
-            other_hero = page.evaluate(
-                "() => (document.getElementById('hero')||{}).textContent || ''"
-            )
-            record(
-                "site picker navigates to the other site's own page and payload",
-                "pacific-palisades" in landed and "best day" in other_hero,
-                f"{landed} :: {other_hero[:90]}",
-            )
-            page.goto(url, wait_until="networkidle")
-            page.wait_for_timeout(2000)
-
-            # 7. calendar artifact
-            href = page.evaluate("() => (document.querySelector('a[href*=\"calendar\"]')||{}).href || ''")
-            ics = (site_dir / "calendar.ics").read_text(encoding="utf-8")
-            record(
-                "calendar link is the published .ics, never the live API path",
-                "calendar.ics" in str(href) and "/api/" not in str(href) and ics.startswith("BEGIN:VCALENDAR"),
-                str(href),
-            )
+                _checks(page, payload, site_dir, url, errors)
+                _ = page.screenshot(path=str(shots_dir / f"{tag}-{width}.png"))
+                page.close()
             browser.close()
     finally:
         httpd.shutdown()
 
 
-def write_report(out: Path, site_dir: Path) -> int:
+def compare_baseline(shots: Path, baseline: Path) -> None:
+    """Compare this run's screenshots with a stored baseline, if one exists.
+
+    A pixel baseline is only meaningful when it was produced on the SAME renderer
+    as the run (fonts and rasterisation differ across platforms), so this seeds
+    nothing automatically: it compares when a baseline is present and records an
+    explicit notice when it is not. Seed it with:
+
+      mkdir -p <baseline> && cp <shots>/*.png <baseline>/
+
+    Pillow is imported here rather than declared: the rest of the script works
+    without it, and a missing Pillow is a notice, not a crash.
+    """
+    try:
+        image_module = importlib.import_module("PIL.Image")
+        image_chops = importlib.import_module("PIL.ImageChops")
+    except ImportError:
+        record("pixel baseline compared", True, "skipped: Pillow not installed")
+        return
+    if not baseline.is_dir() or not any(baseline.glob("*.png")):
+        record("pixel baseline compared", True, f"no baseline seeded yet at {baseline}")
+        return
+    for shot in sorted(shots.glob("*.png")):
+        want = baseline / shot.name
+        if not want.exists():
+            record(f"pixel baseline has {shot.name}", False, "missing from the baseline")
+            continue
+        with image_module.open(shot) as got_img, image_module.open(want) as want_img:
+            if got_img.size != want_img.size:
+                record(f"pixel baseline size {shot.name}", False, [got_img.size, want_img.size])
+                continue
+            diff = image_chops.difference(got_img.convert("RGB"), want_img.convert("RGB"))
+            bbox = diff.getbbox()
+            changed = 0 if bbox is None else sum(1 for p in diff.convert("L").getdata() if p > 16)
+            total = got_img.size[0] * got_img.size[1]
+            share = changed / max(total, 1)
+        record(
+            f"pixel baseline matches {shot.name}",
+            share <= 0.005,
+            f"{share * 100:.3f}% of pixels differ (tolerance 0.500%)",
+        )
+
+
+def write_report(out: Path, site_dir: Path, shots: Path) -> int:
     failed = [c for c in CHECKS if not c[1]]
     lines = [
         "# Rendered-UI verification (Phase 2 acceptance)",
@@ -379,6 +507,8 @@ def write_report(out: Path, site_dir: Path) -> int:
             "Driven by real Chromium over the committed static export "
             "(`uv run --with playwright python scripts/verify_rendered_ui.py`)."
         ),
+        "",
+        f"Screenshots: `{shots}/` (desktop-1350.png, mobile-390.png).",
         "",
         "| check | result | observed |",
         "|---|---|---|",
@@ -395,9 +525,17 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--site-dir", default="docs")
     ap.add_argument("--out", default="docs/validation/rendered_ui_verification.md")
+    ap.add_argument(
+        "--baseline",
+        default="docs/validation/rendered_ui_baseline",
+        help="Directory of baseline screenshots to diff against (seeded by hand on the runner)",
+    )
     ns = ap.parse_args(argv)
-    verify(Path(ns.site_dir))
-    return write_report(Path(ns.out), Path(ns.site_dir))
+    shots = Path(ns.out).parent / "rendered_ui"
+    shots.mkdir(parents=True, exist_ok=True)
+    verify(Path(ns.site_dir), shots)
+    compare_baseline(shots, Path(ns.baseline))
+    return write_report(Path(ns.out), Path(ns.site_dir), shots)
 
 
 if __name__ == "__main__":

@@ -140,6 +140,28 @@ def validate_surface_materials() -> None:
 SURFACE_EXTENT_MODES = ("local", "broad")
 
 
+def validate_surface_extent(mode: object) -> str:
+    """Return the extent mode, refusing one this build cannot honour.
+
+    `broad` promises a homogeneous-area radiative-transfer run. It used to be
+    accepted and merely stamped into the payload, so asking for broad
+    surroundings returned local numbers under a different label (audit: "broad
+    surface mode only changes metadata"). Refuse it at every entry point until a
+    real RT path exists, instead of labelling local physics as broad.
+    """
+    text = str(mode or "local").strip().lower() or "local"
+    if text == "broad":
+        raise ValueError(
+            "ERROR surface: surface_extent=broad needs homogeneous-area radiative transfer"
+            + ", which this build does not implement; use 'local'"
+        )
+    if text not in SURFACE_EXTENT_MODES:
+        raise ValueError(
+            f"ERROR surface: surface_extent must be one of {list(SURFACE_EXTENT_MODES)}, got {mode!r}"
+        )
+    return text
+
+
 def resolve_surface(
     slug: str | None,
     uva_reflectance: float | None = None,

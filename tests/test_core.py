@@ -1188,6 +1188,10 @@ def test_daily_summary_keeps_status_and_wind_peaks():
             "wind_speed_10m": [9.0, 26.0],
             "wind_gusts_10m": [12.0, 34.0],
             "outdoor_blocked": [False, False],
+            # Without the dose input there is no computed window at all, and the
+            # day is ungraded (NO USABLE WINDOW); this fixture grades the status
+            # column, so it supplies the radiation the window search needs.
+            "melanogenic_effective_irradiance_wm2": [0.5, 0.6],
         }
     )
     out = build_daily_summary(df)

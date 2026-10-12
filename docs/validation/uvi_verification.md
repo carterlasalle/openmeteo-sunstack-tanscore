@@ -1,6 +1,6 @@
 # UVI verification (retrospective reference, not truth)
 
-Snapshots: 144 | 1-day-lead rows: 333
+Snapshots: 290 | 1-day-lead rows: 333
 
 | source | n | MAE | bias | RMSE |
 |---|---|---|---|---|
@@ -15,6 +15,4 @@ Common-case MAE (identical rows, ranking metric):
 - om: n=147 MAE 0.13 bias +0.03
 - cams: n=147 MAE 1.19 bias -1.09
 - cons: n=147 MAE 0.62 bias -0.53
-
-Reference: Open-Meteo previous-runs best_match (shared-DNA caveat).
-Target: MAE < 1.0, |bias| < 0.3 per source at 1-day lead.
+- verdict: fusion MAE 0.62 vs OM 0.13 -> worse (+0.49)

@@ -10,6 +10,8 @@ name: forecast-run
   workflow_dispatch:
   push:
     paths:
+      - "docs/**"
+      - "scripts/verify_rendered_ui.py"
       - "src/sunstack/**"
       - "data/research/**"
       - "scripts/build_spectral_corpus.py"
@@ -21,6 +23,8 @@ name: forecast-run
       - "docs/SCIENCE.md"
   pull_request:
     paths:
+      - "docs/**"
+      - "scripts/verify_rendered_ui.py"
       - "src/sunstack/**"
       - "data/research/**"
       - "scripts/build_spectral_corpus.py"
@@ -74,6 +78,50 @@ jobs:
           for site in docs/sites/*/data.json; do
             [ -f "$site" ] && uv run python scripts/validate_published_artifact.py "$site"
           done
+  rendered-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          version: "0.12.15"
+          python-version: "3.13"
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Install Chromium
+        run: uv run --with playwright python -m playwright install --with-deps chromium
+      # Real Chromium over the committed export: the physics module and the page
+      # must agree on the plane factor, material/tilt must reach the hero, the
+      # rendered ranking row must match the payload field it came from, there
+      # must be no console errors and no page-wide horizontal overflow, at both
+      # 1350px and 390px.
+      - name: Rendered UI contract (1350px + 390px)
+        run: uv run --with playwright python scripts/verify_rendered_ui.py
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-ui-screenshots-${{ github.run_id }}
+          path: docs/validation/rendered_ui/
+          retention-days: 30
+      # The deployed page must serve the run-stamped payload. Pages lags a push
+      # by about a minute, so retry instead of reporting a false failure.
+      - name: Published URL smoke test
+        run: |
+          url="https://carterlasalle.github.io/openmeteo-sunstack-tanscore/"
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -s -o /tmp/published.html -w '%{http_code}' "$url")
+            if [ "$code" = "200" ] && grep -q "data.json?v=" /tmp/published.html; then
+              echo "published page served the run-stamped payload (HTTP $code)"
+              exit 0
+            fi
+            echo "attempt $attempt: HTTP $code; waiting for Pages"
+            sleep 20
+          done
+          echo "published page did not serve the run-stamped payload"
+          exit 1
+
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 60

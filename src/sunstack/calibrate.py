@@ -694,7 +694,7 @@ def estimate_expected_uvi_error(
     against the UVI verification table (OM MAE 0.48, CAMS 1.14 at 1-day
     lead): lone-source rows and wide-spread rows carry wider intervals.
     ``tan_forecast_confidence_0_100`` is a monotonic transform of expected
-    error (versioned ``calibrated-error-v1``), so higher bins mean lower
+    error (versioned ``heuristic-reliability-v1``), so higher bins rank lower
     realized error — never sunnier skies.
     """
     from . import config as _cfg

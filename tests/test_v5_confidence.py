@@ -100,16 +100,14 @@ def test_common_case_uvi_evaluator_uses_identical_rows() -> None:
     assert hasattr(module, "extract_preds")
     assert hasattr(module, "fetch_truth")
     assert hasattr(module, "main")
-    import inspect
 
-    src = inspect.getsource(module.main)
-    assert "Common case" in src
-    # Production common-case column set: every ranked source + reference.
-    assert '"om", "cams", "cons", "retrospective_reference"' in src
-    # The loud invariant must exist on the identical row set (not just the
-    # legacy availability table): fail text + nonzero exit wired to it.
-    assert "common-case MAE exceeds OM" in src
-    assert src.count("return 1") >= 2
+    # The common-case gate is a comparison with float noise for slack, NOT the
+    # old 0.5-UVI allowance that passed a measured 0.49 regression (audit §5).
+    assert hasattr(module, "common_case_regressed")
+    assert hasattr(module, "common_case_maes")
+    assert module.common_case_regressed(0.62, 0.13) is True
+    assert module.common_case_regressed(0.13, 0.13) is False
+    assert module.common_case_regressed(0.1300000001, 0.13) is False
     # Behavioral pin: identical-row MAE math on a mixed-availability frame
     # using production's own column set (cons missing on row 1 narrows it).
     frame = pd.DataFrame({
@@ -125,6 +123,9 @@ def test_common_case_uvi_evaluator_uses_identical_rows() -> None:
         assert len(vc) == 1
     # And consensus-missing rows genuinely narrow the common set.
     assert len(frame.dropna(subset=["om", "retrospective_reference"])) == 2
+    # The MAE helper reads exactly that narrowed set.
+    maes = module.common_case_maes(common)
+    assert maes is not None and len(maes) == 2
 
 
 def test_strong_sun_probability_separate_from_confidence() -> None:

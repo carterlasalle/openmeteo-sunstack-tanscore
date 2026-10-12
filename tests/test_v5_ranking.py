@@ -187,3 +187,48 @@ def test_daily_summary_carries_both_rankings() -> None:
     assert _cell_text(row, "strongest_30m_start") == "2026-06-21T10:00:00"
     assert _cell_text(row, "best_usable_30m_start") == "2026-06-21T10:00:00"
     assert _cell_text(row, "best_comfortable_usable_30m_start") == "2026-06-21T10:00:00"
+
+
+def test_blocked_preceding_interval_does_not_disqualify_the_window() -> None:
+    """The stamp that BOUNDS a window is not inside it.
+
+    Stamps label interval ENDS, so a candidate [start, start+30m) integrates the
+    interval ending at stamps[i+1]; the stamp at `i` belongs to the interval
+    BEFORE the window. Gating on it (the old behaviour) let rain in the previous
+    half-hour disqualify a clean candidate - audit §6 / Phase 3 item 5.
+    """
+    from sunstack.opportunity import best_fixed_dose_window
+
+    clean = _day()
+    # Block the BOUNDING stamp of the candidate at 10:00: it must survive.
+    blocked_bound = clean.copy()
+    blocked_bound.loc[0, "outdoor_blocked"] = True
+    win = best_fixed_dose_window(blocked_bound, 30, usable_only=True)
+    assert win is not None
+    assert str(win[0]) == "2026-06-21 10:00:00"
+    assert abs(win[2] - 1080.0) < 1e-9
+
+    # Block the stamp INSIDE that candidate (the 10:30 leg): now it must go.
+    blocked_leg = clean.copy()
+    blocked_leg.loc[1, "outdoor_blocked"] = True
+    win2 = best_fixed_dose_window(blocked_leg, 30, usable_only=True)
+    assert win2 is None or str(win2[0]) != "2026-06-21 10:00:00"
+
+
+def test_class_ending_exactly_at_a_window_start_does_not_block_it() -> None:
+    """A schedule block [09:00, 09:30) ends when the 09:30 window starts."""
+    from sunstack.opportunity import best_fixed_dose_window
+
+    day = pd.DataFrame({
+        "dt": pd.to_datetime([
+            "2026-06-22T09:30", "2026-06-22T10:00", "2026-06-22T10:30"]),
+        "melanogenic_effective_irradiance_wm2": [0.2, 0.6, 0.4],
+        "tan_forecast_confidence_0_100": [70.0] * 3,
+        "outdoor_blocked": [False] * 3,
+        "outdoor_feasibility_complete": [True] * 3,
+    })
+    # 2026-06-22 is a Monday (weekday 0); the block ends at the candidate start.
+    blocks = {0: [(9 * 60, 9 * 60 + 30)]}
+    win = best_fixed_dose_window(day, 30, usable_only=True, class_blocks=blocks)
+    assert win is not None
+    assert str(win[0]) == "2026-06-22 09:30:00", win

@@ -40,3 +40,7 @@ bun.lock
 
 # mutmut's shadow checkout (full src/ + tests/ copy), regenerated on every run.
 mutants/
+
+# Per-run screenshots from scripts/verify_rendered_ui.py: regenerated locally,
+# uploaded as CI artifacts, never committed (the text report carries the verdicts).
+docs/validation/rendered_ui/

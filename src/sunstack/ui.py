@@ -100,7 +100,7 @@ _READ_RESPONSES: dict[int | str, dict[str, object]] = {
 
 
 def _parse_surface(surface: object, extent: object) -> tuple[str, str]:
-    from .surface import PRESETS, SURFACE_EXTENT_MODES, resolve_surface
+    from .surface import PRESETS, resolve_surface, validate_surface_extent
 
     slug = str(surface or "unknown").strip() or "unknown"
     mode = str(extent or "local").strip() or "local"
@@ -116,9 +116,7 @@ def _parse_surface(surface: object, extent: object) -> tuple[str, str]:
     except ValueError as exc:
         allowed = sorted(s for s in PRESETS if s != "custom")
         raise ValueError(f"unknown surface {slug!r}; allowed: {allowed}") from exc
-    if mode not in SURFACE_EXTENT_MODES:
-        raise ValueError(
-            f"surface_extent must be one of {list(SURFACE_EXTENT_MODES)}, got {mode!r}")
+    mode = validate_surface_extent(mode)
     return prof.slug, mode
 
 def _parse_skin_plane(

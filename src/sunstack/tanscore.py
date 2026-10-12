@@ -635,7 +635,7 @@ def score_forecast(
     # did not match model features and read missing inputs as full model.
     # Emitted for transparency only: coverage is NOT coupled into confidence
     # or any score (no error-model coupling — no historical calibration shows
-    # a coverage→error relationship, so uncertainty stays calibrated-error-v1).
+    # a coverage→error relationship, so uncertainty stays heuristic-reliability-v1).
     _schema: list[str] = []
     _bundle = _as_str_dict(_load_bundle(calibration_dir, strict=strict))
     if _bundle is not None:

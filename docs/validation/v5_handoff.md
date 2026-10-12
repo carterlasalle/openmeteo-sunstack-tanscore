@@ -22,7 +22,7 @@ Every v5 identity, and what forced the change. Read from the live artifact with
 | `spectral_degraded_backend` | `tierC-broadband-proxy-v2` | The shipped path: fixed-band proxy, explicitly labelled degraded. |
 | `surface_model_version` | `uv-surface-v1` | New local surface/material model separate from regional albedo. |
 | `fusion_version` | `calibrated-uvi-fusion-v2` | Replaced the duplicated-OM-median trick with bias-corrected inverse-error weights. |
-| `confidence_version` | `calibrated-error-v1` | Confidence now means reliability, not sunniness. |
+| `confidence_version` | `heuristic-reliability-v1` | Confidence now means reliability, not sunniness. |
 | `window_rank_version` | `fixed-duration-dose-v2` | Ranking is fixed-duration delayed-pigmentation dose, not a geometric composite. |
 | `global_reference_version` | `global-mel-ref-v2` | 12-site POWER 2024 corpus replaces the two-site provisional estimate. |
 

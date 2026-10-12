@@ -1503,13 +1503,27 @@ def build_daily_summary(
                 "blocked_half_hours": int(
                     scol(daylight, "outdoor_blocked").fillna(False).sum()
                 ),
-                "day_status": day_status(float(best["overall_tan_opportunity_0_100"])),
+                "day_status": day_status(
+                    float(best["overall_tan_opportunity_0_100"]),
+                    has_usable_window=usable_30m is not None,
+                ),
             }
         )
     return pd.DataFrame(rows)
 
 
-def day_status(score: float) -> str:
+def day_status(score: float, *, has_usable_window: bool = True) -> str:
+    """Day verdict word for the Overall composite.
+
+    Availability comes FIRST. A day with no usable interval is not a bad day to
+    grade - it is a day with nothing to grade, and grading it POOR reads as "weak
+    sun" when the sun may be strong and simply blocked (audit: Oct 17 showed
+    751.6 J/m2 of blocked radiation rendered as "POOR, 0 J/m2"). The no-window
+    state is the same phrase the hero and the day card use, so the whole page
+    says one thing.
+    """
+    if not has_usable_window:
+        return "NO USABLE WINDOW"
     if not np.isfinite(score):
         return "UNKNOWN"
     if score >= 80:

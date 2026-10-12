@@ -1400,7 +1400,7 @@ def main() -> None:
             "--surface-uva-reflectance and --surface-uvb-reflectance "
             "require --surface custom"
         )
-    from .surface import resolve_surface
+    from .surface import resolve_surface, validate_surface_extent
 
     try:
         args.surface = resolve_surface(
@@ -1408,6 +1408,13 @@ def main() -> None:
             args.surface_uva_reflectance,
             args.surface_uvb_reflectance,
         ).slug
+    except ValueError as exc:
+        parser.error(str(exc))
+    # The CLI advertises `--surface-extent broad`, so it has to refuse it for the
+    # same reason the API does: the mode is stamped into the payload without any
+    # homogeneous-area radiative transfer behind it.
+    try:
+        args.surface_extent = validate_surface_extent(args.surface_extent)
     except ValueError as exc:
         parser.error(str(exc))
     if args.skin_tilt_deg is not None and not 0 <= args.skin_tilt_deg <= 180:

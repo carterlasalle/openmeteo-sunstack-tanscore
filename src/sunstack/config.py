@@ -230,7 +230,14 @@ SPECTRAL_BACKEND_VERSION_V5 = "tierB-libradtran-emulator-v1"
 SPECTRAL_DEGRADED_BACKEND = "tierC-broadband-proxy-v2"
 SURFACE_MODEL_VERSION = "uv-surface-v1"
 FUSION_VERSION = "calibrated-uvi-fusion-v2"
-CONFIDENCE_VERSION = "calibrated-error-v1"
+# Audit §4: the expected-error model is a handwritten formula (see
+# calibrate.estimate_expected_uvi_error) with no fitted coefficients and no
+# demonstrated held-out interval coverage, so it is NOT calibrated. Calling
+# the version `calibrated-error-v1` claimed statistical evidence the number
+# does not have; the UI already labels it "heuristic reliability". Renamed
+# for the same reason, old value kept here for one migration:
+#   calibrated-error-v1 -> heuristic-reliability-v1
+CONFIDENCE_VERSION = "heuristic-reliability-v1"
 WINDOW_RANK_VERSION = "fixed-duration-dose-v2"
 DEPRECATED_FIELDS = (
     "overall_tan_opportunity_0_100",

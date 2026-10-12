@@ -15,7 +15,7 @@
 > **v5 model identity.** `schema_version = sunstack-output-v5`; temporal support
 > `interval-contract-v1`; photobiology `delayed-pigmentation-v2`; action spectrum
 > `parrish-fda-3630-v1`; surface `uv-surface-v1`; fusion `calibrated-uvi-fusion-v2`;
-> confidence `calibrated-error-v1`; window rank `fixed-duration-dose-v2`. Strict,
+> confidence `heuristic-reliability-v1`; window rank `fixed-duration-dose-v2`. Strict,
 > gate-passing spectra identify `tierB-libradtran-emulator-v1`; explicitly degraded
 > spectra identify `tierC-broadband-proxy-v2`.
 
@@ -309,7 +309,7 @@ weighted votes. `erythemal_irradiance_wm2 = uvi_consensus / 40` is then derived
 from that final consensus. SED integrates this final-consensus erythemal field,
 never a raw provider value or a pre-fusion intermediate.
 
-### 4.2 Confidence (`confidence_version = calibrated-error-v1`)
+### 4.2 Confidence (`confidence_version = heuristic-reliability-v1`)
 
 `tan_forecast_confidence_0_100` is calibrated reliability/error context, never
 sun strength and never a multiplier on photons. Source disagreement and

@@ -6,6 +6,7 @@ from typing import cast
 
 import numpy as np
 import pandas as pd
+import pytest
 
 
 def _num(frame: pd.DataFrame, name: str, i: int = 0) -> float:
@@ -190,3 +191,48 @@ def test_material_changes_skin_plane_dose_not_environment() -> None:
         grass["skin_plane_best_usable_30m_dose_j_m2"]) > 0
     assert float(sand["best_usable_30m_dose_j_m2"]) == float(
         grass["best_usable_30m_dose_j_m2"])
+
+
+@pytest.mark.parametrize("tilt", [0.0, 30.0, 60.0, 90.0, 180.0])
+def test_posture_sweep_bounds_and_material_monotonicity(tilt: float) -> None:
+    """Posture sweep across the tilt range (audit Phase 1 item 6).
+
+    Every tilt must keep the environmental reference bit-identical, bound each
+    reflected band by its own downwelling, and order the materials by
+    reflectance. Tilt 180 is the mirror case: the sky view is zero and the plane
+    sees only the ground, so a zero-reflectance (unknown) material gives nothing
+    while bright ones give more.
+    """
+    from sunstack.spectral import apply_skin_plane
+
+    base = _env_frame()
+    plane = {
+        slug: apply_skin_plane(base, tilt, 180.0, surface_slug=slug)
+        for slug in ("unknown", "grass_summer", "dry_beach_sand", "fresh_snow")
+    }
+    for slug, out in plane.items():
+        for col in ("melanogenic_effective_irradiance_wm2", "tan_score_absolute_0_100",
+                    "predicted_uva_wm2", "predicted_uvb_wm2"):
+            assert out[col].tolist() == base[col].tolist(), (tilt, slug, col)
+        assert (out["skin_plane_ground_reflected_uva_wm2"]
+                <= out["predicted_uva_wm2"] + 1e-9).all(), (tilt, slug)
+        assert (out["skin_plane_ground_reflected_uvb_wm2"]
+                <= out["predicted_uvb_wm2"] + 1e-9).all(), (tilt, slug)
+        assert (out["skin_plane_e_mel_wm2"] >= 0).all(), (tilt, slug)
+        assert bool(np.isfinite(out["skin_plane_e_mel_wm2"]).all()), (tilt, slug)
+
+    if tilt == 0.0:
+        # Flat, upward-facing plane: no ground view at all, so no material can
+        # change the plane exposure - and that is geometry, not a broken control.
+        values = {round(_num(o, "skin_plane_e_mel_wm2"), 12) for o in plane.values()}
+        assert len(values) == 1, values
+        assert all(abs(_num(o, "skin_plane_factor") - 1.0) < 1e-9 for o in plane.values())
+        return
+
+    ordered = [
+        _num(plane[slug], "skin_plane_e_mel_wm2")
+        for slug in ("grass_summer", "dry_beach_sand", "fresh_snow")
+    ]
+    assert ordered == sorted(ordered) and ordered[0] > 0, (tilt, ordered)
+    if tilt == 180.0:
+        assert _num(plane["unknown"], "skin_plane_e_mel_wm2") == 0.0

@@ -8,8 +8,9 @@ REFERENCE (not truth: shared provider DNA flatters OM ~0.1-0.2).
 Scores per source (OM/CAMS/EPA/consensus) at 1-day lead, 12-2PM EDT:
 per-source availability MAE/bias/RMSE table PLUS a common-case block on the
 identical om/cams/cons/reference row set (the §10.2 ranking metric). Fails
-loudly (exit 1) if consensus common-case MAE exceeds OM by >0.5 on identical
-rows, and likewise on the legacy availability table.
+loudly (exit 1) if the fusion's common-case MAE exceeds OM's on the identical
+row set at all (audit §5: a 0.5-UVI allowance used to pass a real regression),
+and likewise on the legacy availability table.
 Usage: uv run python scripts/verify_uvi.py [--refetch]
 Writes docs/validation/uvi_verification.md (not committed by CI).
 """
@@ -87,6 +88,28 @@ def fetch_truth(days: list[str], cache: Path) -> pd.DataFrame:
     return t
 
 
+def common_case_maes(common: pd.DataFrame) -> tuple[float, float] | None:
+    """(consensus MAE, OM MAE) over the identical-row common case, or None."""
+    needed = {"cons", "om", "retrospective_reference"}
+    if common.empty or not needed <= set(common.columns):
+        return None
+    return (
+        float((common["cons"] - common["retrospective_reference"]).abs().mean()),
+        float((common["om"] - common["retrospective_reference"]).abs().mean()),
+    )
+
+
+def common_case_regressed(cons_mae: float, om_mae: float) -> bool:
+    """True when the fusion is worse than its best input on identical rows.
+
+    Audit §5: the comparison allowed consensus to lose to OM by up to 0.5 UVI,
+    which passed a measured 0.49 regression. The only slack kept is float noise -
+    a fused product that is worse than the input it fuses does not earn the
+    headline, and the gate has to say so.
+    """
+    return bool(cons_mae > om_mae + 1e-9)
+
+
 def main() -> int:
     revs = snapshot_revs()
     preds = extract_preds(revs)
@@ -134,12 +157,20 @@ def main() -> int:
             errc = vc[col] - vc["retrospective_reference"]
             lines.append(f"- {col}: n={len(vc)} MAE {np.abs(errc).mean():.2f} "
                          f"bias {errc.mean():+.2f}")
-        if "cons" in common.columns and "om" in common.columns and len(common):
-            cons_err = (common["cons"] - common["retrospective_reference"]).abs().mean()
-            om_err = (common["om"] - common["retrospective_reference"]).abs().mean()
-            if float(cons_err) > float(om_err) + 0.5:
-                print("FAIL: consensus common-case MAE exceeds OM by >0.5",
-                      file=sys.stderr)
+        verdict = common_case_maes(common)
+        if verdict is not None:
+            cons_err, om_err = verdict
+            lines.append(
+                f"- verdict: fusion MAE {cons_err:.2f} vs OM {om_err:.2f} "
+                f"-> {'worse' if common_case_regressed(cons_err, om_err) else 'no worse'} "
+                f"({cons_err - om_err:+.2f})"
+            )
+            if common_case_regressed(cons_err, om_err):
+                print(
+                    f"FAIL: consensus common-case MAE {cons_err:.2f} exceeds "
+                    f"OM {om_err:.2f}",
+                    file=sys.stderr,
+                )
                 out = ROOT / "docs" / "validation" / "uvi_verification.md"
                 out.write_text("\n".join(lines) + "\n", encoding="utf-8")
                 return 1
@@ -151,8 +182,11 @@ def main() -> int:
     print(out.read_text())
     # Legacy availability invariant (kept): consensus must not lose badly to
     # its best input even on differing availability.
-    if "cons" in stats and "om" in stats and stats["cons"][0] > stats["om"][0] + 0.5:
-        print("FAIL: consensus MAE exceeds OM MAE by >0.5", file=sys.stderr)
+    if "cons" in stats and "om" in stats and common_case_regressed(stats["cons"][0], stats["om"][0]):
+        print(
+            f"FAIL: consensus MAE {stats['cons'][0]:.2f} exceeds OM {stats['om'][0]:.2f}",
+            file=sys.stderr,
+        )
         return 1
     return 0
 
