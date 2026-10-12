@@ -628,7 +628,7 @@ label>input[type=checkbox]{width:16px;height:16px;vertical-align:-3px}
 <button onclick="loadData()">Apply</button></div><div class="controls actions" role="group" aria-label="Actions"><button class="primary livereq" onclick="refreshData()">Refresh forecast</button><a id="cal" class="btn" href="/api/calendar.ics" title="Subscribe to the best-window calendar">Calendar</a><button onclick="exportVisibleCsv()" title="All days in this run, regardless of the day selected below">Download all (CSV)</button><button onclick="exportDayCsv()" title="Only the day selected below, 30-minute rows with dose and confidence">Download this day (CSV)</button></div></div>
 <div id="msg" class="status"></div>
 <p class="hero" id="hero">Finding the best light…</p>
-<p class="legend">Ranking is maximum expected 30-minute delayed-pigmentation dose (fixed-duration-dose-v2). Overall is an absolute-dominant composite, kept for interpretation rather than ranking. UV∘ is headline UVI fusion; TanDose comes from the UVA/UVB model.</p>
+<p class="legend">Ranking is maximum expected 30-minute delayed-pigmentation dose (fixed-duration-dose-v2). Overall is an absolute-dominant composite, kept for interpretation rather than ranking. UV∘ is the headline UVI — Open-Meteo best match, §5 — and the inverse-error fusion is published beside it as Fusion; TanDose comes from the UVA/UVB model.</p>
 <p class="legend" id="tzline"></p>
 <p class="gloss" id="skinctx" hidden></p>
 <div class="strip" id="strip" role="listbox" aria-label="Days" aria-orientation="horizontal"></div>

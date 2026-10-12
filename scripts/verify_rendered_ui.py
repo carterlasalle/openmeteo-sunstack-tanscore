@@ -506,6 +506,12 @@ def _checks(
         "raw placeholder in the page" if "__FUSION_LIMIT__" in html else "substituted",
     )
     record(
+        "the page never claims the headline is the fusion",
+        "headline UVI fusion" not in html
+        and "headline UVI — Open-Meteo best match" in html,
+        "stale legend present" if "headline UVI fusion" in html else "headline named correctly",
+    )
+    record(
         "hourly table labels the headline, the fusion and the spread",
         "not the headline" in html and ">Fusion</th>" in html and "ΔUV</th>" in html,
         "missing: " + ", ".join(
