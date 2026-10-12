@@ -483,6 +483,11 @@ def run_live_inner(
         best_air = best_air.merge(epa_hourly.loc[:, ["time", "uvi_epa"]], on="time", how="left") if not epa_hourly.empty else best_air
     tan_hourly = score_forecast(best_air, calibration_dir, cams_direct, sun_windows,
                                strict=strict)
+    # Declare the hourly grid's support BEFORE its trailing doses are computed,
+    # so the same column name means the same thing in both published tables.
+    from .temporal import stamp_live_hourly_support as _stamp_hourly
+
+    tan_hourly = _stamp_hourly(tan_hourly)
     tan_hourly = apply_outdoor_feasibility(tan_hourly, min_temp_f)
     tan_hourly = attach_fitzpatrick(tan_hourly, skin_type)
     try:

@@ -600,6 +600,52 @@ def test_best_30m_dose_belongs_to_the_interval_ending_at_the_best_row():
     assert str(out["best_30m_start"].iloc[0]) == "2026-06-21T11:00:00"
 
 
+def test_hourly_grid_declares_its_support_so_one_hour_means_one_thing():
+    """The hourly product must declare its interval support like the half-hour one.
+
+    Without the declaration the same column names are a trapezoid over point
+    samples here and an interval-mean integral there, and the two published
+    tables disagree about the same hour - 2026-10-19: 1335.4 (half-hour grid,
+    what the hero and calendar show) against 1388.99 (hourly table). On a step
+    signal the gap is a clean factor of two, which is what this pins.
+    """
+    from sunstack.doses import add_interval_doses
+    from sunstack.temporal import stamp_live_hourly_support
+
+    stamps = pd.date_range("2026-06-21T10:00Z", periods=4, freq="1h")
+    # Interval MEANS over [end-1h, end): the old hour is lit, the new one is not.
+    means = [1.0, 1.0, 0.0, 0.0]
+    frame = pd.DataFrame(
+        {
+            "time": stamps.tz_convert("UTC").strftime("%Y-%m-%dT%H:%M"),
+            "time_utc": stamps,
+            "melanogenic_effective_irradiance_wm2": means,
+            "erythemal_irradiance_wm2": [v / 10.0 for v in means],
+            "predicted_uva_wm2": [30.0] * 4,
+            "predicted_uvb_wm2": [0.5] * 4,
+        }
+    )
+
+    stamped = stamp_live_hourly_support(frame)
+    assert (stamped["interval_end_utc"] - stamped["interval_start_utc"]).eq(pd.Timedelta(hours=1)).all()
+    assert stamped["radiation_support_type"].eq("interval_mean").all()
+
+    declared = add_interval_doses(stamped)
+    # The 11:00 row covers [10:00, 11:00), whose mean is 1.0 W/m²: the whole hour.
+    assert abs(num(declared, "tan_dose_1h_j_m2").iloc[1] - 1.0 * 3600) < 1e-6
+    # The 12:00 row covers [11:00, 12:00), whose mean is 0.0 - and the interval
+    # mean is the truth for it, so the hour is genuinely empty.
+    assert abs(num(declared, "tan_dose_1h_j_m2").iloc[2]) < 1e-6
+
+    # Undeclared, the same rows are point samples: the 12:00 row is a trapezoid
+    # from E(11:00)=1.0 down to E(12:00)=0.0, inventing 1800 J/m² for an hour
+    # whose mean is zero. That invention is the disagreement the declaration
+    # removes - it is why the hourly table read 1388.99 where the half-hour
+    # table read 1335.4 for the same hour.
+    undeclared = add_interval_doses(frame)
+    assert abs(num(undeclared, "tan_dose_1h_j_m2").iloc[2] - 0.5 * 3600) < 1e-6
+
+
 def test_day_totals_use_wall_date_without_time_utc(monkeypatch: pytest.MonkeyPatch):
     from sunstack import config as _config
     from sunstack.doses import day_totals

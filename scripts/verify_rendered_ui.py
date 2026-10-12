@@ -21,6 +21,7 @@ Exits 1 if any check fails, so it is usable as a gate.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import functools
 import http.server
 import importlib
@@ -30,6 +31,7 @@ import socketserver
 import threading
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -608,6 +610,82 @@ def _checks(
             f"{sum(1 for _, pr in spread_rows if _wants_envelope(pr))} rows should show an envelope; "
             f"{misfiled[:2]}",
         )
+
+    # 7c. the published calendar must describe the payload it ships beside.
+    # reskin_static_dir deliberately leaves calendar.ics alone ("rebuilding it
+    # from the daylight-filtered payload rows would degrade the UV peaks"), so
+    # when the pipeline stops publishing, the payload refreshes and the calendar
+    # silently does not - observed: DTSTAMP 05:09Z beside a 05:41Z payload, and a
+    # dose (1088.3 J/m2) that exists nowhere in it.
+    ics_text = (site_dir / "calendar.ics").read_text(encoding="utf-8")
+    def _ics_utc(stamp: str) -> dt.datetime | None:
+        """ICS 20261012T173000Z -> an aware UTC datetime (never a naive one)."""
+        if stamp.endswith("Z") and len(stamp) >= 16 and "T" in stamp:
+            iso = (
+                f"{stamp[0:4]}-{stamp[4:6]}-{stamp[6:8]}T"
+                f"{stamp[9:11]}:{stamp[11:13]}:{stamp[13:15]}+00:00"
+            )
+            try:
+                return dt.datetime.fromisoformat(iso)
+            except ValueError:
+                return None
+        return None
+
+    tz_name = str((payload.get("summary") or {}).get("timezone") or "UTC")
+    site_tz = ZoneInfo(tz_name)
+    # Key by the event's own local date: the ICS carries the date in DTSTART,
+    # not in the summary line - keying off the summary compared nothing at all.
+    events: dict[str, tuple[str, str, float | None]] = {}
+    for block in ics_text.split("BEGIN:VEVENT")[1:]:
+        start = re.search(r"DTSTART[^:]*:(\S+)", block)
+        end = re.search(r"DTEND[^:]*:(\S+)", block)
+        summary = re.search(r"SUMMARY:(.*)", block)
+        if not (start and end and summary):
+            continue
+        started, finished = _ics_utc(start.group(1)), _ics_utc(end.group(1))
+        if started is None or finished is None:
+            continue
+        dose = re.search(r"([0-9]+\.[0-9]) J/m", summary.group(1))
+        events[started.astimezone(site_tz).strftime("%Y-%m-%d")] = (
+            start.group(1),
+            end.group(1),
+            float(dose.group(1)) if dose else None,
+        )
+
+    disagreeing: list[str] = []
+    compared = 0
+    for day_row in payload.get("daily") or []:
+        date = str(day_row.get("date"))[:10]
+        landed = events.get(date)
+        start_field = day_row.get("best_usable_30m_start")
+        end_field = day_row.get("best_usable_30m_end")
+        dose_field = day_row.get("best_usable_30m_dose_j_m2")
+        if landed is None or not isinstance(start_field, str) or not isinstance(end_field, str):
+            continue
+        started, finished = _ics_utc(landed[0]), _ics_utc(landed[1])
+        if started is None or finished is None:
+            continue
+        compared += 1
+        # Compare in the payload's own spelling (naive local, minute precision)
+        # rather than re-deriving it: the artifact is the authority here.
+        got_start = started.astimezone(site_tz).strftime("%Y-%m-%dT%H:%M")
+        got_end = finished.astimezone(site_tz).strftime("%Y-%m-%dT%H:%M")
+        want_start = start_field[:16]
+        want_end = end_field[:16]
+        if got_start != want_start or got_end != want_end:
+            disagreeing.append(
+                f"{date}: calendar {got_start[11:]}-{got_end[11:]} "
+                f"vs payload {want_start[11:]}-{want_end[11:]}"
+            )
+        elif landed[2] is not None and isinstance(dose_field, (int, float)) and abs(landed[2] - float(dose_field)) > 0.05:
+            disagreeing.append(
+                f"{date}: calendar dose {landed[2]} vs payload {dose_field}"
+            )
+    record(
+        "published calendar agrees with the payload it ships beside",
+        compared > 0 and not disagreeing,
+        f"{compared} days compared; {disagreeing[:2]}",
+    )
 
     # 7. calendar artifact
     href = page.evaluate("() => (document.querySelector('a[href*=\"calendar\"]')||{}).href || ''")

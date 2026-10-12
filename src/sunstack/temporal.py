@@ -139,6 +139,35 @@ def interval_bounds(
     })
 
 
+def stamp_live_hourly_support(
+    frame: pd.DataFrame, time_col: str = "time_utc", minutes: int = 60
+) -> pd.DataFrame:
+    """Declare the support of the live (Open-Meteo) hourly product rows.
+
+    Open-Meteo hourly values are interval means, and the grid is backward-mean:
+    the stamp labels the interval END, so a row is [end - 1h, end). The half-hour
+    product already says this about itself (opportunity.build_30min_forecast);
+    the hourly product did not, which left its trailing dose columns integrated
+    as point samples under the same names the half-hour table integrates as
+    interval means - two different "1 hour" doses for the same hour (2026-10-19:
+    1335.4 from the half-hour grid, 1388.99 from the hourly one).
+
+    Unlike openmeteo_hourly_to_intervals this reads an unambiguous UTC column and
+    publishes the `_utc` spellings the artifact already uses elsewhere.
+    """
+    out = frame.copy()
+    if out.empty or time_col not in out.columns:
+        return out
+    end = pd.to_datetime(out[time_col], utc=True, errors="coerce")
+    width = pd.Timedelta(minutes=minutes)
+    out["interval_start_utc"] = end - width
+    out["interval_end_utc"] = end
+    out["interval_midpoint_utc"] = end - width / 2
+    out["radiation_support_type"] = "interval_mean"
+    out["temporal_semantics_version"] = TEMPORAL_SEMANTICS_VERSION
+    return out
+
+
 def power_hourly_to_intervals(frame: pd.DataFrame) -> pd.DataFrame:
     """Attach canonical interval bounds to NASA POWER hourly rows."""
     out = frame.copy()
