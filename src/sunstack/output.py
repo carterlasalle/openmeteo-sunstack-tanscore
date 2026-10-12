@@ -107,7 +107,7 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
             "const tail=' · spectral '+esc(row.spectral_backend||s.spectral_backend||'—')+' (tier '+esc(row.spectral_tier||s.photobiology_action_spectrum_tier||'—')+') · fusion '+esc(s.fusion_version||'—')+' · confidence '+esc(s.confidence_version||'—')+' · rank '+esc(s.window_rank_version||'—');"
             "if(row.surface_extent_mode==='broad'){box.textContent='Surface '+name+' · broad extent requires backend RT'+tail;return;}"
             "const p=planeForRow(row);"
-            "box.textContent='Surface '+p.name+' (computed in your browser) · reflectance proxy '+((+p.proxy)*100).toFixed(2)+'% · reflected UVA '+f2(p.refl_uva)+' W/m² · reflected UVB '+f2(p.refl_uvb)+' W/m² · tilt '+p.tilt+'° azimuth '+p.az+'° from north · plane gain '+(p.factor>1?'+':'')+Math.round((p.factor-1)*100)+'%'+(p.tilt<1e-9?' · flat, upward-facing plane has no ground view, so material choice has no effect at tilt 0':'')+tail;}"
+            "box.textContent='Surface '+p.name+' at '+esc(String(row.time||'').slice(0,16).replace('T',' '))+' (computed in your browser) · reflectance proxy '+((+p.proxy)*100).toFixed(2)+'% · reflected UVA '+f2(p.refl_uva)+' W/m² · reflected UVB '+f2(p.refl_uvb)+' W/m² · tilt '+p.tilt+'° azimuth '+p.az+'° from north · plane gain '+(p.factor>1?'+':'')+Math.round((p.factor-1)*100)+'%'+(p.tilt<1e-9?' · flat, upward-facing plane has no ground view, so material choice has no effect at tilt 0':'')+tail;}"
             "async function loadData(){"
         ),
     )
