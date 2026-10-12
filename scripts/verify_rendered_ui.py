@@ -494,6 +494,105 @@ def _checks(
                 checked > 0 and not mismatched,
                 f"{checked} rows checked; mismatches {mismatched[:2]}",
             )
+    # 7b. §5 headline provenance: the page must name which UVI is the headline,
+    # carry the fusion and the source spread beside it, and never ship the copy
+    # placeholder raw. The value checks are conditional on the payload actually
+    # carrying the fields, so an artifact published before this contract does not
+    # fail the gate - but a page that hides a field the payload does carry does.
+    html = page.content()
+    record(
+        "fusion copy placeholder is substituted, not shipped raw",
+        "__FUSION_LIMIT__" not in html,
+        "raw placeholder in the page" if "__FUSION_LIMIT__" in html else "substituted",
+    )
+    record(
+        "hourly table labels the headline, the fusion and the spread",
+        "not the headline" in html and ">Fusion</th>" in html and "ΔUV</th>" in html,
+        "missing: " + ", ".join(
+            t for t, ok in (("headline copy", "not the headline" in html),
+                            ("Fusion column", ">Fusion</th>" in html),
+                            ("spread column", "ΔUV</th>" in html))
+            if not ok
+        ),
+    )
+    rendered = page.evaluate("""() => {
+      const t = [...document.querySelectorAll('table')].find(
+        x => (x.tHead && x.tHead.textContent || '').includes('Fusion'));
+      if (!t) return null;
+      const heads = [...t.tHead.rows[0].cells].map(c => c.textContent.trim());
+      return [...t.tBodies[0].rows].map(r => {
+        const cells = {};
+        heads.forEach((h, i) => { cells[h] = (r.cells[i] || {}).textContent || ''; });
+        return {time: (r.getAttribute('data-time') || '').slice(0, 16), cells};
+      });
+    }""") or []
+    by_time = {str(r.get("time", ""))[:16]: r for r in payload.get("hourly") or []}
+
+    def _shown(cell: str) -> float | None:
+        text = cell.replace("\u2212", "-").strip()
+        try:
+            return float(text)
+        except ValueError:
+            return None
+
+    pairs = [(row, by_time[row["time"]]) for row in rendered if row["time"] in by_time]
+    record(
+        "hourly rows on screen match the payload rows they came from",
+        bool(pairs) and len(pairs) == len(rendered),
+        f"{len(pairs)} of {len(rendered)} rendered rows joined to the payload",
+    )
+
+    fusion_rows = [(r, pr) for r, pr in pairs if isinstance(pr.get("uvi_fusion"), (int, float))]
+    if fusion_rows:
+        bad = [
+            (r["time"], r["cells"].get("Fusion"), pr["uvi_fusion"])
+            for r, pr in fusion_rows
+            if _shown(r["cells"].get("Fusion", "")) is None
+            or abs(_shown(r["cells"].get("Fusion", "")) - float(pr["uvi_fusion"])) > 0.051
+        ]
+        record(
+            "Fusion column shows the fused UVI the payload publishes",
+            not bad,
+            f"{len(fusion_rows)} rows checked; mismatches {bad[:2]}",
+        )
+
+    spread_rows = [(r, pr) for r, pr in pairs if isinstance(pr.get("uvi_source_spread"), (int, float))]
+    if spread_rows:
+        bad_spread = [
+            (r["time"], r["cells"].get("ΔUV"), pr["uvi_source_spread"])
+            for r, pr in spread_rows
+            if _shown(r["cells"].get("ΔUV", "")) is None
+            or abs(_shown(r["cells"].get("ΔUV", "")) - float(pr["uvi_source_spread"])) > 0.051
+        ]
+        record(
+            "ΔUV column shows the source spread the payload publishes",
+            not bad_spread,
+            f"{len(spread_rows)} rows checked; mismatches {bad_spread[:2]}",
+        )
+
+        # the UV∘ cell appends the min-max envelope exactly when the payload row
+        # has two visible sources and a spread at or above the disagree flag
+        want_range = [
+            (r, pr) for r, pr in spread_rows
+            if float(pr["uvi_source_spread"]) >= 1.0
+            and sum(1 for k in ("uv_index", "uvi_cams", "uvi_epa")
+                    if isinstance(pr.get(k), (int, float))) >= 2
+        ]
+        misfiled = [
+            (r["time"], "range shown without the payload spread", r["cells"].get("UV∘"))
+            for r, pr in spread_rows if r not in [x[0] for x in want_range]
+            and ("–" in r["cells"].get("UV∘", "") or "\u2013" in r["cells"].get("UV∘", ""))
+        ] + [
+            (r["time"], "envelope missing where the payload has one", r["cells"].get("UV∘"))
+            for r, pr in want_range
+            if "–" not in r["cells"].get("UV∘", "")
+        ]
+        record(
+            "UV column shows the source envelope exactly where the payload has one",
+            not misfiled,
+            f"{len(want_range)} rows should show an envelope; {misfiled[:2]}",
+        )
+
     # 7. calendar artifact
     href = page.evaluate("() => (document.querySelector('a[href*=\"calendar\"]')||{}).href || ''")
     ics = (site_dir / "calendar.ics").read_text(encoding="utf-8")
