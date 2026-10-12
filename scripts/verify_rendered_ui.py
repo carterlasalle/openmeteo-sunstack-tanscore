@@ -148,6 +148,37 @@ def _checks(
             panel[:160],
         )
 
+    # 2b. switching material moves the plane, and the module agrees again -
+    # "grass -> sand -> snow" is the audit's Phase 2 interaction list, not just
+    # one material spot check.
+    sand_factor = float(page.evaluate("() => planeForRow(activeRow()).factor"))
+    page.select_option("#surface", "fresh_snow")
+    page.wait_for_timeout(1400)
+    snow_hero = page.evaluate(
+        "() => document.getElementById('hero').textContent.replace(/\\s+/g,' ')"
+    )
+    snow_time = page.evaluate("() => (activeRow()||{}).time")
+    snow_row = next(
+        (r for r in payload["half_hour"] if str(r["time"]).startswith(str(snow_time)[:16])), None
+    )
+    if snow_row is None:
+        record("switching material resolves a published row", False, snow_time)
+    else:
+        want_snow = _module_factor(snow_row, "fresh_snow", 45.0)
+        snow_factor = float(page.evaluate("() => planeForRow(activeRow()).factor"))
+        record(
+            "switching material moves the plane and matches the module (sand -> snow)",
+            abs(snow_factor - want_snow) < 5e-5 and snow_factor > sand_factor,
+            f"sand={sand_factor:.4f} snow={snow_factor:.6f} module={want_snow:.6f}",
+        )
+        record(
+            "hero names the new material",
+            "Fresh snow" in str(snow_hero) and "tilted 45" in str(snow_hero),
+            str(snow_hero)[-110:],
+        )
+    page.select_option("#surface", "dry_beach_sand")
+    page.wait_for_timeout(1000)
+
     # 3. honesty of the two live-only controls on a published page
     class_copy = page.evaluate(
         "() => [...document.querySelectorAll('#classbox .note')].map(e => e.textContent).join(' ')"
@@ -395,6 +426,15 @@ def _checks(
     )
     page.goto(url, wait_until="networkidle")
     page.wait_for_timeout(2000)
+
+    cal_title = page.evaluate("() => (document.getElementById('cal')||{}).title || ''")
+    record(
+        "the published calendar says it is environmental (no schedule/surface claim)",
+        "environmental calendar" in str(cal_title).lower()
+        and "schedule" in str(cal_title)
+        and "surface" in str(cal_title),
+        cal_title,
+    )
 
     # 7. calendar artifact
     href = page.evaluate("() => (document.querySelector('a[href*=\"calendar\"]')||{}).href || ''")
