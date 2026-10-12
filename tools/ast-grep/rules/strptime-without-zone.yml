@@ -1,0 +1,20 @@
+id: strptime-without-zone
+language: Python
+severity: warning
+message: |
+  strptime without %z builds a naive datetime; everything downstream then has to
+  guess the zone. The interval work in this repo treats a stamp as an interval
+  END in the site timezone, so a naive parse is where an off-by-one-hour starts.
+note: |
+  Prefer parsing an unambiguous UTC column (the published rows carry
+  time_utc and interval_end_utc for exactly this reason), or attach the zone at
+  parse time with %z / datetime.fromisoformat on an offset-bearing string.
+rule:
+  any:
+    - pattern: datetime.datetime.strptime($$$ARGS)
+    - pattern: datetime.strptime($$$ARGS)
+constraints:
+  ARGS:
+    not:
+      # %z in the format string means the parse produced an aware value.
+      regex: "%.*[z%]|%z"

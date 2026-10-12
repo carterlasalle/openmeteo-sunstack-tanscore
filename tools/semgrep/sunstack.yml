@@ -1,0 +1,77 @@
+rules:
+  # Rules here are meant to hold at ZERO in this repo, so the analysis workflow
+  # can gate on them rather than report them. The heavy, noisier ruleset
+  # (p/python) runs alongside as a report.
+  #
+  # Each rule names the reason it matters for THIS project, not a generic one.
+
+  - id: sunstack-unsafe-yaml-load
+    languages: [python]
+    severity: ERROR
+    message: >-
+      yaml.load without a safe loader executes arbitrary constructors from the
+      file. This repo reads locations.yaml, surface definitions and issue bodies
+      as YAML, so the loader is the trust boundary.
+    patterns:
+      - pattern-either:
+          - pattern: yaml.load($X)
+          - pattern: yaml.load($X, Loader=yaml.Loader)
+          - pattern: yaml.load($X, Loader=yaml.UnsafeLoader)
+    fix: yaml.safe_load($X)
+
+  - id: sunstack-subprocess-shell
+    languages: [python]
+    severity: ERROR
+    message: >-
+      shell=True hands a string to a shell. The CLI shells out to git with
+      literal argv lists and no shell; a shell here would put the repo's own
+      paths into a shell's word-splitting.
+    pattern: subprocess.$F(..., shell=True, ...)
+
+  - id: sunstack-eval-exec
+    languages: [python]
+    severity: ERROR
+    message: >-
+      eval/exec on a value that may come from data. Nothing in the pipeline needs
+      to compile input: the emulator loads a joblib artifact and the spectra are
+      parsed as numbers.
+    pattern-either:
+      - pattern: eval($X)
+      - pattern: exec($X)
+      - pattern: pickle.load($X)
+
+  - id: sunstack-requests-verify-disabled
+    languages: [python]
+    severity: ERROR
+    message: >-
+      TLS verification disabled. Every upstream here (Open-Meteo, CAMS ADS, NASA
+      POWER, WOUCD) is fetched over HTTPS and the fetch layer pins retries and
+      timeouts; silently accepting any certificate would make the calibration
+      inputs forgeable.
+    pattern-either:
+      - pattern: requests.$M(..., verify=False, ...)
+      - pattern: session.$M(..., verify=False, ...)
+
+  - id: sunstack-request-value-reaches-filesystem
+    languages: [python]
+    severity: WARNING
+    mode: taint
+    message: >-
+      A request value reaches a filesystem path. The FastAPI surface takes
+      skin_type, min_temp and a location slug as query parameters, and the static
+      handler serves a directory; a parameter that becomes part of a path is a
+      traversal unless it is matched against a known set first.
+    pattern-sources:
+      - pattern: fastapi.Query(...)
+      - pattern: fastapi.Path(...)
+      - pattern: starlette.requests.Request
+    pattern-sinks:
+      - pattern: open($PATH, ...)
+      - pattern: pathlib.Path($PATH)
+      - pattern: Path($PATH)
+      - pattern: $P.read_text(...)
+      - pattern: $P.write_text(...)
+    pattern-sanitizers:
+      # An explicit pattern/whitelist check before use is the sanitiser here.
+      - pattern: re.fullmatch($PATTERN, $VALUE)
+      - pattern: $VALUE in $ALLOWED

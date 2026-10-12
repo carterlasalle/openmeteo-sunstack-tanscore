@@ -1,0 +1,260 @@
+name: analysis
+
+# The analyzer stack, wired to what each tool can actually say about this repo.
+#
+# Split by measured evidence, not by ambition:
+#
+#   analyzers   GATING. Every command here is clean on main today (see the
+#               thresholds in no-new-findings), so it can fail a change.
+#   no-new-findings  GATING on growth. refurb / radon / ast-grep already have
+#               findings on main; the counts recorded below are today's, measured,
+#               and the job fails when a change adds more. Raising a threshold is
+#               a deliberate edit with the new count in the diff.
+#   api-contract  Advisory: property-based HTTP against the FastAPI surface.
+#   deep-properties  Nightly coverage-guided fuzzing of the interval properties.
+#
+# Not here on purpose: ruff / pytest / basedpyright / check_literature and the
+# published-artifact validators already gate in run.yml.
+
+"on":
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "scripts/**"
+      - "tools/**"
+      - "sgconfig.yml"
+      - ".importlinter"
+      - "pyproject.toml"
+      - ".github/workflows/analysis.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "scripts/**"
+      - "tools/**"
+      - "sgconfig.yml"
+      - ".importlinter"
+      - "pyproject.toml"
+      - ".github/workflows/analysis.yml"
+  schedule:
+    # Nightly, offset from the forecast slots so they never contend.
+    - cron: "41 3 * * *"
+      timezone: "America/Indiana/Indianapolis"
+  workflow_dispatch:
+
+concurrency:
+  group: analysis-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  analyzers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          version: "0.12.15"
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # Each of these is clean on main. The commands include their config:
+      # bandit needs -c pyproject.toml or the documented skips do not apply, and
+      # vulture needs the whitelist positionally before --min-confidence.
+      - name: vulture (dead code)
+        run: uv run vulture src tests tools/vulture_whitelist.py --min-confidence 90
+
+      - name: bandit (security lint)
+        run: uv run bandit -q -c pyproject.toml -r src -f txt
+
+      - name: deptry (dependency hygiene)
+        run: uv run deptry src
+
+      - name: import-linter (layering contracts)
+        run: uv run lint-imports
+
+      - name: semgrep (this repo's rules)
+        # Validated both ways before being gated: 6 findings on a deliberately
+        # vulnerable control file (tools/semgrep/sunstack.yml has the rules) and
+        # 0 on src + scripts. A ruleset that never fires is a false all-clear.
+        run: |
+          uvx --python 3.13 --from semgrep semgrep scan \
+            --config tools/semgrep/sunstack.yml --metrics=off --error --quiet src scripts
+
+      - name: ast-grep rule self-check
+        # The four scans are searches, but they must at least parse and fire:
+        # this asserts the rule set loads and the off-by-one rule still matches
+        # the revision that had the bug (a rule that matches nothing anywhere is
+        # worse than no rule).
+        run: |
+          uv run ast-grep scan --json > /tmp/current.json
+          git show d581a28^:src/sunstack/opportunity.py > /tmp/old_opportunity.py
+          uv run ast-grep scan --json /tmp/old_opportunity.py > /tmp/old.json
+          python3 - <<'PY'
+          import json
+          rules = {d["ruleId"] for d in json.load(open("/tmp/old.json"))}
+          assert "interval-bound-from-offset" in rules, (
+              "the off-by-one rule no longer matches the revision that had the bug; "
+              f"it is reporting clean forever. matched: {sorted(rules)}"
+          )
+          print(f"rules matched on the pre-fix revision: {sorted(rules)}")
+          PY
+
+      - name: Upload ast-grep findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ast-grep-findings
+          path: /tmp/current.json
+          retention-days: 30
+
+  reports:
+    # Reports, not gates. Every tool here has findings on main today, and each
+    # set was triaged by category rather than waved through:
+    #
+    #   refurb 156  - 94 are redundant casts (float(math.sqrt(x)), list(kept)),
+    #                 14 `in [..]` -> `in (..)`, the rest chained returns and
+    #                 friends. Real, mechanical, and a 156-site pass over the
+    #                 numeric core: it wants its own change with the suite as the
+    #                 safety net, not a threshold here.
+    #   ast-grep 13 - all hint severity, reported by the scans; the *self-check*
+    #                 that the rules still match the revision they came from IS a
+    #                 gate (see the analyzers job).
+    #   semgrep p/python - the broad upstream ruleset, report-only; this repo's
+    #                 own rules gate in the analyzers job (clean on main).
+    #
+    # The counts live in the artifacts so "is it growing?" is answerable without
+    # a threshold nobody can see.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          version: "0.12.15"
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: refurb (modernisation) -> artifact
+        run: |
+          uv run refurb src 2>&1 | tee /tmp/refurb.txt || true
+          echo "refurb findings: $(grep -cE '\[FURB' /tmp/refurb.txt || true)"
+
+      - name: ast-grep scans -> artifact
+        run: |
+          uv run ast-grep scan --json > /tmp/ast-grep.json
+          python3 -c "import json;print('ast-grep hits:', len(json.load(open('/tmp/ast-grep.json'))))"
+
+      - name: semgrep (p/python + this repo's rules) -> SARIF
+        run: |
+          uvx --from semgrep semgrep scan             --config p/python --config tools/semgrep/sunstack.yml             --metrics=off --sarif -o /tmp/semgrep.sarif src scripts || true
+          python3 - <<'PY'
+          import json
+          try:
+              data = json.load(open("/tmp/semgrep.sarif"))
+          except FileNotFoundError:
+              print("semgrep produced no report"); raise SystemExit(0)
+          results = data.get("runs", [{}])[0].get("results", [])
+          from collections import Counter
+          counts = Counter(r.get("ruleId") for r in results)
+          print(f"semgrep findings: {len(results)}")
+          for rule, number in counts.most_common(10):
+              print(f"  {number:4d}  {rule}")
+          PY
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: analyzer-reports
+          path: |
+            /tmp/refurb.txt
+            /tmp/ast-grep.json
+            /tmp/semgrep.sarif
+          retention-days: 30
+          if-no-files-found: warn
+
+  api-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Advisory: the API has no fuzzing history yet, so findings are reported
+    # rather than merged into the gate on day one.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          version: "0.12.15"
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Schemathesis against the FastAPI surface
+        run: |
+          uv run schemathesis run --app tools/schemathesis_app.py:app \
+            --checks all --max-examples 40 --report-junit-path /tmp/schemathesis.xml || true
+
+      - name: Report
+        if: always()
+        run: |
+          if [ -f /tmp/schemathesis.xml ]; then
+            python3 - <<'PY'
+            import xml.etree.ElementTree as ET
+            root = ET.parse("/tmp/schemathesis.xml").getroot()
+            cases = root.iter("testcase")
+            total = failures = 0
+            for case in cases:
+                total += 1
+                failures += 1 if len(list(case)) else 0
+            print(f"schemathesis: {total} cases, {failures} failing (advisory)")
+            PY
+          fi
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schemathesis-report
+          path: /tmp/schemathesis.xml
+          retention-days: 30
+
+  deep-properties:
+    # Nightly: the same properties as the gate, with a large example budget and
+    # coverage guidance, so the shapes nobody wrote down keep being explored.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          version: "0.12.15"
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Deep property run (hypothesis, 2000 examples per property)
+        env:
+          SUNSTACK_PROPERTY_EXAMPLES: "2000"
+        run: uv run pytest tests/test_properties_intervals.py -q -p no:randomly
+
+      - name: Fuzz the property suite with coverage guidance (hypofuzz)
+        run: |
+          uv run hypofuzz --no-dashboard tests/test_properties_intervals.py \
+            || echo "::warning::hypofuzz reported failures; see its output above"

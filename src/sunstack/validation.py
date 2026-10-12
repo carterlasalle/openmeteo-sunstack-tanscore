@@ -280,16 +280,16 @@ def validate_cams_direct(df: pd.DataFrame) -> list[ValidationIssue]:
     def present(tokens: tuple[str, ...]) -> bool:
         return any(all(t in c for t in tokens) for c in lows)
     issues: list[ValidationIssue] = []
-    for name,tokens in [
+    for name,tokens in (
         ("AOD340", ("aerosol","optical","340")),
         ("AOD380", ("aerosol","optical","380")),
         ("total-column ozone", ("total","column","ozone")),
-    ]:
+    ):
         if not present(tokens): issues.append(ValidationIssue("ERROR", "cams_direct_ads", f"required spectral field missing: {name}"))
     if not (present(("uv","biologically","effective")) or present(("downward","uv"))):
         issues.append(ValidationIssue("WARN", "cams_direct_ads", "CAMS UV diagnostic field missing; scoring can still use spectral AOD + ozone"))
     # v4: full UV/aerosol propagation is required, not fetch-and-drop.
-    for name, tokens in [
+    for name, tokens in (
         ("UVBED clear-sky", ("biologically","effective","clear")),
         ("downward surface UV", ("downward","uv")),
         ("AOD355", ("aerosol","optical","355")),
@@ -301,7 +301,7 @@ def validate_cams_direct(df: pd.DataFrame) -> list[ValidationIssue]:
         ("cloud liquid water", ("cloud","liquid","water")),
         ("cloud ice water", ("cloud","ice","water")),
         ("forecast albedo", ("forecast","albedo")),
-    ]:
+    ):
         if not present(tokens):
             issues.append(ValidationIssue("WARN", "cams_direct_ads", f"expected CAMS field not propagated: {name}"))
     return issues

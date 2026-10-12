@@ -45,6 +45,33 @@ packages = ["src/sunstack"]
 [tool.uv]
 required-version = "==0.12.15"
 
+[tool.ruff]
+# tools/ holds real Python (the schemathesis entry point) and is linted with the
+# rest. vulture_whitelist.py is excluded because it is vulture's DATA format -
+# bare names as expressions - so linting it as code reports 34 errors that mean
+# nothing (F821 undefined name, B018 useless expression). That is a category
+# error, not a finding: the file is configuration.
+extend-exclude = ["tools/vulture_whitelist.py"]
+
+[tool.bandit]
+# Every skip is a decision about this codebase, not a blanket mute.
+# B603/B607: the CLI shells out to git with literal argv (["git", "add", ...]);
+#            there is no shell and no user-controlled first argument, so partial
+#            paths are the point, not a risk.
+# B101:      asserts are the project's stated verification style and pytest
+#            rewrites them in tests; the runtime uses explicit raises.
+# B404:      `import subprocess` for the same literal-argv git calls.
+# B608:      one false positive: an f-string that assembles a log message, not SQL.
+skips = ["B603", "B607", "B101", "B404", "B608"]
+
+[tool.deptry]
+# cdsapi is imported lazily inside the CAMS fetch path, so the import scan cannot
+# see it; it is a real runtime dependency of the CAMS ADS requests.
+per_rule_ignores = { DEP002 = ["cdsapi", "pyarrow", "netCDF4"] }
+# cdsapi  - imported lazily inside the CAMS fetch path.
+# pyarrow - pandas' parquet engine; imported by pandas, never by us.
+# netCDF4 - xarray's engine for the CAMS netCDF files; same reason.
+
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
@@ -54,7 +81,11 @@ stubPath = "stubs"
 # mutmut writes a full shadow checkout into mutants/ on every run. Left in, its
 # generated MutantDict mutants are analysed as if they were our source and
 # flood the error count with findings that are not our code.
-exclude = ["mutants"]
+#
+# tools/vulture_whitelist.py is vulture's DATA format - bare names as
+# expressions - so analysing it reports 17 undefined-variable errors that mean
+# nothing. Configuration, not code (ruff excludes it for the same reason).
+exclude = ["mutants", "tools/vulture_whitelist.py"]
 
 [tool.pytest.ini_options]
 # mutmut writes a full shadow checkout into mutants/ on every run, including a

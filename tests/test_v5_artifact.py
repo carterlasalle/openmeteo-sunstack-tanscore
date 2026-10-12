@@ -17,6 +17,10 @@ import pandas as pd
 
 
 class _ValidatorModule(Protocol):
+    # The gate list is part of the module's surface: the test asserts the report
+    # matches it, so the stub has to declare it or the check types as a stranger.
+    FATAL_CHECKS: list[str]
+
     def validate_artifact(self, data_path: Path) -> dict[str, object]: ...
 
 

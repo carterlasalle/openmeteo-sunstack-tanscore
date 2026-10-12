@@ -1,0 +1,14 @@
+id: naive-tzinfo-replace
+language: Python
+severity: warning
+message: |
+  .replace(tzinfo=...) on a naive datetime asserts a zone the value never
+  carried. In the interval code that is the shape of "the stamp is local, assume
+  the site zone" - fine only when the value is known to be local wall-clock.
+note: |
+  If the value came from a UTC column, convert instead (astimezone). If it is
+  genuinely local wall-clock, compare it as a string against the published field
+  (scripts/verify_rendered_ui.py does this for the calendar) or localize at the
+  point the value is created, not the point it is read.
+rule:
+  pattern: $OBJ.replace(tzinfo=$TZ)

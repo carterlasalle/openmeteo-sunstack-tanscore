@@ -1,0 +1,23 @@
+[importlinter]
+root_package = sunstack
+
+[importlinter:contract:physics-ignores-presentation]
+name = physics and interval layers never import the presentation layer
+type = forbidden
+source_modules =
+    sunstack.spectral
+    sunstack.doses
+    sunstack.temporal
+    sunstack.tanscore
+forbidden_modules =
+    sunstack.ui
+    sunstack.serving
+    sunstack.output
+
+[importlinter:contract:state-does-not-import-the-cli]
+name = the derived-state hub does not import the command line entry point
+type = forbidden
+source_modules =
+    sunstack.state
+forbidden_modules =
+    sunstack.cli

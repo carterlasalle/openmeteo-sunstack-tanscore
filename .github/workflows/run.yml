@@ -61,7 +61,7 @@ jobs:
       # validation scripts. Scheduled publish needs no gate: Gate 3 inside
       # the run aborts publication itself.
       - name: Lint
-        run: uv run ruff check src tests scripts
+        run: uv run ruff check src tests scripts tools
       - name: Tests
         run: uv run pytest tests/ -q
       - name: Type check

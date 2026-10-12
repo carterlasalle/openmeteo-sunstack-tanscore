@@ -1,0 +1,18 @@
+id: neighbouring-row-index
+language: Python
+severity: hint
+message: |
+  A positional index built from an offset (iloc[i+1], iloc[i-1], shift(1)) walks
+  to a neighbouring row. In interval code that is an off-by-one waiting to
+  happen: the published failure read row i+1 for row i's slot.
+note: |
+  Read the row's own columns where possible; where a neighbour really is the
+  intent, pin it with a property rather than an example.
+rule:
+  any:
+    - pattern: $OBJ.iloc[$IDX]
+    - pattern: $OBJ.shift($N)
+    - pattern: $OBJ.shift($N, $$$REST)
+constraints:
+  IDX:
+    regex: "[-+]"

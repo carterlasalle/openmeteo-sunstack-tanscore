@@ -1,0 +1,22 @@
+id: timestamp-offset-beside-dose-read
+language: Python
+severity: warning
+message: |
+  A Timedelta offset in the same expression as a trailing interval column
+  (tan_dose_*/sed_*/delayed_pigmentation_*). That is the shape of both interval
+  bugs in this repo: reading the row at t+30m for the slot that ENDS at t
+  published the next slot's dose (1000.854 instead of 1104.66).
+
+  Published rows declare their support (interval_start_utc/interval_end_utc) and
+  a trailing column is the integral over that row's own support, so a trailing
+  read normally needs no offset at all.
+note: |
+  If the offset really is the intent, say which interval it names in a comment
+  and cover it with a property (tests/test_properties_intervals.py).
+rule:
+  all:
+    - kind: call
+    - has:
+        pattern: pd.Timedelta($$$W)
+    - has:
+        regex: "(tan_dose|sed_|delayed_pigmentation_|pigment_darkening_).*_[0-9]+m"

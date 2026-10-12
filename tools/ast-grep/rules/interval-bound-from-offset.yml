@@ -1,0 +1,26 @@
+id: interval-bound-from-offset
+language: Python
+severity: hint
+message: |
+  An interval bound built by offsetting a stamp. This is the shape both interval
+  bugs in this repo took: `_best_end = _best_dt + Timedelta(minutes=30)` and then
+  reading a trailing column at `_best_end`, which published the NEXT slot's dose
+  (1000.854 instead of 1104.66 for the slot that ends at _best_dt).
+
+  Published rows already declare their support (interval_start_utc /
+  interval_end_utc, end - start = the level width) and every trailing column is
+  the integral over the row's own support, so a trailing read normally needs no
+  offset at all.
+note: |
+  Where the offset is genuinely the intent, name the interval it denotes in a
+  comment and cover it with a property (tests/test_properties_intervals.py)
+  rather than an example - the bug survived because an example was written to
+  match the implementation.
+rule:
+  any:
+    - pattern: $VAR = $BASE + pd.Timedelta($$$W)
+    - pattern: $VAR = $BASE - pd.Timedelta($$$W)
+    - pattern: $VAR = pd.Timedelta($$$W) + $BASE
+constraints:
+  VAR:
+    regex: "(start|end|stamp|mid|bound|interval)"
