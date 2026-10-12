@@ -1139,6 +1139,7 @@ def best_fixed_dose_window(
     usable_only: bool = True, comfort_min: float | None = None,
     dose_tolerance_frac: float = 0.01,
     class_blocks: ClassBlocks | None = None,
+    e_mel_col: str = "melanogenic_effective_irradiance_wm2",
 ) -> tuple[pd.Timestamp, pd.Timestamp, float] | None:
     """Maximum expected delayed-pigmentation dose over a fixed window (§16.3).
 
@@ -1161,7 +1162,7 @@ def best_fixed_dose_window(
     # 30 min -> 2 stamps (one trapezoid leg), 60 min -> 3 stamps (two legs).
     n_legs = max(round(duration_min / 30), 1)
     n_slots = n_legs + 1
-    e_mel = _num(d, "melanogenic_effective_irradiance_wm2")
+    e_mel = _num(d, e_mel_col) if e_mel_col in d.columns else _num(d, "melanogenic_effective_irradiance_wm2")
     conf = _num(d, "tan_forecast_confidence_0_100")
     blocked_raw = d.get("outdoor_blocked", False)
     blocked = (blocked_raw.fillna(False).astype(bool)
@@ -1320,6 +1321,15 @@ def build_daily_summary(
         comfortable_usable_30m = best_fixed_dose_window(
             daylight, 30, usable_only=True, comfort_min=2, class_blocks=class_blocks
         )
+        # Skin-plane variant (§12.11): same fixed-duration objective over the
+        # skin-plane E_mel column when present. Environmental windows above
+        # are untouched; this is the personalized ranking path.
+        skin_usable_30m = None
+        if "skin_plane_e_mel_wm2" in daylight.columns:
+            skin_usable_30m = best_fixed_dose_window(
+                daylight, 30, usable_only=True, class_blocks=class_blocks,
+                e_mel_col="skin_plane_e_mel_wm2",
+            )
         try:
             from .doses import day_totals as _day_totals
             from .doses import window_dose as _window_dose
@@ -1431,6 +1441,9 @@ def build_daily_summary(
                 "best_comfortable_usable_30m_dose_j_m2": round(comfortable_usable_30m[2], 1) if comfortable_usable_30m else np.nan,
                 "window_rank_version": "fixed-duration-dose-v2",
                 "exposure_basis": "environmental_horizontal",
+                "skin_plane_best_usable_30m_start": skin_usable_30m[0].isoformat() if skin_usable_30m else None,
+                "skin_plane_best_usable_30m_end": skin_usable_30m[1].isoformat() if skin_usable_30m else None,
+                "skin_plane_best_usable_30m_dose_j_m2": round(skin_usable_30m[2], 1) if skin_usable_30m else np.nan,
                 "tan_dose_best_window_j_m2": float(_win_doses.get("tan_dose_best_window_j_m2", float("nan"))),
                 "tan_dose_best_window_complete": bool(_win_doses.get("tan_dose_best_window_complete", False)),
                 "tan_dose_best_window_coverage_fraction": float(_win_doses.get("tan_dose_best_window_coverage_fraction", float("nan"))),

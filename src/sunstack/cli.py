@@ -514,6 +514,10 @@ def run_live_inner(
         surface_uva_reflectance,
         surface_uvb_reflectance,
     )
+    from .doses import add_interval_doses as _add_skin_doses
+    tan_hourly = _add_skin_doses(
+        tan_hourly, e_mel_col="skin_plane_e_mel_wm2",
+        prefix="skin_plane_tan_dose")
     # Strict photobiology gate: spectrum resource must evaluate.
     from .validation import validate_action_spectra
 
@@ -551,6 +555,9 @@ def run_live_inner(
         surface_uva_reflectance,
         surface_uvb_reflectance,
     )
+    tan_30 = _add_skin_doses(
+        tan_30, e_mel_col="skin_plane_e_mel_wm2",
+        prefix="skin_plane_tan_dose")
     daily_tan = build_daily_summary(tan_30)
     tan_windows = best_tan_windows(tan_hourly)
     # Gate 2 (final products): strict validates the PUBLISHED artifacts, not

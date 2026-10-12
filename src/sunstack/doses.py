@@ -238,8 +238,16 @@ def _window_flags(frame: pd.DataFrame, window_s: float,
             pd.Series(np.round(coverage, 4), index=frame.index))
 
 
-def add_interval_doses(frame: pd.DataFrame) -> pd.DataFrame:
-    """Attach trailing 15m/30m/1h TanDose, SED, UVA/UVB doses + reference minutes."""
+def add_interval_doses(frame: pd.DataFrame, e_mel_col: str = "melanogenic_effective_irradiance_wm2",
+                       prefix: str = "tan_dose") -> pd.DataFrame:
+    """Attach trailing 15m/30m/1h TanDose, SED, UVA/UVB doses + reference minutes.
+
+    Pass e_mel_col="skin_plane_e_mel_wm2" with prefix="skin_plane_tan_dose"
+    to integrate the skin-plane exposure through the identical trapezoidal /
+    interval-mean machinery with its own complete/coverage flags. The default
+    call integrates the horizontal environmental reference; nothing about the
+    default path changes.
+    """
     out = frame.copy()
     if out.empty:
         return out
@@ -250,7 +258,7 @@ def add_interval_doses(frame: pd.DataFrame) -> pd.DataFrame:
             out["erythemal_irradiance_wm2"] = num(out, "uv_index") / 40.0
         else:
             out["erythemal_irradiance_wm2"] = np.nan
-    e_mel = num(out, "melanogenic_effective_irradiance_wm2")
+    e_mel = num(out, e_mel_col) if e_mel_col in out else num(out, "melanogenic_effective_irradiance_wm2")
     ery = num(out, "erythemal_irradiance_wm2")
     uva = num(out, "predicted_uva_wm2") if "predicted_uva_wm2" in out else e_mel * np.nan
     uvb = num(out, "predicted_uvb_wm2") if "predicted_uvb_wm2" in out else e_mel * np.nan
@@ -268,8 +276,16 @@ def add_interval_doses(frame: pd.DataFrame) -> pd.DataFrame:
     work["_uva"] = uva.to_numpy()
     work["_uvb"] = uvb.to_numpy()
     work["_pig"] = pig.to_numpy()
+    skin_plane = prefix != "tan_dose"
     for label, sec in (("15m", 900.0), ("30m", 1800.0), ("1h", 3600.0)):
-        out[f"tan_dose_{label}_j_m2"] = _rolling_dose(work, "_e_mel", sec, "", "tandose").to_numpy()
+        out[f"{prefix}_{label}_j_m2"] = _rolling_dose(work, "_e_mel", sec, "", "tandose").to_numpy()
+        if skin_plane:
+            # Skin-plane call integrates its own exposure only: SED/UVA/UVB
+            # stay on the environmental default path, never duplicated.
+            done, cov = _window_flags(work, sec, "_e_mel")
+            out[f"{prefix}_{label}_complete"] = done.to_numpy(dtype=bool)
+            out[f"{prefix}_{label}_coverage_fraction"] = cov.to_numpy(dtype=float)
+            continue
         out[f"sed_{label}"] = _rolling_dose(work, "_ery", sec, "", "sed").to_numpy()
         out[f"uva_dose_{label}_j_m2"] = _rolling_dose(work, "_uva", sec, "", "tandose").to_numpy()
         out[f"uvb_dose_{label}_j_m2"] = _rolling_dose(work, "_uvb", sec, "", "tandose").to_numpy()
@@ -287,15 +303,20 @@ def add_interval_doses(frame: pd.DataFrame) -> pd.DataFrame:
         out[f"sed_{label}_coverage_fraction"] = scov.to_numpy(dtype=float)
     ref = float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2)
     for label in ("15m", "30m", "1h"):
-        out[f"tan_dose_{label}_reference_minutes"] = (
-            out[f"tan_dose_{label}_j_m2"] / ref / 60.0
+        out[f"{prefix}_{label}_reference_minutes"] = (
+            out[f"{prefix}_{label}_j_m2"] / ref / 60.0
         ).round(2)
-    out["tan_dose_model_version"] = TAN_DOSE_MODEL_VERSION
-    out["sed_uvi_source"] = work["sed_uvi_source"].to_numpy()
-    # v5 canonical endpoint names (contract §2.1.B): every emitted tan_dose_*
-    # column gets an exact delayed_pigmentation_dose_* twin; old names stay.
-    for col in [c for c in out.columns if "tan_dose" in str(c)]:
-        out[str(col).replace("tan_dose", "delayed_pigmentation_dose")] = out[col]
+    if not skin_plane:
+        out["tan_dose_model_version"] = TAN_DOSE_MODEL_VERSION
+        out["sed_uvi_source"] = work["sed_uvi_source"].to_numpy()
+        # v5 canonical endpoint names (contract §2.1.B): every emitted tan_dose_*
+        # column gets an exact delayed_pigmentation_dose_* twin; old names stay.
+        for col in [c for c in out.columns if "tan_dose" in str(c)]:
+            out[str(col).replace("tan_dose", "delayed_pigmentation_dose")] = out[col]
+    else:
+        for col in [c for c in out.columns if str(c).startswith(f"{prefix}_") and str(c).endswith("_j_m2")]:
+            twin = str(col).replace(prefix, "skin_plane_delayed_pigmentation_dose", 1)
+            out[twin] = out[col]
     return out
 
 

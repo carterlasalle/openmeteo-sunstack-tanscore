@@ -233,7 +233,16 @@ def test_surface_context_preserves_horizontal_values(tmp_path: Path):
                 "tan_forecast_confidence_0_100",
             ):
                 assert grass_row[col] == sand_row[col], col
-    assert _rows(grass_data, "daily") == _rows(sand_data, "daily")
+    for grass_day, sand_day in zip(
+        _rows(grass_data, "daily"), _rows(sand_data, "daily"), strict=True
+    ):
+        assert grass_day["date"] == sand_day["date"]
+        # Environmental ranking identical; the skin-plane ranking moves.
+        for col in ("best_usable_30m_dose_j_m2", "strongest_30m_dose_j_m2",
+                    "day_absolute_peak_0_100", "day_status"):
+            assert grass_day[col] == sand_day[col], col
+        assert sand_day["skin_plane_best_usable_30m_dose_j_m2"] != grass_day[
+            "skin_plane_best_usable_30m_dose_j_m2"]
 
     reflected = "skin_plane_ground_reflected_delayed_pigmentation_wm2"
     grass_hourly, sand_hourly = _rows(grass_data, "hourly"), _rows(sand_data, "hourly")

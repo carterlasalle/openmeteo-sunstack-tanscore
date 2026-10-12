@@ -150,3 +150,43 @@ def test_unknown_means_no_correction_not_silent_albedo() -> None:
     out = apply_skin_plane(_env_frame(), 60.0, 180.0, surface_slug="unknown")
     assert float(out["skin_plane_ground_reflected_delayed_pigmentation_wm2"].iloc[0]) == 0.0
     assert out["surface_model_quality"].iloc[0] == "none"
+
+
+def test_material_changes_skin_plane_dose_not_environment() -> None:
+    from sunstack.doses import add_interval_doses
+    from sunstack.opportunity import build_daily_summary
+    from sunstack.spectral import apply_skin_plane
+
+    def _run(slug: str) -> pd.Series:
+
+        rows = []
+        for t in ("2026-10-12T13:30", "2026-10-12T14:00"):
+            rows.append({
+                "time": t, "dt": t, "is_day": 1,
+                "solar_elevation_deg": 45.0, "solar_azimuth_deg": 180.0,
+                "sza": 45.0, "shortwave_radiation": 600.0,
+                "direct_radiation": 450.0, "diffuse_radiation": 150.0,
+                "predicted_uva_wm2": 42.0, "predicted_uvb_wm2": 0.35,
+                "albedo": 0.2,
+                "melanogenic_effective_irradiance_wm2": 0.5,
+                "tan_score_absolute_0_100": 30.0,
+                "local_tan_score_0_100": 50.0,
+                "tan_forecast_confidence_0_100": 60.0,
+                "overall_tan_opportunity_0_100": 40.0,
+                "outdoor_blocked": False,
+                "outdoor_feasibility_complete": True,
+                "comfort_band": "perfect",
+            })
+        frame = pd.DataFrame(rows)
+        frame = apply_skin_plane(frame, 60.0, 180.0, slug)
+        frame = add_interval_doses(
+            frame, e_mel_col="skin_plane_e_mel_wm2",
+            prefix="skin_plane_tan_dose")
+        return build_daily_summary(frame).iloc[0]
+
+    grass = _run("grass_summer")
+    sand = _run("dry_beach_sand")
+    assert float(sand["skin_plane_best_usable_30m_dose_j_m2"]) > float(
+        grass["skin_plane_best_usable_30m_dose_j_m2"]) > 0
+    assert float(sand["best_usable_30m_dose_j_m2"]) == float(
+        grass["best_usable_30m_dose_j_m2"])
