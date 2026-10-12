@@ -100,13 +100,13 @@ jobs:
       # 1350px and 390px.
       # The live artifact: every check runs against the payload that ships.
       - name: Rendered UI contract (1350px + 390px, published artifact)
-        run: uv run --with playwright python scripts/verify_rendered_ui.py
+        run: uv run --with playwright --with pillow python scripts/verify_rendered_ui.py
       # The visual gate renders the FROZEN fixture. A pixel baseline against the
       # live payload would fail on every scheduled run, because the dates and
       # doses change - that is data, not a regression.
       - name: Rendered UI visual gate (frozen fixture)
         run: |
-          uv run --with playwright python scripts/verify_rendered_ui.py \
+          uv run --with playwright --with pillow python scripts/verify_rendered_ui.py \
             --site-dir tests/fixtures/rendered_site \
             --out /tmp/fixture_report.md \
             --shots-dir /tmp/fixture_shots \
