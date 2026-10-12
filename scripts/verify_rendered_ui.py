@@ -637,6 +637,8 @@ def main(argv: list[str] | None = None) -> int:
     shots = Path(ns.shots_dir) if ns.shots_dir else Path(ns.out).parent / "rendered_ui"
     shots.mkdir(parents=True, exist_ok=True)
     verify(Path(ns.site_dir), shots)
+    global _viewport_label
+    _viewport_label = ""  # the baseline covers every viewport's screenshots
     compare_baseline(shots, Path(ns.baseline))
     return write_report(Path(ns.out), Path(ns.site_dir), shots)
 

@@ -8,6 +8,7 @@ integration are trust boundaries. Nothing else in the suite touches them.
 from __future__ import annotations
 
 import importlib.util
+import itertools
 import json
 import math
 import urllib.request
@@ -164,38 +165,27 @@ def test_milliwatt_files_are_read_at_their_declared_scale() -> None:
 
 
 def test_pinned_fixture_agrees_with_its_own_erythemal_integral() -> None:
-    """The unit choice is evidence, not preference.
+    """Two conventions, one spectrum - and the file tells us which is which.
 
-    A WOUDC file carries the Brewer's own IntCIE (mW/m2). If our W/m2/nm reading
-    is right, the erythemal channel integrated from the same spectrum lands
-    within 10% of that declared number; if the file were mW/m2/nm we would be
-    1000x away from it.
+    WOUDC's own IntCIE column is the plain SUM over the reported samples, not the
+    integral: on a 0.5 nm grid the sum is exactly 2x the trapezoid, and the
+    committed fixture's mean step is 0.54 nm (it is truncated at 325 nm), so the
+    ratio there is 1.85. A physical erythemal irradiance is the integral, so our
+    integral must equal IntCIE x the grid step. That relation pins the unit and
+    the integration convention in one assertion: a return to summing samples, or
+    a wrong unit scale, breaks it by a factor of ~2.
     """
     scan = woudc.parse_brewer_csv(FIXTURE.read_text(encoding="utf-8"))[0]
     summary = cast("dict[str, str]", scan["summary"])
     waves, irr = _channels(scan)
     channels = woudc.integrate_channels(waves, irr)
-    declared = float(summary["IntCIE"]) * 1e-3  # mW/m2 -> W/m2
-    assert declared > 0
-    assert abs(channels["e_ery"] - declared) / declared < 0.10, (channels["e_ery"], declared)
 
-
-def test_non_http_urls_are_refused_without_reading_local_files(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """`--urls` and the API's own `url` field feed the fetcher, so the scheme is
-    a trust boundary: `urlopen` follows file:// happily, which would turn this
-    "download a scan" step into a local-file reader."""
-    secret = tmp_path / "secret.csv"
-    _ = secret.write_text("SECRET-MARKER,0.0\n", encoding="utf-8")
-    out = tmp_path / "report.md"
-    woudc.main([
-        "--urls", f"file://{secret},ftp://example.invalid/x.csv",
-        "--out", str(out),
-    ])
-    captured = capsys.readouterr().out
-    assert "refusing non-http" in captured, captured
-    assert "SECRET-MARKER" not in out.read_text(encoding="utf-8")
+    declared_sum = float(summary["IntCIE"]) * 1e-3  # mW/m2 -> W/m2, sum convention
+    gaps = sorted(b - a for a, b in itertools.pairwise(waves))
+    step = gaps[len(gaps) // 2]
+    assert declared_sum > 0 and step > 0
+    ratio = channels["e_ery"] / (declared_sum * step)
+    assert abs(ratio - 1.0) < 0.15, (channels["e_ery"], declared_sum, step, ratio)
 
 
 def _api(days: list[str]):

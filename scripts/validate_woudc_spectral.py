@@ -113,6 +113,33 @@ def parse_brewer_csv(text: str) -> list[dict[str, object]]:
     return scans
 
 
+def parse_station_location(text: str) -> dict[str, float]:
+    """Station latitude/longitude/height from a WOUDC file's #LOCATION block.
+
+    A measured scan is only usable as forecast truth if it can be located: the
+    forecast has to be fetched at the station's own coordinates.
+    """
+    keys = ("latitude", "longitude", "height")
+    values: list[float] = []
+    lines = text.splitlines()
+    for i, raw in enumerate(lines):
+        if raw.strip() != "#LOCATION":
+            continue
+        # The block is a header line followed by the values; take the first line
+        # that actually parses as three numbers rather than assuming its position.
+        for follow in lines[i + 1 : i + 4]:
+            parts = [p.strip() for p in follow.split(",")]
+            if len(parts) < 3:
+                continue
+            try:
+                values = [float(p) for p in parts[:3]]
+            except ValueError:
+                continue
+            break
+        break
+    return dict(zip(keys, values)) if len(values) == 3 else {}
+
+
 def integrate_channels(
     waves: list[float], irr: list[float], *, unit_scale: float = _W_M2_NM
 ) -> dict[str, float]:
@@ -135,14 +162,21 @@ def integrate_channels(
 
     w = np.asarray(waves, dtype=float)
     e = np.clip(np.asarray(irr, dtype=float), 0, None) * float(unit_scale)
+    if w.size < 2:
+        raise ValueError("a spectrum needs at least two wavelengths to integrate")
     dp_s = _eff(_load("parrish_fda_3630"), w)
     ery_s = _eff(_load("cie_erythema_reference"), w)
     out: dict[str, float] = {}
-    for name, m in (("uva", (w >= 315) & (w <= 400)),
-                    ("uvb", (w >= 280) & (w < 315))):
-        out[name] = float(np.sum(e[m]))
-    out["e_ery"] = float(np.sum(e * ery_s))
-    out["e_dp"] = float(np.sum(e * dp_s))
+    # Trapezoid over wavelength, never a plain sum: WOUDC ships a 0.5 nm grid,
+    # so summing samples double-counts every band. Against the files' own
+    # IntCIE column the sum/integral ratio is exactly 2.0, and a measured UVI
+    # built on the sum reads as a +2.5 UVI "forecast bias" when compared with a
+    # forecast. Zeroing outside the band clamps the edges to what was measured.
+    for name, mask in (("uva", (w >= 315) & (w <= 400)),
+                       ("uvb", (w >= 280) & (w < 315))):
+        out[name] = float(np.trapezoid(np.where(mask, e, 0.0), w))
+    out["e_ery"] = float(np.trapezoid(e * ery_s, w))
+    out["e_dp"] = float(np.trapezoid(e * dp_s, w))
     out["uvi"] = out["e_ery"] * 40.0
     return out
 
