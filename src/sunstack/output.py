@@ -104,7 +104,8 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
             "function activeRow(){const dl=DATA.daily||[],d=dl.find(x=>x.date===SEL)||bestDay();if(!d)return {};const st=d.best_usable_30m_start||d.strongest_30m_start;const hv=rowsFor(DATA.half_hour,d.date);return (st&&hv.find(x=>String(x.time).slice(0,16)===String(st).slice(0,16)))||hv[0]||rowsFor(DATA.hourly,d.date)[0]||{};}"
             "function showSurface(){const box=surfaceBox(),el=document.getElementById('surface');if(!box||!el||!SURFACES||!DATA)return;"
             "const info=surfInfo();if(!info)return;const row=activeRow(),name=info.display_name||el.value,s=DATA.summary||{};"
-            "const tail=' · spectral '+esc(row.spectral_backend||s.spectral_backend||'—')+' (tier '+esc(row.spectral_tier||s.photobiology_action_spectrum_tier||'—')+') · fusion '+esc(s.fusion_version||'—')+' · confidence '+esc(s.confidence_version||'—')+' · rank '+esc(s.window_rank_version||'—');"
+            "const tail=' · spectral '+esc(row.spectral_backend||s.spectral_backend||'—')+' (tier '+esc(row.spectral_tier||s.photobiology_action_spectrum_tier||'—')+') · fusion '+esc(s.fusion_version||'—')+' · confidence '+esc(s.confidence_version||'—')+' · rank '+esc(s.window_rank_version||'—')+' · '+SPECTRAL_PROXY_NOTE;"
+            "const prov=document.getElementById('provenance');if(prov)prov.title=SPECTRAL_PROXY_DETAIL;"
             "if(row.surface_extent_mode==='broad'){box.textContent='Surface '+name+' · broad extent requires backend RT'+tail;return;}"
             "const p=planeForRow(row);"
             "box.textContent='Surface '+p.name+' at '+esc(String(row.time||'').slice(0,16).replace('T',' '))+' (computed in your browser) · reflectance proxy '+((+p.proxy)*100).toFixed(2)+'% · reflected UVA '+f2(p.refl_uva)+' W/m² · reflected UVB '+f2(p.refl_uvb)+' W/m² · tilt '+p.tilt+'° azimuth '+p.az+'° from north · plane gain '+(p.factor>1?'+':'')+Math.round((p.factor-1)*100)+'%'+(p.tilt<1e-9?' · flat, upward-facing plane has no ground view, so material choice has no effect at tilt 0':'')+tail;}"
@@ -125,6 +126,38 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
         html,
         "fetch('/api/locations').then(r=>{if(!r.ok)throw 0;}).catch(",
         "Promise.reject(0).catch(",
+    )
+    # The two controls below only work against the live API, which a published
+    # page does not have. Left as-is they are silently inert: a user types a
+    # personal MMD and no number moves, which reads as a broken feature rather
+    # than a static export. Hide the inputs (keeping their ids so the reader
+    # code still finds them) and say why in place of the control.
+    html = swap_once(
+        html,
+        "<details class=\"mmd\" style=\"display:inline-block\"><summary title=\"Only if you have a measured or estimated personal MMD\">I have my MMD</summary><span id=\"mmdwrap\"><label>My MMD <input id=\"mmd\" type=\"number\" min=\"1\" step=\"1\" placeholder=\"J/m²\" title=\"Measured/estimated personal MMD in melanogenic-effective J/m² — leave blank unless you know yours\" style=\"width:80px\"></label><label>basis <select id=\"mmdbasis\" title=\"How much to trust your MMD number. It changes how the dose is expressed relative to your own threshold; it never changes the environmental dose.\"><option value=\"\">—</option><option value=\"SUNSTACK_EFFECTIVE_DOSE_MEASURED\">Measured with SunStack's dose basis</option><option value=\"SOURCE_SPECTRUM_MEASURED\">Measured from the source spectrum</option><option value=\"OBJECTIVE_ESTIMATE\">Estimate from another app</option><option value=\"COARSE_ESTIMATE\">Rough guess</option></select></label></span></details>",
+        (
+            '<input id="mmd" type="hidden" value="">'
+            '<input id="mmdbasis" type="hidden" value="">'
+            '<span class="note" id="mmdstatic" title="A personal MMD re-expresses '
+            'doses against your own threshold, which needs the live server to '
+            're-rank. This published page ships one fixed run.">'
+            'Personal MMD needs the live server — this page ships one published run.'
+            '</span>'
+        ),
+    )
+    html = swap_once(
+        html,
+        "<p class=\"note\">One block per line — <b>Mon 11:00-12:15</b>. Kept in this browser only; it is never part of the published forecast. With no schedule entered, nothing is filtered and no class rows are marked.</p>",
+        (
+            '<p class="note">One block per line — <b>Mon 11:00-12:15</b>. Kept in '
+            'this browser only; it is never part of the published forecast. With no '
+            'schedule entered, nothing is filtered and no class rows are marked. '
+            '<b>A published page cannot re-rank for a schedule:</b> entering one marks '
+            'your class rows in the tables, while the recommended window stays the '
+            'environmental one — so a class block can contain it. '
+            'The live dashboard (<code>uv run sunstack ui</code>) ranks with your '
+            'schedule.</p>'
+        ),
     )
     html = swap_once(
         html,

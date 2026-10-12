@@ -2504,6 +2504,27 @@ process.stdout.write(JSON.stringify(out));
             f"client fresnel {one['fresnel']} != module {want_fr} at sza {sza}")
 
 
+def test_static_export_derives_from_the_single_live_template() -> None:
+    """One HTML template, two renderers.
+
+    The published page must be a *derivation* of the live template, not a fork:
+    a copy would drift, and the reader would silently lose sections the live app
+    still has. Two invariants keep that true - the live app serves the template
+    object itself, and the export's live->static swaps were actually applied.
+    """
+    from sunstack import serving as _serving
+    from sunstack import ui as _ui
+    from sunstack.output import render_static_html
+
+    assert _ui.HTML is _serving.HTML, "the live app must serve the template, not a copy"
+
+    rendered = render_static_html("20260923_000000")
+    # A published page has no API to call: if a swap was skipped or the template
+    # was forked, these live-only forms survive and the static page 404s.
+    assert "return '/api/data?'" not in rendered
+    assert "./data.json?v=" in rendered
+
+
 def test_percentile_helpers_reject_non_series_loudly():
     import pytest
 
