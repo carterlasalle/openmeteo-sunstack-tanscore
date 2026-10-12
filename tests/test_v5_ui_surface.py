@@ -52,6 +52,8 @@ def _api_fixture(tmp_path: Path) -> Path:
             "shortwave_radiation": 440.0,
             "direct_radiation": 320.0,
             "diffuse_radiation": 120.0,
+            "predicted_uva_wm2": 26.0,
+            "predicted_uvb_wm2": 0.22,
             "temperature_2m": 80.0,
             "overall_tan_opportunity_0_100": 40.0,
             "tan_score_absolute_0_100": 35.0,
@@ -69,6 +71,8 @@ def _api_fixture(tmp_path: Path) -> Path:
             "shortwave_radiation": 720.0,
             "direct_radiation": 560.0,
             "diffuse_radiation": 160.0,
+            "predicted_uva_wm2": 42.0,
+            "predicted_uvb_wm2": 0.35,
             "temperature_2m": 82.0,
             "overall_tan_opportunity_0_100": 60.0,
             "tan_score_absolute_0_100": 45.0,
@@ -86,6 +90,8 @@ def _api_fixture(tmp_path: Path) -> Path:
             "shortwave_radiation": 530.0,
             "direct_radiation": 390.0,
             "diffuse_radiation": 140.0,
+            "predicted_uva_wm2": 32.0,
+            "predicted_uvb_wm2": 0.27,
             "temperature_2m": 81.0,
             "overall_tan_opportunity_0_100": 50.0,
             "tan_score_absolute_0_100": 40.0,
@@ -232,6 +238,12 @@ def test_surface_context_preserves_horizontal_values(tmp_path: Path):
     reflected = "skin_plane_ground_reflected_delayed_pigmentation_wm2"
     grass_hourly, sand_hourly = _rows(grass_data, "hourly"), _rows(sand_data, "hourly")
     assert _number(sand_hourly[0], reflected) > _number(grass_hourly[0], reflected) > 0
+    # End-to-end, not diagnostics-only: the material reaches skin-plane
+    # exposure, and no reflected band exceeds its own downwelling.
+    assert _number(sand_hourly[0], "skin_plane_e_mel_wm2") > _number(
+        grass_hourly[0], "skin_plane_e_mel_wm2")
+    assert _number(sand_hourly[0], "skin_plane_ground_reflected_uva_wm2") <= 26.0
+    assert _number(sand_hourly[0], "skin_plane_ground_reflected_uvb_wm2") <= 0.22
 
     flat_grass = client.get(
         "/api/data", params={"surface": "grass_summer", "skin_tilt_deg": "0"}
