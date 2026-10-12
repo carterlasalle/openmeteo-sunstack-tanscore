@@ -111,11 +111,21 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
             "async function loadData(){"
         ),
     )
-    # Static export keeps the live fetch shape (./data.json via the first
+    # The static export keeps the live fetch shape (./data.json via the first
     # anchor above); the surface selector stays visible and recomputes
     # skin-plane reflection client-side from serialized components.
     # Static surface controls only update the reflected-context provenance;
     # broad homogeneous surfaces require backend radiative transfer.
+    #
+    # The template probes /api/locations to decide whether to hide the
+    # Refresh button (a live host answers, a static one did not). On GitHub
+    # Pages that probe is a guaranteed 404 in every visitor's console, and the
+    # export already knows there is no live API, so answer it without a request.
+    html = swap_once(
+        html,
+        "fetch('/api/locations').then(r=>{if(!r.ok)throw 0;}).catch(",
+        "Promise.reject(0).catch(",
+    )
     html = swap_once(
         html,
         "function calUrl(qs){return 'webcal://'+location.host+'/api/calendar.ics?'+qs;}",

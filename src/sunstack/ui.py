@@ -69,36 +69,34 @@ def _parse_skin_type(raw: object) -> int | None:
     return value
 
 
-_MIN_TEMP_F_RANGE = (32.0, 80.0)
+# The cold-floor window the page's own input advertises (32-80 °F). It lives in
+# the FastAPI Query declaration so /openapi.json describes the accepted domain
+# and out-of-range or non-finite values are rejected before a handler runs
+# (F-19 enforced the same window in the handler with a 400; the schema is the
+# contract clients and generated SDKs actually read, so it owns the bound now).
+_MIN_TEMP_F_LOW, _MIN_TEMP_F_HIGH = 32.0, 80.0
 
+# `classes` is a JSON array of [day, start, end] blocks; empty means "no
+# schedule". The wire shape belongs in the schema, so an obvious non-array is a
+# 422 before a handler runs instead of a 400 from the parser.
+_CLASSES_PATTERN = r"^$|^\[.*\]$"
+_CLASSES_DESC = (
+    'JSON array of {"dow": 0-4, "start": "HH:MM", "end": "HH:MM"} blocks '
+    "(empty string = no schedule)"
+)
 
-def _finite_min_temp(value: float | None) -> float | None:
-    """Reject NaN/±inf thresholds, and anything outside the advertised range.
+# Fitzpatrick selector: the page's <select> offers empty (unset) or 1-6, and the
+# handler rejects anything else, so the schema states the same closed domain.
+_SKIN_TYPE_PATTERN = r"^$|^[1-6]$"
 
-    `min_temp=nan` was accepted with HTTP 200 and silently disabled the cold
-    floor: `temp < nan` is False for every row, so a 43 °F hour that is blocked
-    at the default 50 °F became 100 % feasible while the run summary still
-    reported the default threshold (live audit 2026-10-06). FastAPI parses the
-    parameter, so the check has to live here.
-
-    F-19: tilt and azimuth were range-checked while `min_temp` accepted -100 and
-    120. The page's own input advertises 32-80, so the API enforces the same
-    window rather than leaving one control inconsistent with its siblings.
-    """
-    if value is None:
-        return None
-    if not np.isfinite(value):
-        raise HTTPException(
-            status_code=400,
-            detail=f"min_temp must be a finite number, got {value!r}",
-        )
-    lo, hi = _MIN_TEMP_F_RANGE
-    if not lo <= value <= hi:
-        raise HTTPException(
-            status_code=400,
-            detail=f"min_temp must be between {lo:g} and {hi:g} °F, got {value!r}",
-        )
-    return value
+# Status codes every read endpoint can deliberately return. 503 is the fresh
+# install: no run has been published yet, which the message tells the user to
+# fix by running one - it is not a server fault.
+_READ_RESPONSES: dict[int | str, dict[str, object]] = {
+    400: {"description": "invalid query parameter (schedule JSON, surface, tilt, MMD)"},
+    404: {"description": "unknown location"},
+    503: {"description": "no forecast run published yet"},
+}
 
 
 def _parse_surface(surface: object, extent: object) -> tuple[str, str]:
@@ -177,10 +175,12 @@ def create_app(root: Path, run_live_fn: RunLiveFn | None = None) -> FastAPI:
     def home():
         return HTML
 
-    @app.get("/api/data")
+    @app.get("/api/data", responses=_READ_RESPONSES)
     def data(
-        skin_type: str = Query(default=""),
-        min_temp: float | None = Query(default=None),
+        skin_type: str = Query(default="", pattern=_SKIN_TYPE_PATTERN),
+        min_temp: float | None = Query(
+            default=None, ge=_MIN_TEMP_F_LOW, le=_MIN_TEMP_F_HIGH
+        ),
         location: str = Query(default=""),
         personal_mmd: str = Query(default=""),
         personal_mmd_basis: str = Query(default=""),
@@ -188,9 +188,8 @@ def create_app(root: Path, run_live_fn: RunLiveFn | None = None) -> FastAPI:
         surface_extent: str = Query(default="local"),
         skin_tilt_deg: str = Query(default=""),
         skin_azimuth_deg: str = Query(default=""),
-        classes: str = Query(default=""),
+        classes: str = Query(default="", pattern=_CLASSES_PATTERN, description=_CLASSES_DESC),
     ):
-        min_temp = _finite_min_temp(min_temp)
         try:
             class_blocks = _parse_classes(classes)
         except (TypeError, ValueError) as exc:
@@ -241,6 +240,12 @@ def create_app(root: Path, run_live_fn: RunLiveFn | None = None) -> FastAPI:
             # error reported as a server error, which breaks monitoring and
             # sends the user looking for a server log.
             raise
+        except FileNotFoundError as exc:
+            # No run published yet. That is the documented fresh-install state
+            # (the message says how to fix it), so it is 503 + retry, not a 500
+            # that reads as a server crash. `latest_dir` is the only thing below
+            # that raises it - an unknown location is already a 404 above.
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -260,8 +265,10 @@ def create_app(root: Path, run_live_fn: RunLiveFn | None = None) -> FastAPI:
 
     @app.post("/api/refresh")
     def refresh(
-        skin_type: str = Query(default=""),
-        min_temp: float | None = Query(default=None),
+        skin_type: str = Query(default="", pattern=_SKIN_TYPE_PATTERN),
+        min_temp: float | None = Query(
+            default=None, ge=_MIN_TEMP_F_LOW, le=_MIN_TEMP_F_HIGH
+        ),
         location: str = Query(default=""),
         personal_mmd: str = Query(default=""),
         personal_mmd_basis: str = Query(default=""),
@@ -270,7 +277,6 @@ def create_app(root: Path, run_live_fn: RunLiveFn | None = None) -> FastAPI:
         skin_tilt_deg: str = Query(default=""),
         skin_azimuth_deg: str = Query(default=""),
     ):
-        min_temp = _finite_min_temp(min_temp)
         try:
             mmd, basis = parse_personal_mmd(personal_mmd, personal_mmd_basis)
         except ValueError as exc:
@@ -311,18 +317,26 @@ def create_app(root: Path, run_live_fn: RunLiveFn | None = None) -> FastAPI:
                 status_code=500, detail=f"LIVE REFRESH FAILED: {exc}"
             ) from exc
 
-    @app.get("/api/calendar.ics")
+    @app.get(
+        "/api/calendar.ics",
+        response_class=Response,
+        responses={
+            **_READ_RESPONSES,
+            200: {"content": {"text/calendar": {}}, "description": "iCalendar feed"},
+        },
+    )
     def calendar(
-        skin_type: str = Query(default=""),
-        min_temp: float | None = Query(default=None),
+        skin_type: str = Query(default="", pattern=_SKIN_TYPE_PATTERN),
+        min_temp: float | None = Query(
+            default=None, ge=_MIN_TEMP_F_LOW, le=_MIN_TEMP_F_HIGH
+        ),
         location: str = Query(default=""),
         surface: str = Query(default="unknown"),
         surface_extent: str = Query(default="local"),
         skin_tilt_deg: str = Query(default=""),
         skin_azimuth_deg: str = Query(default=""),
-        classes: str = Query(default=""),
+        classes: str = Query(default="", pattern=_CLASSES_PATTERN, description=_CLASSES_DESC),
     ):
-        min_temp = _finite_min_temp(min_temp)
         try:
             class_blocks = _parse_classes(classes)
         except (TypeError, ValueError) as exc:
@@ -350,6 +364,9 @@ def create_app(root: Path, run_live_fn: RunLiveFn | None = None) -> FastAPI:
             return Response(content=ics, media_type="text/calendar; charset=utf-8")
         except HTTPException:
             raise
+        except FileNotFoundError as exc:
+            # Same fresh-install state as /api/data; see there.
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 

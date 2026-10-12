@@ -12,7 +12,7 @@ measurement uncertainty context. No network at test time: tests use a pinned
 fixture scan under data/research/woudc/.
 
 Usage:
-  uv run python scripts/validate_woudc_spectral.py --fixture data/research/woudc/brewer_fixture.csv --out /tmp/woudc_check.md
+  uv run python scripts/validate_woudc_spectral.py --fixture data/research/woudc/brewer_saskatoon_19930127_scan0.csv --out /tmp/woudc_check.md
 """
 
 from __future__ import annotations
@@ -31,6 +31,12 @@ sys.path.insert(0, str(REPO / "src"))
 
 WOUDC_API = "https://api.woudc.org/collections/data_records/items"
 
+# WOUDC Spectral_1.0 S-Irradiance is W/m2/nm (the pinned fixture's own IntCIE
+# agrees to within a few percent of the integrated erythemal channel).
+_W_M2_NM = 1.0
+_MW_M2_NM = 1e-3
+UNIT_SCALES = {"W/m2/nm": _W_M2_NM, "mW/m2/nm": _MW_M2_NM}
+
 
 def _tls_ctx() -> ssl.SSLContext:
     """Verifying TLS context. certifi's bundle comes first because some hosts
@@ -39,6 +45,21 @@ def _tls_ctx() -> ssl.SSLContext:
     import certifi
 
     return ssl.create_default_context(cafile=certifi.where())
+
+
+def _fetch(url: str, timeout: int) -> str:
+    """Fetch an http(s) URL as text, refusing any other scheme.
+
+    URLs here come from the WOUDC API and from `--urls`, so they are not
+    literals: without the scheme check `urlopen` would happily follow
+    `file:///etc/passwd` (or any local path) and the "download a scan" path
+    would become a local-file reader.
+    """
+    scheme = urllib.parse.urlsplit(url).scheme.lower()
+    if scheme not in ("http", "https"):
+        raise ValueError(f"refusing non-http(s) URL: {url!r}")
+    with urllib.request.urlopen(url, timeout=timeout, context=_tls_ctx()) as r:
+        return r.read().decode(errors="replace")
 
 
 def parse_brewer_csv(text: str) -> list[dict[str, object]]:
@@ -92,18 +113,28 @@ def parse_brewer_csv(text: str) -> list[dict[str, object]]:
     return scans
 
 
-def integrate_channels(waves: list[float], irr: list[float]) -> dict[str, float]:
-    """Integrate UVA/UVB/erythemal/E_DP from a measured spectrum (W/m2/nm)."""
+def integrate_channels(
+    waves: list[float], irr: list[float], *, unit_scale: float = _W_M2_NM
+) -> dict[str, float]:
+    """Integrate UVA/UVB/erythemal/E_DP from a measured spectrum.
+
+    `unit_scale` takes the file's irradiance unit to W/m2/nm: 1.0 for the
+    W/m2/nm that WOUDC Spectral_1.0 ships (the pinned fixture's own IntCIE column
+    confirms it - see tests), 1e-3 for mW/m2/nm sources.
+
+    It is an argument, never a guess from the data. The previous magnitude sniff
+    (`sum(UVA) > 500 -> divide by 1000`) made the units a function of the sky: a
+    0.2 mW/m2/nm step across the threshold reported UVI 74.6 where the same
+    spectrum a hair dimmer reported 0.08, and every weak scan (cloud, low sun,
+    the SZA bins this report stratifies by) came out 1000x too large.
+    """
     import numpy as np
 
     from sunstack.photobiology import effectiveness_at as _eff
     from sunstack.photobiology import load_action_spectrum as _load
 
     w = np.asarray(waves, dtype=float)
-    e = np.clip(np.asarray(irr, dtype=float), 0, None)
-    # Brewer files report mW/m2/nm in practice; detect by scale.
-    if np.sum(e[(w >= 315) & (w <= 400)]) > 500:
-        e = e / 1000.0
+    e = np.clip(np.asarray(irr, dtype=float), 0, None) * float(unit_scale)
     dp_s = _eff(_load("parrish_fda_3630"), w)
     ery_s = _eff(_load("cie_erythema_reference"), w)
     out: dict[str, float] = {}
@@ -128,9 +159,6 @@ def find_scans(
     set spans the window instead of one month. Returns ``(station, url)`` pairs
     so a multi-station report can attribute each scan.
     """
-    import urllib.parse
-    import urllib.request
-
     matches: list[tuple[str, str]] = []
     offset = 0
     while offset < 4000:
@@ -144,8 +172,7 @@ def find_scans(
         if station:
             params["platform_name"] = station
         q = urllib.parse.urlencode(params)
-        with urllib.request.urlopen(f"{WOUDC_API}?{q}", timeout=90, context=_tls_ctx()) as r:
-            d = json.loads(r.read().decode())
+        d = json.loads(_fetch(f"{WOUDC_API}?{q}", timeout=90))
         feats = d.get("features", [])
         if not feats:
             break
@@ -193,6 +220,12 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--per-station", type=int, default=12)
     ap.add_argument("--fixture", default="")
     ap.add_argument("--urls", default="")
+    ap.add_argument(
+        "--irradiance-units",
+        choices=sorted(UNIT_SCALES),
+        default="W/m2/nm",
+        help="Units of the file's S-Irradiance column (WOUDC Spectral_1.0: W/m2/nm)",
+    )
     ap.add_argument("--out", default="docs/validation/woudc_spectral_validation.md")
     ns = ap.parse_args(argv)
 
@@ -221,8 +254,7 @@ def main(argv: list[str] | None = None) -> None:
             if ns.fixture:
                 text = Path(src).read_text(encoding="utf-8")
             else:
-                with urllib.request.urlopen(src, timeout=120, context=_tls_ctx()) as r:
-                    text = r.read().decode(errors="replace")
+                text = _fetch(src, timeout=120)
         except (OSError, ValueError) as exc:
             print(f"WARN {src}: {exc}")
             continue
@@ -231,7 +263,10 @@ def main(argv: list[str] | None = None) -> None:
             ir = scan["irradiance"]
             if not isinstance(wv, list) or not isinstance(ir, list) or len(wv) < 50:
                 continue
-            ch = integrate_channels([float(x) for x in wv], [float(x) for x in ir])
+            ch = integrate_channels(
+                [float(x) for x in wv], [float(x) for x in ir],
+                unit_scale=UNIT_SCALES[str(ns.irradiance_units)],
+            )
             summ = scan["summary"]
             if not isinstance(summ, dict):
                 continue

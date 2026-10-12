@@ -32,6 +32,12 @@ class _AppFactory(Protocol):
     def __call__(self, root: Path) -> object: ...
 
 
+class _App(Protocol):
+    """The slice of a FastAPI app these tests read: its published schema."""
+
+    def openapi(self) -> dict[str, object]: ...
+
+
 def _write_rows(path: Path, rows: list[dict[str, object]]) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
@@ -301,21 +307,84 @@ def test_refresh_and_calendar_validate_surface_without_reordering_environment(
     assert _stable_calendar_lines(baseline.text) == _stable_calendar_lines(surfaced.text)
 
 
+def test_read_endpoints_answer_a_missing_run_with_503_not_500(tmp_path: Path) -> None:
+    """A fresh install has no run yet, and the message says how to make one.
+
+    That state used to escape as an unhandled FileNotFoundError -> 500, which
+    reads as a server crash: monitoring pages, and the user goes looking for a
+    server log instead of running a forecast.
+    """
+    empty = tmp_path / "empty-root"
+    empty.mkdir()
+    client = _client(empty)
+    for path in ("/api/data", "/api/calendar.ics"):
+        r = client.get(path)
+        assert r.status_code == 503, (path, r.status_code)
+        assert "No SunStack run found" in _detail(r), _detail(r)
+
+
+def test_classes_query_carries_its_wire_shape(tmp_path: Path) -> None:
+    """`classes` is JSON inside a query parameter.
+
+    The schema states the array shape, so obvious junk is rejected before a
+    handler runs (422) while a real schedule still works and a schema-shaped but
+    semantically invalid array stays the documented 400.
+    """
+    client = _client(_api_fixture(tmp_path))
+    schedule = '[{"dow":0,"start":"11:00","end":"12:15"}]'
+    assert client.get("/api/data", params={"classes": schedule}).status_code == 200
+    assert client.get("/api/data", params={"classes": ""}).status_code == 200
+    assert client.get("/api/data", params={"classes": "[]"}).status_code == 200
+    for junk in ("c", "[1,", "{", "1"):
+        assert client.get("/api/data", params={"classes": junk}).status_code == 422, junk
+
+
+def test_skin_type_query_states_the_fitzpatrick_domain(tmp_path: Path) -> None:
+    """Fitzpatrick 1-6 (or unset) is a closed domain the schema now states."""
+    client = _client(_api_fixture(tmp_path))
+    for ok in ("", "1", "3", "6"):
+        assert client.get("/api/data", params={"skin_type": ok}).status_code == 200, ok
+    for bad in ("0", "7", "9", "h\u00cd"):
+        assert client.get("/api/data", params={"skin_type": bad}).status_code == 422, bad
+
+
 def test_min_temp_is_bounded_to_the_advertised_range(tmp_path: Path) -> None:
     """F-19: tilt and azimuth were range-checked while min_temp accepted -100
     and 120. The page's own input advertises 32-80, so the API enforces the same
-    window instead of leaving one control inconsistent with its siblings."""
-    client = _client(_api_fixture(tmp_path))
+    window - and the bound lives in the OpenAPI schema, because the schema is
+    the contract a client (or a fuzzer, or a generated SDK) actually reads.
+    Enforcing it there also rejects NaN/inf before a handler can run."""
+    root = _api_fixture(tmp_path)
+    client = _client(root)
+    try:
+        ui_module = import_module("sunstack.ui")
+        app_factory = cast(_AppFactory, ui_module.__dict__["create_app"])
+    except (ImportError, RuntimeError):
+        pytest.skip("fastapi not installed")
 
-    for bad in ("-100", "120", "10", "95"):
+    spec = cast(_App, app_factory(root)).openapi()
+    paths = cast("dict[str, object]", spec["paths"])
+
+    def _get(path: str) -> dict[str, object]:
+        return cast("dict[str, object]", cast("dict[str, object]", paths[path])["get"])
+
+    params = cast("list[dict[str, object]]", _get("/api/data")["parameters"])
+    min_temp = next(p for p in params if p["name"] == "min_temp")
+    any_of = cast("list[dict[str, object]]", cast("dict[str, object]", min_temp["schema"])["anyOf"])
+    bounds = {k: v for part in any_of for k, v in part.items()}
+    assert bounds.get("minimum") == 32.0, bounds
+    assert bounds.get("maximum") == 80.0, bounds
+
+    # The feed is not JSON; its declared media type has to say so, or every
+    # generated client (and schema-aware tool) deserializes it wrongly.
+    responses = cast("dict[str, object]", _get("/api/calendar.ics")["responses"])
+    content = cast("dict[str, object]", cast("dict[str, object]", responses["200"])["content"])
+    assert "text/calendar" in content, list(content)
+
+    for bad in ("-100", "120", "10", "95", "nan", "inf"):
         r = client.get("/api/data", params={"min_temp": bad})
-        assert r.status_code == 400, (bad, r.status_code)
-        assert "between 32 and 80" in _detail(r), _detail(r)
-
-    # NaN keeps its own message: it is a different failure from out-of-range.
-    nan = client.get("/api/data", params={"min_temp": "nan"})
-    assert nan.status_code == 400
-    assert "finite" in _detail(nan), _detail(nan)
+        assert r.status_code == 422, (bad, r.status_code)
+        assert client.get("/api/calendar.ics", params={"min_temp": bad}).status_code == 422, bad
 
     for ok in ("32", "50", "80"):
         assert client.get("/api/data", params={"min_temp": ok}).status_code == 200, ok
