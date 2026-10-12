@@ -25,6 +25,7 @@ import functools
 import http.server
 import importlib
 import json
+import re
 import socketserver
 import threading
 from pathlib import Path
@@ -178,6 +179,20 @@ def _checks(
         )
     page.select_option("#surface", "dry_beach_sand")
     page.wait_for_timeout(1000)
+
+    # 2c. the material's model quality must reach the reader, not just the
+    # payload (audit Phase 1 item 3: surface_model_quality carried to display).
+    panel_text = str(page.evaluate(
+        "() => (document.getElementById('surfacecontext')||{}).textContent || ''"
+    ))
+    quality = re.search(r"surface quality ([a-z][a-z /-]{2,})", panel_text)
+    record(
+        "panel discloses the material's model quality as words",
+        quality is not None
+        and quality.group(1).strip() not in ("unknown", "undefined", "none")
+        and "no material applied" not in panel_text,
+        panel_text[-110:],
+    )
 
     # 3. honesty of the two live-only controls on a published page
     class_copy = page.evaluate(

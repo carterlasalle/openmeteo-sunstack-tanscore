@@ -104,7 +104,7 @@ def render_static_html(run_tag: object = "", min_temp_f: float = 50.0) -> str:
             "function activeRow(){const dl=DATA.daily||[],d=dl.find(x=>x.date===SEL)||bestDay();if(!d)return {};const st=d.best_usable_30m_start||d.strongest_30m_start;const hv=rowsFor(DATA.half_hour,d.date);return (st&&hv.find(x=>String(x.time).slice(0,16)===String(st).slice(0,16)))||hv[0]||rowsFor(DATA.hourly,d.date)[0]||{};}"
             "function showSurface(){const box=surfaceBox(),el=document.getElementById('surface');if(!box||!el||!SURFACES||!DATA)return;"
             "const info=surfInfo();if(!info)return;const row=activeRow(),name=info.display_name||el.value,s=DATA.summary||{};"
-            "const tail=' · spectral '+esc(row.spectral_backend||s.spectral_backend||'—')+' (tier '+esc(row.spectral_tier||s.photobiology_action_spectrum_tier||'—')+') · fusion '+esc(s.fusion_version||'—')+' · confidence '+esc(s.confidence_version||'—')+' · rank '+esc(s.window_rank_version||'—')+' · '+SPECTRAL_PROXY_NOTE;"
+            "const tail=' · spectral '+esc(row.spectral_backend||s.spectral_backend||'—')+' (tier '+esc(row.spectral_tier||s.photobiology_action_spectrum_tier||'—')+') · fusion '+esc(s.fusion_version||'—')+' · confidence '+esc(s.confidence_version||'—')+' · rank '+esc(s.window_rank_version||'—')+' · surface quality '+esc(surfaceQualityText((surfInfo()||{}).spectral_quality||''))+' · '+SPECTRAL_PROXY_NOTE;"
             "const prov=document.getElementById('provenance');if(prov)prov.title=SPECTRAL_PROXY_DETAIL;"
             "if(row.surface_extent_mode==='broad'){box.textContent='Surface '+name+' · broad extent requires backend RT'+tail;return;}"
             "const p=planeForRow(row);"

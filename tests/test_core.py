@@ -2516,11 +2516,21 @@ def test_static_export_derives_from_the_single_live_template() -> None:
     still has. Two invariants keep that true - the live app serves the template
     object itself, and the export's live->static swaps were actually applied.
     """
+    from pathlib import Path as _Path
+
     from sunstack import serving as _serving
     from sunstack import ui as _ui
     from sunstack.output import render_static_html
 
-    assert _ui.HTML is _serving.HTML, "the live app must serve the template, not a copy"
+    # Exactly one module owns the page markup: a fork anywhere in the package
+    # would be a second literal document, and it would drift.
+    owners = sorted(
+        path.name
+        for path in (_Path(__file__).resolve().parents[1] / "src" / "sunstack").glob("*.py")
+        if "<!doctype html>" in path.read_text(encoding="utf-8")
+    )
+    assert owners == ["serving.py"], owners
+    assert _ui.HTML == _serving.HTML, "the live app must serve the template, not a copy"
 
     rendered = render_static_html("20260923_000000")
     # A published page has no API to call: if a swap was skipped or the template
