@@ -112,6 +112,22 @@ def fuse_uvi_unique_count(frame: pd.DataFrame) -> pd.DataFrame:
         out["uvi_source_spread"] = np.round(spread, 3)
         out["uvi_sunny"] = np.round(np.nanmax(stacked, axis=0), 3)
         out["uvi_cloudy"] = np.round(np.nanmin(stacked, axis=0), 3)
+    # §5: publish the fused value AND choose the headline. `uvi_consensus` keeps
+    # its role as the product's headline UVI (erythemal, SED and the page read
+    # it), but the headline is the best-match input while the measured common-case
+    # result says the fusion is worse. Nothing is discarded: `uvi_fusion` carries
+    # the fused value, `uvi_source_spread` the disagreement envelope, and
+    # `uvi_headline_source` says which one the headline is.
+    out["uvi_fusion"] = out["uvi_consensus"]
+    if config.UVI_HEADLINE == "best_match":
+        headline = np.where(np.isfinite(om), om, out["uvi_consensus"])
+        source = np.where(np.isfinite(om), "openmeteo_best_match", "fusion")
+    else:
+        headline = out["uvi_consensus"]
+        source = np.full(len(out), "fusion", dtype=object)
+    out["uvi_consensus"] = np.round(headline, 3)
+    out["uvi_headline_source"] = source
+    out["uvi_headline_version"] = config.UVI_HEADLINE_VERSION
     out["fusion_version"] = config.FUSION_VERSION
     return out
 

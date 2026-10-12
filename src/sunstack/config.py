@@ -230,6 +230,16 @@ SPECTRAL_BACKEND_VERSION_V5 = "tierB-libradtran-emulator-v1"
 SPECTRAL_DEGRADED_BACKEND = "tierC-broadband-proxy-v2"
 SURFACE_MODEL_VERSION = "uv-surface-v1"
 FUSION_VERSION = "calibrated-uvi-fusion-v2"
+
+# §5 (audit): the fused UVI is published, but the HEADLINE must not be worse
+# than its best input. On the identical-row common case the fusion measures
+# MAE 0.62 against Open-Meteo best match at 0.13, so best-match is the headline
+# and the fusion rides alongside as context. The weights come from a different
+# (availability-weighted) population than the row set that judges them; an
+# operator re-enables the fused headline only after a fit on identical rows
+# shows it helps.
+UVI_HEADLINE = os.getenv("SUNSTACK_UVI_HEADLINE", "best_match")
+UVI_HEADLINE_VERSION = "best-match-headline-v1"
 # Audit §4: the expected-error model is a handwritten formula (see
 # calibrate.estimate_expected_uvi_error) with no fitted coefficients and no
 # demonstrated held-out interval coverage, so it is NOT calibrated. Calling

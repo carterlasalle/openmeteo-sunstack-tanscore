@@ -96,8 +96,38 @@ jobs:
       # rendered ranking row must match the payload field it came from, there
       # must be no console errors and no page-wide horizontal overflow, at both
       # 1350px and 390px.
-      - name: Rendered UI contract (1350px + 390px)
+      # The live artifact: every check runs against the payload that ships.
+      - name: Rendered UI contract (1350px + 390px, published artifact)
         run: uv run --with playwright python scripts/verify_rendered_ui.py
+      # The visual gate renders the FROZEN fixture. A pixel baseline against the
+      # live payload would fail on every scheduled run, because the dates and
+      # doses change - that is data, not a regression.
+      - name: Rendered UI visual gate (frozen fixture)
+        run: |
+          uv run --with playwright python scripts/verify_rendered_ui.py \
+            --site-dir tests/fixtures/rendered_site \
+            --out /tmp/fixture_report.md \
+            --shots-dir /tmp/fixture_shots \
+            --baseline docs/validation/rendered_ui_baseline
+      # Seed the baseline once, on main. The visual gate needs a baseline made by
+      # the runner's own renderer: fonts and antialiasing differ between macOS
+      # and Linux, so a locally made baseline would fail here for no reason.
+      - name: Seed the visual baseline (main only, first run)
+        if: github.event_name != 'pull_request'
+        run: |
+          if ls docs/validation/rendered_ui_baseline/*.png >/dev/null 2>&1; then
+            echo "baseline present; the visual gate above compared against it"
+            exit 0
+          fi
+          mkdir -p docs/validation/rendered_ui_baseline
+          cp /tmp/fixture_shots/*.png docs/validation/rendered_ui_baseline/
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/validation/rendered_ui_baseline
+          git diff --quiet --cached && echo "nothing to seed" || {
+            git commit -m "Seed the rendered-UI visual baseline $(date -u +%Y%m%d_%H%M)"
+            git push
+          }
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4

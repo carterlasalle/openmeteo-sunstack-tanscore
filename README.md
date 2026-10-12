@@ -22,7 +22,7 @@ It fetches live Open-Meteo forecasts, full ensemble data, native HRRR sub-hourly
 | Schema / temporal support | `sunstack-output-v5` · `interval-contract-v1` |
 | Exposure endpoint / action spectrum | `delayed-pigmentation-v2` · `parrish-fda-3630-v1` |
 | Spectral backend | Tier-C `tierC-broadband-proxy-v2` in production (no gate-passing `tierB-libradtran-emulator-v1` wired; strict publishes Tier-C labeled; tier A/B claims fail loudly) |
-| Surface / fusion / confidence / ranking | `uv-surface-v1` · `calibrated-uvi-fusion-v2` · `heuristic-reliability-v1` (handwritten expected-error heuristic; not an empirically calibrated interval) · `fixed-duration-dose-v2` |
+| Surface / fusion / confidence / ranking | `uv-surface-v1` · `calibrated-uvi-fusion-v2` · `best-match-headline-v1` (UVI headline is the best match; the fusion is published beside it) · `heuristic-reliability-v1` (handwritten expected-error heuristic; not an empirically calibrated interval) · `fixed-duration-dose-v2` |
 
 
 ## How it works

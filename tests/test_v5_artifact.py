@@ -192,9 +192,35 @@ def test_validator_passes_clean_fixture(tmp_path: Path) -> None:
     assert isinstance(checks, list)
     # The gate list is a contract: adding a fatal check is a deliberate act,
     # silently dropping one is the regression this pin exists for.
-    assert len(cast(list[object], checks)) == 23, checks
+    assert len(cast(list[object], checks)) == 24, checks
     assert "time_utc_is_true_utc" in cast(list[str], checks)
     assert "min_temp_threshold_finite" in cast(list[str], checks)
+    assert "uvi_headline_matches_its_source" in cast(list[str], checks)
+
+
+def test_validator_fails_headline_that_disagrees_with_its_named_source(
+    tmp_path: Path,
+) -> None:
+    """§5: the headline names its source, so it must equal that source.
+
+    A page that says "Open-Meteo best match" while showing the fused number is
+    a mislabel - the exact failure mode that made the old fusion a regression.
+    """
+    module = _load_validator()
+    bad = _good_artifact()
+    row = _row(bad, 1)
+    row["uvi_headline_source"] = "openmeteo_best_match"
+    row["uvi_openmeteo"] = 4.0
+    row["uvi_consensus"] = 5.5  # not the best match
+    out = _validate(module, tmp_path, bad)
+    assert out["passed"] is False
+    assert "uvi_headline_matches_its_source" in _failures(out)
+
+    # A fused headline must equal the published fused value instead.
+    row["uvi_headline_source"] = "fusion"
+    row["uvi_fusion"] = 5.5
+    ok = _validate(module, tmp_path, bad)
+    assert "uvi_headline_matches_its_source" not in _failures(ok)
 
 
 def test_validator_fails_row_without_action_spectrum_identity(tmp_path: Path) -> None:

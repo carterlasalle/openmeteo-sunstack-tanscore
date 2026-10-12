@@ -8,6 +8,7 @@
   "spectral_backend_degraded": "tierC-broadband-proxy-v2",
   "surface_model_version": "uv-surface-v1",
   "fusion_version": "calibrated-uvi-fusion-v2",
+  "uvi_headline_version": "best-match-headline-v1",
   "confidence_version": "heuristic-reliability-v1",
   "window_rank_version": "fixed-duration-dose-v2",
   "deprecated_fields": [

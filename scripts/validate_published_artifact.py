@@ -32,6 +32,7 @@ FATAL_CHECKS = [
     "at_best_from_window",
     "feasibility_missingness_honest",
     "confidence_contract",
+    "uvi_headline_matches_its_source",
     "source_counts_bounded",
     "surface_local_mode_invariant",
     "daylight_fit_denominator",
@@ -270,6 +271,21 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
             if min(abs(_num(_conf) - v) for v in _legal) > 1.5:
                 failures["confidence_contract"].append(
                     f"{stamp}: confidence {_conf} not in {sorted(_legal)}")
+
+        # §5: the headline names its source, so it must equal that source. A
+        # page that says "best match" and shows a fused number is a mislabel.
+        _hsrc = row.get("uvi_headline_source")
+        _head = row.get("uvi_consensus")
+        if _hsrc == "openmeteo_best_match":
+            _om = row.get("uvi_openmeteo")
+            if _is_finite(_head) and _is_finite(_om) and abs(_num(_head) - _num(_om)) > 1e-3:
+                failures["uvi_headline_matches_its_source"].append(
+                    f"{stamp}: headline {_head} != best match {_om}")
+        elif _hsrc == "fusion":
+            _fus = row.get("uvi_fusion")
+            if _is_finite(_head) and _is_finite(_fus) and abs(_num(_head) - _num(_fus)) > 1e-3:
+                failures["uvi_headline_matches_its_source"].append(
+                    f"{stamp}: headline {_head} != fused {_fus}")
 
     day_rows = _rows_of(daily)
     half_rows = _rows_of(half)

@@ -67,15 +67,18 @@ def test_consensus_never_leaves_observed_source_range() -> None:
         "uvi_epa": [0.0, np.nan],
     })
     out = fuse_uvi_unique_count(night)
-    assert out["uvi_consensus"].tolist() == [0.0, 0.1]
+    # The fused value stays convex and clamped into the observed range.
+    assert out["uvi_fusion"].tolist() == [0.0, 0.1]
+    # The headline is the best-match input (OM), so it inherits OM's values.
+    assert out["uvi_consensus"].tolist() == [0.0, 0.0]
     day = pd.DataFrame({
         "uvi_openmeteo": [5.0],
         "uvi_cams": [4.0],
         "uvi_epa": [np.nan],
     })
     dout = fuse_uvi_unique_count(day)
-    cons = _num(dout, "uvi_consensus")
-    assert 4.0 <= cons <= 5.0
+    assert 4.0 <= _num(dout, "uvi_fusion") <= 5.0      # convex within [CAMS, OM]
+    assert _num(dout, "uvi_consensus") == 5.0          # headline is OM best match
 
 
 def test_unique_uvi_source_count_not_vote_count() -> None:
@@ -93,7 +96,8 @@ def test_unique_uvi_source_count_not_vote_count() -> None:
     # finite source values; audit: night 0.22 out of [0,0] failed the live
     # range gate). Unique count still separates provider presence from the
     # legacy vote count.
-    assert out["uvi_consensus"].tolist() == [1.607, 5.0]
+    assert out["uvi_fusion"].tolist() == [1.607, 5.0]
+    assert out["uvi_consensus"].tolist() == [0.0, 5.0]  # headline = OM best match
     assert out["uvi_consensus_sources"].tolist() == [3, 1]
     assert out["uvi_consensus_vote_count"].tolist() == [4, 2]
 

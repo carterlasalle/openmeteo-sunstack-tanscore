@@ -89,6 +89,7 @@ def test_documented_v5_tokens_remain_current() -> None:
         "tierC-broadband-proxy-v2",
         "uv-surface-v1",
         "calibrated-uvi-fusion-v2",
+        "best-match-headline-v1",
         "heuristic-reliability-v1",
         "fixed-duration-dose-v2",
         "70",

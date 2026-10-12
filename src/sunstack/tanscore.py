@@ -753,7 +753,11 @@ def score_forecast(
     for _col in ("uvi_consensus", "uvi_consensus_sources",
                  "uvi_consensus_vote_count", "uvi_source_spread",
                  "uvi_source_values", "uvi_source_weights",
-                 "uvi_sunny", "uvi_cloudy", "fusion_version"):
+                 "uvi_sunny", "uvi_cloudy", "fusion_version",
+                 # §5: the published fused value, the headline's provenance and
+                 # its version. A stage that dropped them would silently lose
+                 # the record of which UVI the headline is.
+                 "uvi_fusion", "uvi_headline_source", "uvi_headline_version"):
         out[_col] = _fused[_col].to_numpy()
     # Independent erythemal channel (SED input) from the consensus UVI. NEVER
     # added to TanScore. Consensus resists one bad source; raw OM UVI kept as

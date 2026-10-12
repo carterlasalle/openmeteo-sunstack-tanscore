@@ -2168,18 +2168,31 @@ def test_uvi_consensus_resists_single_bad_source(tmp_path: Path):
     # blindly). Spread names the disagreement width; source count is exact.
     # Matches state.fuse_uvi_unique_count on identical inputs.
     out = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
-    assert np.allclose(num(out, "uvi_consensus").to_numpy(), [3.69, 3.352], atol=0.01)
+    # The FUSED value still resists the single bad source (3.69 lifts the low
+    # outlier, which is the fusion's whole purpose).
+    assert np.allclose(num(out, "uvi_fusion").to_numpy(), [3.69, 3.352], atol=0.01)
+    # The HEADLINE is the best-match input (§5: the fusion measures worse than
+    # best match on identical rows). The envelope is what now tells the reader
+    # the sources are split - row 0 carries spread 3.0.
+    om = num(out, "uvi_openmeteo").to_numpy()
+    finite = np.isfinite(om)
+    assert finite.any() and np.allclose(num(out, "uvi_consensus").to_numpy()[finite], om[finite], atol=1e-3)
     assert num(out, "uvi_consensus_sources").tolist() == [3.0, 3.0]
     assert np.allclose(num(out, "uvi_source_spread").to_numpy(), [3.0, 3.46])
     assert np.allclose(num(out, "uvi_sunny").to_numpy(), [5.6, 5.56])
     assert np.allclose(num(out, "uvi_cloudy").to_numpy(), [2.6, 2.1])
 
 
-def test_sed_integrates_consensus_not_raw_om(tmp_path: Path):
-    # SED's erythemal input is consensus-derived: a bad OM UVI must not drag
-    # the erythemal channel down while the other sources agree.
+def test_sed_integrates_the_headline_state_not_a_raw_column(tmp_path: Path):
+    # SED's erythemal input is the headline UVI of the FINAL state, never a raw
+    # provider column read straight off the frame. §5 makes that headline the
+    # best-match value (`uvi_headline_source`), so a bad OM row moves it by
+    # design; the fused alternative stays published as uvi_fusion and the
+    # disagreement envelope is what flags the split.
     out = score_forecast(_split_frame(), Path(tmp_path), None, _confidence())
-    assert np.allclose(num(out, "erythemal_irradiance_wm2").to_numpy(), [0.09215, 0.08358], atol=1e-4)
+    cons = num(out, "uvi_consensus").to_numpy()
+    assert np.allclose(num(out, "erythemal_irradiance_wm2").to_numpy(), cons / 40.0, atol=1e-6)
+    assert set(_text(out, "uvi_headline_source").tolist()) <= {"openmeteo_best_match", "fusion"}
 
 
 def test_sed_fallback_prefers_consensus_marks_degraded_om():
@@ -2209,13 +2222,21 @@ def test_consensus_degrades_with_missing_sources(tmp_path: Path):
     # (0.827/0.173) after bias correction; OM itself when lone. NaN never zero.
     two = _split_frame().drop(columns=["uvi_epa"])
     out = score_forecast(two, Path(tmp_path), None, _confidence())
-    assert np.allclose(num(out, "uvi_consensus").to_numpy(), [3.39, 2.97], atol=0.01)
+    # The fused value reweights what remains (OM/CAMS shares 0.827/0.173).
+    assert np.allclose(num(out, "uvi_fusion").to_numpy(), [3.39, 2.97], atol=0.01)
+    # The headline follows the best-match input wherever it exists (a row with
+    # no best match falls back to the fused value).
+    om = num(out, "uvi_openmeteo").to_numpy()
+    finite = np.isfinite(om)
+    assert finite.any() and np.allclose(num(out, "uvi_consensus").to_numpy()[finite], om[finite], atol=1e-3)
     assert num(out, "uvi_consensus_sources").tolist() == [2.0, 2.0]
     one = _best_air().iloc[:1].copy()
     solo = score_forecast(one, Path(tmp_path), None, _confidence())
-    # Lone OM row: consensus equals the lone source (convex fusion clamps
+    # Lone OM row: the fused value equals the lone source (convex fusion clamps
     # the +0.11 bias correction into the observed range; audit 2026-10-05:
-    # unclamped night fusion invented 0.22 out of [0,0]).
+    # unclamped night fusion invented 0.22 out of [0,0]), and the headline is
+    # that same lone source.
+    assert np.allclose(num(solo, "uvi_fusion").to_numpy(), num(solo, "uvi_openmeteo").to_numpy())
     assert np.allclose(num(solo, "uvi_consensus").to_numpy(), num(solo, "uvi_openmeteo").to_numpy())
 
 

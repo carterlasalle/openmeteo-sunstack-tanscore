@@ -15,6 +15,7 @@
 > **v5 model identity.** `schema_version = sunstack-output-v5`; temporal support
 > `interval-contract-v1`; photobiology `delayed-pigmentation-v2`; action spectrum
 > `parrish-fda-3630-v1`; surface `uv-surface-v1`; fusion `calibrated-uvi-fusion-v2`;
+> headline `best-match-headline-v1`;
 > confidence `heuristic-reliability-v1`; window rank `fixed-duration-dose-v2`. Strict,
 > gate-passing spectra identify `tierB-libradtran-emulator-v1`; explicitly degraded
 > spectra identify `tierC-broadband-proxy-v2`.
@@ -298,7 +299,25 @@ errors); predictions reindex to the bundle's feature list and clip at 0.
 
 ## 4. UVI fusion, disagreement, and confidence
 
-### 4.1 Calibrated UVI fusion (`fusion_version = calibrated-uvi-fusion-v2`)
+### 4.1 UVI fusion and the published headline (`fusion_version = calibrated-uvi-fusion-v2`, headline `best-match-headline-v1`)
+
+**Which UVI the product headlines is a decision, not an accident.** The fusion is still
+computed and published (`uvi_fusion`), but the headline (`uvi_consensus`, the value the
+erythemal channel, the SED integrator and the page's UV∘ read) is the Open-Meteo best match.
+The reason is the repo's own common-case scorecard on identical rows: best match MAE 0.13,
+fused 0.62, CAMS 1.19. A fused product that measures worse than its best input does not earn
+the headline, so §5 makes the input the headline and keeps the fusion beside it as context,
+with `uvi_source_spread` as the disagreement envelope and `uvi_headline_source` naming which
+value the headline is.
+
+The weights that produced the regression come from a different population (the
+availability-weighted scorecard, OM MAE 0.48 / CAMS 1.14) than the identical-row table that
+judges the result; the 0.6 single-source cap then hands 0.4 of the share to two sources that
+measure 9x and 8x worse. Restoring the fused headline needs a fit on identical rows - the
+env switch `SUNSTACK_UVI_HEADLINE=fusion` exists for that experiment. The reference itself
+shares Open-Meteo lineage, so it is a comparison, not truth.
+
+#### 4.1.1 Calibrated UVI fusion (`fusion_version = calibrated-uvi-fusion-v2`)
 
 `uvi_consensus` is the bias-corrected inverse-error weighted mean over unique
 providers (OM bias −0.11 MAE 0.48, CAMS bias −1.03 MAE 1.14 at 1-day lead,

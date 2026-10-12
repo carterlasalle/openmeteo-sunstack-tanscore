@@ -77,9 +77,14 @@ def test_source_weight_contributions_sum_to_one() -> None:
     _lone = out["uvi_source_weights"].tolist()[1]
     assert _lone[0] == 1.0 and all(math.isnan(v) for v in _lone[1:])
     assert out["uvi_source_values"].tolist()[0] == (5.0, 5.5, 4.5)
-    # Weighted consensus: [5.199, 6.0]. Row 0 fuses inside range; row 1 is
-    # lone OM 6.0, clamped (convex fusion never leaves finite sources).
-    assert out["uvi_consensus"].tolist() == [5.199, 6.0]
+    # Weighted fusion: [5.199, 6.0]. Row 0 fuses inside range; row 1 is lone OM
+    # 6.0, clamped (convex fusion never leaves finite sources). The fused value
+    # is published as uvi_fusion.
+    assert out["uvi_fusion"].tolist() == [5.199, 6.0]
+    # §5: the headline is the best-match input, so it can never be worse than
+    # its best source. Both rows have OM, so both headlines are OM's value.
+    assert out["uvi_consensus"].tolist() == [5.0, 6.0]
+    assert out["uvi_headline_source"].tolist() == ["openmeteo_best_match"] * 2
 
 
 def test_common_case_uvi_evaluator_uses_identical_rows() -> None:
