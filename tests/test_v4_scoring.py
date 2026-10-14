@@ -1719,6 +1719,103 @@ def test_training_drops_constant_features_loudly(tmp_path: Path, caplog: pytest.
                for r in caplog.records)
 
 
+def test_training_code_fingerprint_ignores_prose(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """A docstring edit must not orphan a trained bundle (shipped bug).
+
+    The hyperparameter half of the probe also proves `train_uv_models` itself
+    is fingerprinted, since the estimator arguments live in its body.
+    """
+    import sunstack.calibrate as cal
+
+    src = Path(cal.__file__).read_text(encoding="utf-8")
+    before = cal.training_code_fingerprint()
+
+    prose = tmp_path / "prose.py"
+    _ = prose.write_text(
+        src.replace('"""Fingerprint this module\'s training-path code, ignoring prose.',
+                    '"""Reworded prose, identical code.'),
+        encoding="utf-8")
+    monkeypatch.setattr(cal, "__file__", str(prose))
+    assert cal.training_code_fingerprint() == before
+
+    body = tmp_path / "body.py"
+    _ = body.write_text(src.replace("min_samples_leaf=30,", "min_samples_leaf=31,"),
+                        encoding="utf-8")
+    monkeypatch.setattr(cal, "__file__", str(body))
+    assert cal.training_code_fingerprint() != before
+
+
+def test_training_fingerprint_covers_every_training_dependency(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Editing a module-level definition the training path calls must move it.
+
+    Otherwise a change to an unlisted training dependency leaves the
+    fingerprint still, and a stale bundle passes the guard.
+    """
+    import ast
+
+    import sunstack.calibrate as cal
+
+    def bound_names(node: ast.stmt) -> tuple[str, ...]:
+        """Module-level names bound by one top-level statement."""
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            return (node.name,)
+        if isinstance(node, ast.Assign):
+            return tuple(t.id for t in node.targets if isinstance(t, ast.Name))
+        return ()
+
+    def perturb(node: ast.stmt, name: str) -> bool:
+        """Change one definition's code without touching its name."""
+        if (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                and node.name == name):
+            node.body.insert(0, ast.Pass())
+            return True
+        if (isinstance(node, ast.Assign) and isinstance(node.value, ast.List)
+                and getattr(node.targets[0], "id", None) == name):
+            node.value.elts.append(ast.Constant("MARKER"))
+            return True
+        return False
+
+    src = Path(cal.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    module_defs = {name for node in tree.body for name in bound_names(node)}
+    fn = next(node for node in tree.body
+              if isinstance(node, ast.FunctionDef) and node.name == "train_uv_models")
+    referenced = {node.id for node in ast.walk(fn)
+                  if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)}
+    # Recording the stamp is bookkeeping, not training: perturbing that helper
+    # must NOT move the fingerprint, or every stamping change orphans a bundle.
+    deps = (referenced & module_defs) - {"training_code_fingerprint"}
+    assert "MODEL_FEATURES" in deps, "probe is vacuous: training path not found"
+
+    before = cal.training_code_fingerprint()
+    probe = tmp_path / "perturbed.py"
+    for name in sorted(deps):
+        edited = ast.parse(src)
+        assert any(perturb(node, name) for node in edited.body), f"cannot perturb {name}"
+        _ = probe.write_text(ast.unparse(edited), encoding="utf-8")
+        monkeypatch.setattr(cal, "__file__", str(probe))
+        assert cal.training_code_fingerprint() != before, (
+            f"training dependency {name} is not fingerprinted")
+
+
+def test_committed_bundles_match_training_fingerprint():
+    """The guard is only enforcement if the committed manifests are compared."""
+    import joblib
+
+    from sunstack.calibrate import training_code_fingerprint
+
+    expected = training_code_fingerprint()
+    root = Path(__file__).resolve().parents[1]
+    for rel in ("data/calibration/uva_uvb_models.joblib",
+                "data/sites/pacific-palisades/calibration/uva_uvb_models.joblib"):
+        bundle = cast("dict[str, object]", joblib.load(root / rel))
+        manifest = cast("dict[str, object]", bundle["manifest"])
+        assert manifest["training_code_sha256"] == expected, (
+            f"{rel} was trained by different code: retrain with `sunstack bootstrap` "
+            "or re-stamp after review")
+
+
 def test_degraded_bundle_serves_predictions(tmp_path: Path):
     import numpy as np
     import pandas as pd

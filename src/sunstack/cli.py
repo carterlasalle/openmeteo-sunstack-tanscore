@@ -9,6 +9,7 @@ import sys
 from contextlib import nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 
@@ -976,8 +977,12 @@ def debug_photobiology(root: Path) -> None:
         print("  no latest hourly table")
 
 
-def publish_site(site: config.Site) -> None:
-    """Commit + push one site's docs and data. Small atomic publishes."""
+def publish_site(site: config.Site, artifacts: list[str] | None = None) -> None:
+    """Commit + push one site's docs and data. Small atomic publishes.
+
+    ``artifacts`` is the exporter's own list of files it just wrote; the whole
+    set is snapshotted and re-asserted after the rebase (see below).
+    """
     import subprocess
 
     subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=False)
@@ -1013,20 +1018,17 @@ def publish_site(site: config.Site) -> None:
     # per-site publishes. Restored right after, before the push.
     subprocess.run(["git", "stash", "push", "-m", f"publish-{slug}",
                     "--", "docs", "data"], check=False)
-    # The site-refresh job also writes this site's data.json (it re-stamps
-    # renderer_code_sha and nothing else). data.json is a single-line JSON
-    # document, so any concurrent reskin edit conflicts with our freshly
-    # exported payload, and `--rebase -X ours` resolves in favour of the
-    # *upstream* side: git then reports "patch contents already upstream" and
-    # silently drops the whole forecast payload from our commit. That is how
-    # the default site stopped publishing fresh rows while the runner's own
-    # tables were current. Keep our payload and re-assert it after the rebase.
-    dest_data = (
-        Path("docs") / "data.json"
-        if slug == config.default_site().slug
-        else Path("docs") / "sites" / slug / "data.json"
-    )
-    saved_payload = dest_data.read_bytes() if dest_data.exists() else None
+    # The site-refresh job also writes this site's docs (it re-stamps
+    # renderer_code_sha and regenerates the calendars). `--rebase -X ours`
+    # resolves conflicting hunks in favour of the *upstream* side, and git then
+    # reports "patch contents already upstream" and silently drops our changes:
+    # whichever artifact both jobs rewrote loses our freshly exported bytes.
+    # That is how the default site stopped publishing fresh rows while the
+    # runner's own tables were current. Keep our bytes for the whole exported
+    # set and re-assert them after the rebase — data.json alone is not enough,
+    # because the calendars and index.html are rewritten by the same jobs.
+    saved = {path: path.read_bytes() for path in (
+        Path(str(a)) for a in (artifacts or [])) if path.exists()}
     pulled = subprocess.run(["git", "pull", "--rebase", "-X", "ours"], check=False)
     if pulled.returncode != 0:
         subprocess.run(["git", "rebase", "--abort"], check=False)
@@ -1038,11 +1040,14 @@ def publish_site(site: config.Site) -> None:
             subprocess.run(["git", "stash", "pop"], check=False)
             raise RuntimeError(f"publish rebase failed for {slug}")
     subprocess.run(["git", "stash", "pop"], check=False)
-    if saved_payload is not None and dest_data.read_bytes() != saved_payload:
-        LOG.warning("Rebase dropped the %s payload; re-asserting the exported rows", slug)
-        dest_data.write_bytes(saved_payload)
-        subprocess.run(["git", "add", str(dest_data)], check=False)
-        subprocess.run(["git", "commit", "--amend", "--no-edit"], check=False)
+    replaced = [path for path, before in saved.items() if path.read_bytes() != before]
+    if replaced:
+        LOG.warning("Rebase dropped %d exported artifact(s) for %s; re-asserting",
+                    len(replaced), slug)
+        for path in replaced:
+            _ = path.write_bytes(saved[path])
+        _ = subprocess.run(["git", "add", *(str(p) for p in replaced)], check=False)
+        _ = subprocess.run(["git", "commit", "--amend", "--no-edit"], check=False)
     pushed = subprocess.run(["git", "push"], check=False)
     if pushed.returncode != 0:
         raise RuntimeError(f"publish push failed for {slug}")
@@ -1187,7 +1192,7 @@ def run_one_site_locked(
                 + "; ".join(f"{k}: {len(v)}" for k, v in _failed.items()
                             if isinstance(v, list))
             )
-    publish_site(site)
+    publish_site(site, cast("list[str]", info["artifacts"]))
     return run_dir
 
 

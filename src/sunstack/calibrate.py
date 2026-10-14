@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import hashlib
 import json
 import math
 from datetime import UTC, datetime, timedelta
@@ -206,6 +208,67 @@ def _metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
     }
 
 
+# Definitions in this module that determine the trained bundle. The manifest
+# binds the pickle to this code (audit: a stale pickle must not masquerade as
+# the current model), so the fingerprint must move when the training path
+# changes and stay put otherwise. Prose and serving-time helpers are excluded:
+# a docstring edit, or a change to e.g. ``estimate_expected_uvi_error``, must
+# never orphan a trained model and stop every scheduled publish (shipped bug:
+# a one-line docstring edit here failed both committed bundles). A training
+# dependency added without being listed here is caught by
+# tests/test_v4_scoring.py::test_training_fingerprint_covers_every_training_dependency
+# and test_committed_bundles_match_training_fingerprint.
+_TRAINING_CODE_SYMBOLS = ("MODEL_FEATURES", "_metrics", "train_uv_models")
+
+
+def _defined_names(node: ast.stmt) -> tuple[str, ...]:
+    """Module-level names bound by one top-level statement."""
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        return (node.name,)
+    if isinstance(node, ast.Assign):
+        return tuple(t.id for t in node.targets if isinstance(t, ast.Name))
+    if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+        return (node.target.id,)
+    return ()
+
+
+def _strip_docstrings(node: ast.AST) -> None:
+    """Drop docstrings in place; comments never reach the AST."""
+    for inner in ast.walk(node):
+        if not isinstance(inner, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        body = inner.body
+        if not body:
+            continue
+        first = body[0]
+        if (isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)):
+            inner.body = body[1:] or [ast.Pass()]
+
+
+def training_code_fingerprint() -> str:
+    """Fingerprint this module's training-path code, ignoring prose.
+
+    Only ``_TRAINING_CODE_SYMBOLS`` are hashed (docstring-stripped): the
+    bundle is bound to the code that produced the model, not to every line of
+    the module.
+    """
+    tree = ast.parse(Path(__file__).read_bytes())
+    wanted = set(_TRAINING_CODE_SYMBOLS)
+    found = {name for node in tree.body for name in _defined_names(node)}
+    missing = wanted - found
+    if missing:
+        raise RuntimeError(
+            f"ERROR calibration: fingerprint symbols not found: {sorted(missing)}")
+    kept: list[ast.stmt] = []
+    for node in tree.body:
+        if set(_defined_names(node)) & wanted:
+            _strip_docstrings(node)
+            kept.append(node)
+    module = ast.Module(body=kept, type_ignores=[])
+    return hashlib.sha256(ast.dump(module).encode()).hexdigest()[:16]
+
+
 def train_uv_models(training: pd.DataFrame, calibration_dir: Path) -> dict[str, object]:
     calibration_dir.mkdir(parents=True, exist_ok=True)
     if training.empty:
@@ -277,17 +340,14 @@ def train_uv_models(training: pd.DataFrame, calibration_dir: Path) -> dict[str, 
     # Bundle manifest: bind the pickle to training code/data/sklearn versions.
     # The runtime fails closed on mismatch (audit: stale pickle masqueraded
     # as the current model). sklearn pinned by importlib version at train time.
-    import hashlib as _hashlib
-
     try:
         import sklearn as _sk
         _sk_ver = _sk.__version__
     except ImportError:
         _sk_ver = "unknown"
-    _train_src = Path(__file__).read_bytes()
     bundle["manifest"] = {
         "model_version": config.TAN_SCORE_MODEL_VERSION,
-        "training_code_sha256": _hashlib.sha256(_train_src).hexdigest()[:16],
+        "training_code_sha256": training_code_fingerprint(),
         "sklearn_version": _sk_ver,
         "trained_at": datetime.now(UTC).isoformat(),
         # Feature contract the scorer reads for model_feature_coverage_fraction
@@ -681,16 +741,16 @@ def compute_openmeteo_model_skill(
     return skill
 
 
-def estimate_expected_uvi_error(
-    frame: pd.DataFrame,
-    _calibration_dir: Path | None = None,
-) -> pd.DataFrame:
-    """Calibrated UVI expected-absolute-error + reliability score (§11).
+def estimate_expected_uvi_error(frame: pd.DataFrame) -> pd.DataFrame:
+    """Hand-written UVI expected-absolute-error + reliability score (§11).
 
-    Error model inputs (all reliability signals, never sunniness): ensemble
+    Never claims fitted coefficients: config.CONFIDENCE_VERSION is
+    ``heuristic-reliability-v1`` because the formula below is anchored to the
+    UVI verification table, not fitted to it (audit §4). Error model inputs
+    (all reliability signals, never sunniness): ensemble
     spread of UVI HEADLINE inputs is unavailable per-row, so the model uses
     source count, source spread, lead-time proxy (row position), SZA/cloud
-    regime, backend tier, and feature coverage. Coefficients are calibrated
+    regime, backend tier, and feature coverage. Coefficients are anchored
     against the UVI verification table (OM MAE 0.48, CAMS 1.14 at 1-day
     lead): lone-source rows and wide-spread rows carry wider intervals.
     ``tan_forecast_confidence_0_100`` is a monotonic transform of expected

@@ -1044,6 +1044,13 @@ def test_export_static_site_publishes_data_and_calendar(tmp_path: Path):
     ics = (tmp_path / "site" / "calendar.ics").read_text()
     assert ics.count("BEGIN:VEVENT") == 1
     assert "UID:sunstack-best-south-bend-2026-09-15@south-bend" in ics
+    # publish_site re-asserts exactly this list after a rebase, so every
+    # artifact the export writes must be in it: an artifact missing here is an
+    # artifact the concurrent site-refresh job can silently revert.
+    reported = {Path(str(p)).name for p in cast("list[str]", info["artifacts"])}
+    assert reported == {p.name for p in (tmp_path / "site").iterdir()}
+    assert "data.json" in reported and "calendar.ics" in reported
+
 
 def test_fusion_recomputed_after_subhour_correction():
     # P1 regression: 30-min geometry/HRRR corrections must recompute fusion

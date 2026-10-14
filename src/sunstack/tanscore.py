@@ -309,12 +309,12 @@ def _load_bundle(calibration_dir: Path, *, strict: bool = True) -> object:
                f"`sunstack bootstrap`.")
         raise RuntimeError(msg)
     # Contract §20.2: a recorded-but-uncompared hash is not enforcement.
-    # Recompute the training-code hash and fail strict on mismatch.
-    import hashlib as _hashlib
-    from pathlib import Path as _Path
+    # Recompute the training-code fingerprint and fail strict on mismatch.
+    # The fingerprint is prose-insensitive on purpose: a docstring edit must
+    # not orphan a trained model (see calibrate.training_code_fingerprint).
+    from .calibrate import training_code_fingerprint
 
-    _expected_sha = _hashlib.sha256(
-        (_Path(__file__).parent / "calibrate.py").read_bytes()).hexdigest()[:16]
+    _expected_sha = training_code_fingerprint()
     if man.get("training_code_sha256") != _expected_sha:
         msg = (f"UVA/UVB bundle training_code_sha256={man.get('training_code_sha256')} != "
                f"current {_expected_sha}: retrain with `sunstack bootstrap`.")
@@ -581,8 +581,14 @@ def add_sun_posture(frame: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def require_photobiology_or_fail() -> tuple[object, float, str]:
-    """Load melanogenesis spectrum + global reference, failing loudly."""
+def require_photobiology_or_fail() -> tuple[float, str]:
+    """Global melanogenic reference + action-spectrum tier, failing loudly.
+
+    Loads the melanogenesis spectrum because a missing or corrupt one must
+    fail loudly, but returns only what callers consume: the reference and the
+    tier. The spectrum's own identity is published by ``photobiology.meta``
+    and ``state.attach_*``.
+    """
     from .photobiology import ACTION_SPECTRUM_STEM, load_action_spectrum
 
     try:
@@ -592,7 +598,7 @@ def require_photobiology_or_fail() -> tuple[object, float, str]:
     ref = float(config.GLOBAL_MELANOGENIC_REFERENCE_WM2)
     if not np.isfinite(ref) or ref <= 0:
         raise RuntimeError("ERROR photobiology: global melanogenic reference invalid")
-    return spec, ref, spec.tier
+    return ref, spec.tier
 
 
 def score_forecast(
@@ -627,7 +633,7 @@ def score_forecast(
         from .photobiology import require_canonical_spectrum
 
         _ = require_canonical_spectrum(_STEM)
-    _spec, global_ref, spectrum_tier = require_photobiology_or_fail()
+    global_ref, spectrum_tier = require_photobiology_or_fail()
     uva, uvb, tier = predict_uva_uvb(features, calibration_dir, strict=strict)
     out = features.copy()
     # v5 contract §11.4 coverage fractions: computed from the bundle/backend
@@ -670,11 +676,8 @@ def score_forecast(
     _tierB_bundle = load_tierB_emulator()
     _tierB_out = (predict_tierB_channels(features, _tierB_bundle)
                   if _tierB_bundle is not None else None)
-    e_mel: object = None
-    _tierB_emel: object = None
     if _tierB_out is not None:
-        _tierB_emel = np.asarray(_tierB_out[2], dtype=float)
-        e_mel = _tierB_emel
+        e_mel = np.asarray(_tierB_out[2], dtype=float)
     else:
         e_mel = melanogenic_from_broadband(
             np.asarray(uva, dtype=float), np.asarray(uvb, dtype=float)
@@ -910,7 +913,7 @@ def score_forecast(
         out["strong_sun_probability_0_100"] = np.nan
     from .calibrate import estimate_expected_uvi_error as _estimate_err
 
-    out = _estimate_err(out, calibration_dir)
+    out = _estimate_err(out)
     out["uv_input_disagree"] = uv_ghi_disagree(out).to_numpy(dtype=bool)
     out["tan_forecast_confidence_0_100"] = apply_disagreement_penalty(
         out["tan_forecast_confidence_0_100"], out["uv_input_disagree"]

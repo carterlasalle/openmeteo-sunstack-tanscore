@@ -281,23 +281,24 @@ def export_static_site(
     }
     html = render_static_html(summary.get("run", ""), min_temp_f)
     out_dir.mkdir(parents=True, exist_ok=True)
-    _ = (out_dir / "index.html").write_text(html, encoding="utf-8")
-    _ = (out_dir / "data.json").write_text(json.dumps(payload), encoding="utf-8")
-    _ = (out_dir / "locations.json").write_text(
-        json.dumps({"locations": site_nav(site.slug)}), encoding="utf-8"
-    )
-    _ = (out_dir / "skin.json").write_text(
-        json.dumps({str(i): fitzpatrick_context(i) for i in range(1, 7)}),
-        encoding="utf-8",
-    )
-    _ = (out_dir / "surfaces.json").write_text(
-        json.dumps(surface_payload()), encoding="utf-8"
-    )
-    _ = (out_dir / "calendar.ics").write_text(
-        build_calendar_ics(daily, hourly,
-                           site_slug=site.slug, tz_name=site.timezone),
-        encoding="utf-8",
-    )
+    # Every artifact the export owns is written through here, so the returned
+    # list is complete by construction: the publish step re-asserts this exact
+    # set after a rebase, and a new artifact must not silently miss the guard.
+    written: list[Path] = []
+
+    def _write(name: str, text: str) -> None:
+        path = out_dir / name
+        _ = path.write_text(text, encoding="utf-8")
+        written.append(path)
+
+    _write("index.html", html)
+    _write("data.json", json.dumps(payload))
+    _write("locations.json", json.dumps({"locations": site_nav(site.slug)}))
+    _write("skin.json", json.dumps(
+        {str(i): fitzpatrick_context(i) for i in range(1, 7)}))
+    _write("surfaces.json", json.dumps(surface_payload()))
+    _write("calendar.ics", build_calendar_ics(
+        daily, hourly, site_slug=site.slug, tz_name=site.timezone))
     # Per-30-minute interval events (doses, tier, native-HRRR vs interpolated
     # labeling). Night rows carry no usable sun: emit daylight intervals only
     # (is_day when present, else any positive UV/E_mel signal). Columns absent
@@ -319,14 +320,12 @@ def export_static_site(
             daylight = half.loc[_mask]
     except (KeyError, ValueError, TypeError):
         pass
-    _ = (out_dir / "calendar-30min.ics").write_text(
-        build_interval_ics(daylight,
-                           site_slug=site.slug, tz_name=site.timezone),
-        encoding="utf-8",
-    )
+    _write("calendar-30min.ics", build_interval_ics(
+        daylight, site_slug=site.slug, tz_name=site.timezone))
     starts = daily.get("best_window_start")
     return {
         "out_dir": str(out_dir),
+        "artifacts": [str(p) for p in written],
         "hourly_rows": len(hourly_ui),
         "half_rows": len(half_ui),
         "days": len(daily),
