@@ -114,8 +114,13 @@ jobs:
       # Seed the baseline once, on main. The visual gate needs a baseline made by
       # the runner's own renderer: fonts and antialiasing differ between macOS
       # and Linux, so a locally made baseline would fail here for no reason.
+      # `always()`: a missing or superseded baseline fails the gate above (it
+      # will not compare pixels against another fixture's), and this step is the
+      # only thing that can write the new one - gating it behind that failure
+      # deadlocked the job. The check below still refuses to overwrite a
+      # baseline that matches, so a real pixel regression is never re-seeded.
       - name: Seed the visual baseline (main only, first run)
-        if: github.event_name != 'pull_request'
+        if: always() && github.event_name != 'pull_request'
         run: |
           if ls docs/validation/rendered_ui_baseline/*.png >/dev/null 2>&1 \
              && [ "$(cat docs/validation/rendered_ui_baseline/fixture.sha256 2>/dev/null)" \

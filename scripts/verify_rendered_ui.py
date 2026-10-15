@@ -120,10 +120,17 @@ def _checks(
         "() => document.getElementById('hero').textContent.replace(/\\s+/g,' ')"
     )
     panel = page.evaluate("() => document.getElementById('surfacecontext').textContent")
+    hero_text = str(hero45)
+    plane_clause = [c for c in hero_text.split(". ") if "plane" in c][:1]
     record(
         "material+tilt reach the hero above the fold",
-        "Dry beach sand" in hero45 and "tilted 45" in hero45 and "+" in hero45,
-        [c for c in hero45.split(". ") if "plane" in c][:1],
+        # The plane factor is geometric, so a tilt can lower the dose as well as
+        # raise it: the hero has to state the *signed* result, not a gain.
+        "Dry beach sand" in hero_text
+        and "tilted 45" in hero_text
+        and "in your plane" in hero_text
+        and re.search(r"\([+-][0-9]+(?:\.[0-9]+)?%\)", hero_text) is not None,
+        plane_clause,
     )
     row_time = page.evaluate(
         "() => (activeRow()||{}).time",
@@ -223,6 +230,18 @@ def _checks(
         except (TypeError, ValueError):
             return None
 
+    def _same_rounded(shown: object, want: object) -> bool:
+        """True when the rendered whole number is this payload value rounded.
+
+        The page rounds half up while Python's `round` rounds half to even, so a
+        payload 14.5 renders as "15" and `round(14.5)` is 14 - the same value
+        from the same row. A whole step away is a different row's number.
+        """
+        try:
+            return abs(float(str(shown)) - float(str(want))) <= 0.5 + 1e-9
+        except (TypeError, ValueError):
+            return False
+
     ui_row_time = str(page.evaluate("() => (activeRow()||{}).time"))[:16]
     # #detail holds the hourly table and the 30-minute table, and both stamp
     # their rows with data-time, so the row has to come from the table whose
@@ -251,10 +270,9 @@ def _checks(
             (7, "Local", prow.get("local_tan_score_0_100")),
         ):
             shown = str(cells[idx]).strip()
-            want_rounded, shown_rounded = _round(want), _round(shown)
             record(
                 f"ranking row agrees with the payload: {field}",
-                want_rounded is not None and want_rounded == shown_rounded,
+                _same_rounded(shown, want),
                 f"shown={shown} payload={want}",
             )
 
