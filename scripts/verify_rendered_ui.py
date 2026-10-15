@@ -85,9 +85,9 @@ def _checks(
     payload: dict[str, Any],
     site_dir: Path,
     url: str,
-    errors: list[str],
 ) -> None:
     """The behaviour checks, run once per viewport."""
+    # Console/page errors are collected here and read by the load check below.
     errors: list[str] = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
@@ -224,9 +224,18 @@ def _checks(
             return None
 
     ui_row_time = str(page.evaluate("() => (activeRow()||{}).time"))[:16]
+    # #detail holds the hourly table and the 30-minute table, and both stamp
+    # their rows with data-time, so the row has to come from the table whose
+    # columns are the ones read below - not from whichever table is first.
     cells = page.evaluate(
-        f"() => {{ const tr = document.querySelector('#detail tr[data-time^=\"{ui_row_time}\"]');"
-        f" return tr ? [...tr.children].map(td => td.textContent.trim()) : null; }}"
+        """(t) => {
+            const table = [...document.querySelectorAll('#detail table')].find(tb =>
+                [...tb.querySelectorAll('thead th')].some(th =>
+                    th.textContent.trim() === 'Dose J/m²'));
+            const tr = table ? table.querySelector('tr[data-time^="' + t + '"]') : null;
+            return tr ? [...tr.children].map(td => td.textContent.trim()) : null;
+        }""",
+        ui_row_time,
     )
     prow = next(
         (r for r in payload["half_hour"] if str(r["time"]).startswith(ui_row_time)), None
@@ -715,12 +724,6 @@ def verify(site_dir: Path, shots_dir: Path) -> None:
                 global _viewport_label
                 _viewport_label = f"[{tag} {width}px] "
                 page = browser.new_page(viewport={"width": width, "height": height})
-                errors: list[str] = []
-                page.on("pageerror", lambda e, _err=errors: _err.append(str(e)))
-                page.on(
-                    "console",
-                    lambda m, _err=errors: _err.append(m.text) if m.type == "error" else None,
-                )
                 page.goto(url, wait_until="networkidle")
                 page.wait_for_timeout(2500)
 
@@ -736,7 +739,7 @@ def verify(site_dir: Path, shots_dir: Path) -> None:
                     and int(metrics["body"]) <= int(metrics["inner"]) + 1,
                     metrics,
                 )
-                _checks(page, payload, site_dir, url, errors)
+                _checks(page, payload, site_dir, url)
                 _ = page.screenshot(path=str(shots_dir / f"{tag}-{width}.png"))
                 page.close()
             browser.close()

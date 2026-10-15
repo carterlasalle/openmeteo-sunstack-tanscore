@@ -108,6 +108,39 @@ def _rows_of(items: list[object]) -> list[dict[str, object]]:
     return out
 
 
+def _at_best_candidates(
+    rows: list[dict[str, object]], day: dict[str, object]
+) -> list[dict[str, object]]:
+    """The rows the daily row names as its selected 30-minute interval.
+
+    Two rows can be meant, and both are the payload's own naming:
+
+    * the row stamped ``best_30m_start`` - the pre-interval-contract payload
+      labelled the carrying row with its own stamp;
+    * the row carrying that interval - the row whose trailing 30-minute dose is
+      the ``best_30m_tan_dose_j_m2`` the daily row publishes. interval-
+      contract-v1 stamps a row with its interval END, so this reading names the
+      interval's *start* one width before the row that carries it.
+
+    A value taken from any other row - another metric's peak, the class this
+    check exists for - matches neither.
+    """
+    out: list[dict[str, object]] = []
+    start = str(day.get("best_30m_start") or "")[:16]
+    labelled = next((r for r in rows if _stamp_key(r.get("time")) == start), None)
+    if labelled is not None:
+        out.append(labelled)
+    dose = day.get("best_30m_tan_dose_j_m2")
+    if _is_finite(dose):
+        want = _num(dose)
+        tolerance = max(1e-6, abs(want) * 1e-6)
+        out.extend(row for row in rows
+                   if row is not labelled
+                   and _is_finite(row.get("tan_dose_30m_j_m2"))
+                   and abs(_num(row.get("tan_dose_30m_j_m2")) - want) <= tolerance)
+    return out
+
+
 def _twin_mismatch(alias: object, twin: object) -> bool:
     """True when both names are published and disagree (canonical twin rule).
 
@@ -356,21 +389,26 @@ def validate_artifact(data_path: Path) -> dict[str, object]:
                 failures["peaks_are_true_maxima"].append(f"{day.get('date')}: {peak_col} != max")
         # §16.5/§27.11: every *_at_best* field carries the value of the
         # interval the daily row selects (best_30m_start), never another
-        # metric's peak.
+        # metric's peak. The interval is resolved from the daily row's own
+        # naming - its label, and the dose it publishes - so the payload that
+        # names that interval's start and the pre-contract payload that named
+        # the carrying row's stamp both compare against the row they mean.
         sel_stamp = str(day.get("best_30m_start") or "")[:16]
-        sel_row = next((r for r in scoped_pool
-                        if str(r.get("time", ""))[:16] == sel_stamp), None)
-        if sel_row is not None:
+        candidates = _at_best_candidates(scoped_pool, day)
+        if candidates:
             for day_col, (src_cols, tol) in _AT_BEST_FIELDS.items():
-                if day_col not in day:
+                if day_col not in day or not _is_finite(day.get(day_col)):
                     continue
-                src = next((sel_row.get(c) for c in src_cols
-                            if _is_finite(sel_row.get(c))), None)
-                if not _is_finite(day.get(day_col)) or not _is_finite(src):
-                    continue
-                if abs(_num(day[day_col]) - _num(src)) > tol:
+                matches = False
+                for candidate in candidates:
+                    src = next((candidate.get(c) for c in src_cols
+                                if _is_finite(candidate.get(c))), None)
+                    if _is_finite(src) and abs(_num(day[day_col]) - _num(src)) <= tol:
+                        matches = True
+                        break
+                if not matches:
                     failures["at_best_from_window"].append(
-                        f"{date}: {day_col} != value at {sel_stamp}")
+                        f"{date}: {day_col} != value at {sel_stamp} on any row the day names")
         # §22.17: no deprecated v4 column may serve as the v5 ranking key.
         # A ranking declaration the artifact publishes must name a live,
         # non-deprecated column.

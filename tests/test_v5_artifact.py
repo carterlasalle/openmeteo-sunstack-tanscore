@@ -341,6 +341,39 @@ def test_validator_fails_at_best_from_wrong_row(tmp_path: Path) -> None:
     assert "at_best_from_window" in _failures(out)
 
 
+def test_validator_accepts_the_interval_start_reading(tmp_path: Path) -> None:
+    """`best_30m_start` names the interval's start, never the carrying stamp.
+
+    interval-contract-v1 stamps a row with its interval END, so the row that
+    carries the selected interval is stamped one width later - the same row the
+    daily dose comes from. This is the shape the scheduled run publishes; read
+    as if the label were the carrying stamp, the check failed on every day and
+    the publish gate aborted.
+    """
+    module = _load_validator()
+    artifact = _good_artifact()
+    day = _day(artifact)
+    carrying = _row(artifact, 1)  # the 12:30 row carries [12:00, 12:30)
+    day["best_30m_tan_dose_j_m2"] = carrying["tan_dose_30m_j_m2"]
+    day["best_30m_start"] = "2026-06-21T12:00:00"  # the interval's own start
+    out = _validate(module, tmp_path, artifact)
+    assert out["passed"] is True, out["failures"]
+
+
+def test_validator_fails_at_best_from_a_row_the_day_does_not_name(
+        tmp_path: Path) -> None:
+    """The row must be one the daily row names, not any row of the day."""
+    module = _load_validator()
+    bad = _good_artifact()
+    day = _day(bad)
+    day["best_30m_tan_dose_j_m2"] = _row(bad, 1)["tan_dose_30m_j_m2"]
+    day["best_30m_start"] = "2026-06-21T12:00:00"
+    day["day_absolute_at_best_usable_30m_0_100"] = 32.0  # the 13:00 row
+    out = _validate(module, tmp_path, bad)
+    assert out["passed"] is False
+    assert "at_best_from_window" in _failures(out)
+
+
 def test_validator_fails_deprecated_ranking_key(tmp_path: Path) -> None:
     module = _load_validator()
     bad = _good_artifact()
