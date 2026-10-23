@@ -80,6 +80,34 @@ jobs:
           for site in docs/sites/*/data.json; do
             [ -f "$site" ] && uv run python scripts/validate_published_artifact.py "$site"
           done
+      # CI replays whatever is committed, so a stalled publish stays green: the
+      # page sat five days old behind thirty failing run jobs before anyone saw
+      # it. On scheduled runs - the pipeline heartbeat - fail when every
+      # published payload is a day old. This never blocks the run job, which is
+      # what heals the staleness.
+      - name: Published payload is fresh (scheduled runs)
+        if: github.event_name == 'schedule'
+        run: |
+          uv run python - <<'EOF'
+          import datetime as dt
+          import glob
+          import json
+          import sys
+
+          now = dt.datetime.now(dt.UTC)
+          ages: dict[str, dt.timedelta | None] = {}
+          for path in ["docs/data.json", *sorted(glob.glob("docs/sites/*/data.json"))]:
+              try:
+                  stamp = json.load(open(path))["summary"]["run"]
+                  ages[path] = now - dt.datetime.strptime(stamp[:15], "%Y%m%d_%H%M%S").replace(tzinfo=dt.UTC)
+              except (KeyError, OSError, TypeError, ValueError):
+                  ages[path] = None
+          for path, age in ages.items():
+              hours = "unreadable" if age is None else f"{age.total_seconds() / 3600:.1f}h old"
+              print(f"{path}: {hours}")
+          fresh = [a for a in ages.values() if a is not None and a < dt.timedelta(hours=24)]
+          sys.exit(0 if fresh else "stale: no published payload is under 24h old")
+          EOF
   rendered-ui:
     runs-on: ubuntu-latest
     timeout-minutes: 20

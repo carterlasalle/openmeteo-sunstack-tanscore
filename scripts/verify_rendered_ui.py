@@ -27,6 +27,7 @@ import http.server
 import importlib
 import json
 import math
+import platform
 import re
 import socketserver
 import threading
@@ -45,6 +46,18 @@ CHECKS: list[tuple[str, bool, str]] = []
 # text and turns every screenshot into a "regression" that is nobody's bug, so
 # the baseline records this and the seed step re-captures when it changes.
 _renderer = ""
+
+
+def payload_instant(payload: dict[str, Any]) -> dt.datetime | None:
+    """The payload's own run stamp as a UTC instant, or None if it is absent."""
+    summary = payload.get("summary")
+    run = summary.get("run") if isinstance(summary, dict) else None
+    if not isinstance(run, str):
+        return None
+    try:
+        return dt.datetime.strptime(run[:15], "%Y%m%d_%H%M%S").replace(tzinfo=dt.UTC)
+    except ValueError:
+        return None
 
 
 _viewport_label = ""
@@ -737,7 +750,7 @@ def _checks(
     )
 
 
-def verify(site_dir: Path, shots_dir: Path) -> None:
+def verify(site_dir: Path, shots_dir: Path, freeze_clock: bool = False) -> None:
     try:
         sync_api = importlib.import_module("playwright.sync_api")
     except ImportError:
@@ -747,16 +760,23 @@ def verify(site_dir: Path, shots_dir: Path) -> None:
         ) from None
 
     payload = json.loads((site_dir / "data.json").read_text(encoding="utf-8"))
+    # The page picks its day and its window state from `new Date()`, so the same
+    # frozen fixture renders differently every day: a pixel baseline compared
+    # across days is measuring the calendar, not a regression. Pin the browser
+    # clock to the payload's own run stamp whenever a baseline is in play.
+    frozen_at = payload_instant(payload) if freeze_clock else None
     httpd, url = _serve(site_dir)
     try:
         with sync_api.sync_playwright() as pw:
             browser = pw.chromium.launch()
             global _renderer
-            _renderer = f"chromium {browser.version}"
+            _renderer = f"chromium {browser.version} on {platform.system()}"
             for width, height, tag in VIEWPORTS:
                 global _viewport_label
                 _viewport_label = f"[{tag} {width}px] "
                 page = browser.new_page(viewport={"width": width, "height": height})
+                if frozen_at is not None:
+                    page.clock.set_fixed_time(frozen_at)
                 page.goto(url, wait_until="networkidle")
                 page.wait_for_timeout(2500)
 
@@ -909,13 +929,17 @@ def main(argv: list[str] | None = None) -> int:
             "Directory of baseline PNGs to diff against. Opt in, and only for a "
             "fixture: the published artifact changes with every payload, so "
             "comparing it against a stored baseline fails for reasons that are "
-            "not regressions (see scripts/build_rendered_fixture.py)."
+            "not regressions (see scripts/build_rendered_fixture.py). Giving a "
+            "baseline also freezes the browser clock at the payload's run stamp, "
+            "because the page picks its day and window state from new Date()."
         ),
     )
     ns = ap.parse_args(argv)
     shots = Path(ns.shots_dir) if ns.shots_dir else Path(ns.out).parent / "rendered_ui"
     shots.mkdir(parents=True, exist_ok=True)
-    verify(Path(ns.site_dir), shots)
+    # A baseline is only comparable when the page sees the same clock it saw
+    # when the baseline was captured, so --baseline implies a frozen clock.
+    verify(Path(ns.site_dir), shots, freeze_clock=bool(ns.baseline))
     (shots / "fixture.sha256").write_text(
         fixture_identity(Path(ns.site_dir)), encoding="utf-8"
     )
