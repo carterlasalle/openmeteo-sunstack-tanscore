@@ -26,6 +26,7 @@ import functools
 import http.server
 import importlib
 import json
+import math
 import re
 import socketserver
 import threading
@@ -38,6 +39,12 @@ REPO = Path(__file__).resolve().parents[1]
 # Each check returns (name, ok, observed). The observed value is what makes the
 # report reviewable: a future regression shows the before/after difference.
 CHECKS: list[tuple[str, bool, str]] = []
+
+# Identity of the renderer that produced these screenshots. A pixel baseline is
+# only evidence about the same browser: a Playwright/Chromium bump re-rasterises
+# text and turns every screenshot into a "regression" that is nobody's bug, so
+# the baseline records this and the seed step re-captures when it changes.
+_renderer = ""
 
 
 _viewport_label = ""
@@ -223,10 +230,15 @@ def _checks(
     # 4a. UI semantic validators: the rendered ranking row, the day card
     # and the hero must agree with the payload they were built from -
     # "wrong number on screen" is invisible to a payload-only test.
-    def _round(value: object) -> int | None:
-        """Rounded int for a payload number or a rendered cell, else None."""
+    def _page_int(value: object) -> str | None:
+        """The page's own whole-number rendering (``f0 = Math.round``), as text.
+
+        The page rounds half up while Python's ``round`` rounds half to even, so
+        a payload 590.5 renders as "591": comparing against ``round()`` failed
+        the day card on the page's own correct output.
+        """
         try:
-            return round(float(str(value)))
+            return str(math.floor(float(str(value)) + 0.5))
         except (TypeError, ValueError):
             return None
 
@@ -295,10 +307,11 @@ def _checks(
 
     if day and day["start"]:
         want_start, want_end = _hhmm(day["start"]), _hhmm(day["end"])
+        want_dose = _page_int(day["dose"]) or ""
         record(
             "day card shows the dose and the window that dose came from",
-            str(_round(day["dose"])) in card and want_start in card and want_end in card,
-            [f"dose={day['dose']}", want_start, want_end, card[:80]],
+            want_dose in card and want_start in card and want_end in card,
+            [f"dose={day['dose']} -> {want_dose}", want_start, want_end, card[:80]],
         )
     else:
         record("day card shows a dose for the selected day", bool(card.strip()), card[:110])
@@ -738,6 +751,8 @@ def verify(site_dir: Path, shots_dir: Path) -> None:
     try:
         with sync_api.sync_playwright() as pw:
             browser = pw.chromium.launch()
+            global _renderer
+            _renderer = f"chromium {browser.version}"
             for width, height, tag in VIEWPORTS:
                 global _viewport_label
                 _viewport_label = f"[{tag} {width}px] "
@@ -805,6 +820,20 @@ def compare_baseline(shots: Path, baseline: Path, site_dir: Path) -> None:
             False,
             "baseline belongs to a different fixture (the page or payload changed); "
             "re-seed it from this run's shots and commit the new PNGs",
+        )
+        return
+    # Same browser, too: a Chromium/Playwright bump re-rasterises text and shows
+    # up as a multi-percent pixel diff that is not a page regression.
+    rendered_with = shots / "renderer.txt"
+    current = rendered_with.read_text(encoding="utf-8").strip() if rendered_with.is_file() else ""
+    captured_with = baseline / "renderer.txt"
+    captured = captured_with.read_text(encoding="utf-8").strip() if captured_with.is_file() else ""
+    if captured != current:
+        record(
+            "pixel baseline compared",
+            True,
+            f"baseline captured by {captured or 'an unknown renderer'}, this run renders "
+            f"with {current or 'an unknown renderer'} - re-seeded instead of diffed",
         )
         return
     try:
@@ -890,6 +919,7 @@ def main(argv: list[str] | None = None) -> int:
     (shots / "fixture.sha256").write_text(
         fixture_identity(Path(ns.site_dir)), encoding="utf-8"
     )
+    (shots / "renderer.txt").write_text(_renderer, encoding="utf-8")
     global _viewport_label
     _viewport_label = ""  # the baseline covers every viewport's screenshots
     if ns.baseline:

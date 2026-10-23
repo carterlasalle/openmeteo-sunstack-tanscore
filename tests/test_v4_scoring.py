@@ -597,7 +597,7 @@ def test_best_30m_dose_belongs_to_the_interval_ending_at_the_best_row():
     # drop, 900 J/m^2 - and reported it as this slot's dose.
     assert abs(num(out, "best_30m_tan_dose_j_m2").iloc[0] - 1800.0) < 1e-6
     # the slot's start, one width before the stamp that carries it
-    assert str(out["best_30m_start"].iloc[0]) == "2026-06-21T11:00:00"
+    assert _text(out, "best_30m_start").iloc[0] == "2026-06-21T11:00:00"
 
 
 def test_hourly_grid_declares_its_support_so_one_hour_means_one_thing():
@@ -738,8 +738,8 @@ def test_day_dose_failure_defaults_to_incomplete(monkeypatch: pytest.MonkeyPatch
     from sunstack import doses as _doses
     from sunstack.opportunity import build_daily_summary
 
-    def _boom(_frame: pd.DataFrame) -> pd.DataFrame:
-        raise RuntimeError("no climatology")
+    def _boom(frame: pd.DataFrame) -> pd.DataFrame:
+        raise RuntimeError(f"no climatology for {len(frame)} rows")
 
     monkeypatch.setattr(_doses, "day_totals", _boom)
     out = build_daily_summary(_half_hour_frame(1.0))
@@ -1000,8 +1000,8 @@ def test_corpus_builder_survives_empty_uvspec_output(tmp_path: Path, monkeypatch
         stdout: str = ""
         stderr: str = ""
 
-    def _fake_which(_name: str) -> str:
-        return "/fake/uvspec"
+    def _fake_which(name: str) -> str:
+        return f"/fake/{name}"
 
     def _fake_run(*_args: object, **_kwargs: object) -> _Done:
         return _Done()
@@ -2102,9 +2102,10 @@ def test_photobiology_gate_rejects_bad_reference_and_missing_spectrum(monkeypatc
     with pytest.raises(RuntimeError, match="reference invalid"):
         _ = require_photobiology_or_fail()
     monkeypatch.setattr(_config, "GLOBAL_MELANOGENIC_REFERENCE_WM2", 1.6)
-    monkeypatch.setattr(pb, "load_action_spectrum",
-                        lambda stem="x": (_ for _ in ()).throw(
-                            FileNotFoundError("ERROR photobiology: gone")))
+    def _gone(stem: str = "x") -> None:
+        raise FileNotFoundError(f"ERROR photobiology: gone ({stem})")
+
+    monkeypatch.setattr(pb, "load_action_spectrum", _gone)
     with pytest.raises(RuntimeError, match="ERROR photobiology"):
         _ = require_photobiology_or_fail()
 
@@ -2205,6 +2206,27 @@ def test_utc_parsing_handles_dst_fold_and_gap(monkeypatch: pytest.MonkeyPatch):
     aware = to_utc_from_openmeteo(pd.Series(["2026-06-21T12:00Z"]))
     assert aware.tolist() == list(pd.to_datetime(["2026-06-21 12:00"], utc=True))
     assert str(aware.dtype) == "datetime64[ns, UTC]"
+
+
+def test_utc_parsing_survives_provider_dst_day_without_repeated_hour(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # Open-Meteo emits 24 wall-clock hours per local day even across a fall-back:
+    # "2026-11-01T01:00" appears once, so `ambiguous="infer"` has no repeated time
+    # to key on and raised ValueError - every publish failed once the 14-day
+    # horizon reached Nov 1. The frame must localize deterministically instead.
+    from sunstack import config as _config
+    from sunstack.tanscore import to_utc_from_openmeteo
+
+    monkeypatch.setattr(_config, "TIMEZONE", "America/Indiana/Indianapolis")
+    day = to_utc_from_openmeteo(pd.Series(
+        ["2026-11-01T00:00", "2026-11-01T01:00", "2026-11-01T02:00", "2026-11-01T03:00"]))
+    # 00:00 EDT, 01:00 read on the reported (EDT) side, then 02:00/03:00 EST: the
+    # provider's 24-row day simply omits the 06:00Z (01:00 EST) hour.
+    assert day.tolist() == list(pd.to_datetime(
+        ["2026-11-01 04:00", "2026-11-01 05:00",
+         "2026-11-01 07:00", "2026-11-01 08:00"], utc=True))
+    assert day.is_monotonic_increasing
 
 
 def test_cams_features_missing_ozone_is_nan():

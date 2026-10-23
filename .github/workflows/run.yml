@@ -124,13 +124,15 @@ jobs:
         run: |
           if ls docs/validation/rendered_ui_baseline/*.png >/dev/null 2>&1 \
              && [ "$(cat docs/validation/rendered_ui_baseline/fixture.sha256 2>/dev/null)" \
-                  = "$(cat /tmp/fixture_shots/fixture.sha256 2>/dev/null)" ]; then
-            echo "baseline present; the visual gate above compared against it"
+                  = "$(cat /tmp/fixture_shots/fixture.sha256 2>/dev/null)" ] \
+             && [ "$(cat docs/validation/rendered_ui_baseline/renderer.txt 2>/dev/null)" \
+                  = "$(cat /tmp/fixture_shots/renderer.txt 2>/dev/null)" ]; then
+            echo "baseline present for this fixture and renderer; the gate compared against it"
             exit 0
           fi
           mkdir -p docs/validation/rendered_ui_baseline
           cp /tmp/fixture_shots/*.png /tmp/fixture_shots/fixture.sha256 \
-             docs/validation/rendered_ui_baseline/
+             /tmp/fixture_shots/renderer.txt docs/validation/rendered_ui_baseline/
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/validation/rendered_ui_baseline

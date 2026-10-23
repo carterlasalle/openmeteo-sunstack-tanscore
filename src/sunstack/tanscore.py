@@ -106,7 +106,21 @@ def _feature_schema(bundle: dict[str, object]) -> list[str]:
 def to_utc_from_openmeteo(times: pd.Series) -> pd.Series[pd.Timestamp]:
     parsed = pd.to_datetime(times)
     if getattr(parsed.dt, "tz", None) is None:
-        parsed = parsed.dt.tz_localize(ZoneInfo(config.TIMEZONE), ambiguous="infer", nonexistent="shift_forward")
+        try:
+            parsed = parsed.dt.tz_localize(
+                ZoneInfo(config.TIMEZONE), ambiguous="infer", nonexistent="shift_forward"
+            )
+        except ValueError:
+            # A frame that repeats the ambiguous hour resolves one row per
+            # occurrence; Open-Meteo does not. It emits 24 wall-clock hours per
+            # local day even across a DST fall-back, so `infer` has nothing to
+            # key on ("there are no repeated times") - which failed every publish
+            # once the 14-day horizon first reached 2026-11-01. The provider
+            # reports the offset in effect for the response, so read that label
+            # on its side: a single pre-dawn hour, outside every daylight window.
+            parsed = parsed.dt.tz_localize(
+                ZoneInfo(config.TIMEZONE), ambiguous=True, nonexistent="shift_forward"
+            )
     # Canonical ns unit: live Open-Meteo strings parse as us, while xarray-derived
     # CAMS frames are ns, and merges require identical key dtypes.
     return parsed.dt.tz_convert("UTC").astype("datetime64[ns, UTC]")
