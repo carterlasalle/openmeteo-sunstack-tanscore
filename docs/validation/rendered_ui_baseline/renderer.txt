@@ -1,1 +1,1 @@
-chromium 156.0.8078.4
+chromium 156.0.8078.4 on Linux
