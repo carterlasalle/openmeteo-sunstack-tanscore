@@ -6,259 +6,259 @@ METHOD:PUBLISH
 X-WR-CALNAME:SunStack 30-min doses
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T0730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T143000Z
 DTEND:20261029T150000Z
 SUMMARY:Sun 07:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 1/100. Local 3/100. TanDose30 0 J/m² mel. SE
- D30 0.0225. UVA30 2022.3 J/m². UVB30 10.71 J/m². Conf 23. interpolated hou
+ D30 0.0225. UVA30 2008.8 J/m². UVB30 10.71 J/m². Conf 23. interpolated hou
  rly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T0800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T150000Z
 DTEND:20261029T153000Z
 SUMMARY:Sun 08:00 (Abs 1/100)
-DESCRIPTION:Abs 1/100. Overall 2/100. Local 13/100. TanDose30 23.256 J/m² m
- el. SED30 0.045. UVA30 4044.6 J/m². UVB30 21.42 J/m². Conf 18. interpolate
+DESCRIPTION:Abs 1/100. Overall 2/100. Local 13/100. TanDose30 23.184 J/m² m
+ el. SED30 0.045. UVA30 4017.6 J/m². UVB30 21.42 J/m². Conf 19. interpolate
  d hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T0830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T153000Z
 DTEND:20261029T160000Z
 SUMMARY:Sun 08:30 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 4/100. Local 21/100. TanDose30 80.586 J/m² m
- el. SED30 0.2025. UVA30 9522.18 J/m². UVB30 96.3269 J/m². Conf 15. interpo
- lated hourly. tier C. cold
+DESCRIPTION:Abs 2/100. Overall 4/100. Local 20/100. TanDose30 74.574 J/m² m
+ el. SED30 0.21384. UVA30 8326.47 J/m². UVB30 91.5603 J/m². Conf 15. interp
+ olated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T0900@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T160000Z
 DTEND:20261029T163000Z
 SUMMARY:Sun 09:00 (Abs 4/100)
-DESCRIPTION:Abs 4/100. Overall 7/100. Local 28/100. TanDose30 139.428 J/m² 
- mel. SED30 0.36. UVA30 15274.8 J/m². UVB30 172.62 J/m². Conf 11. interpola
- ted hourly. tier C. cold
+DESCRIPTION:Abs 4/100. Overall 6/100. Local 26/100. TanDose30 122.652 J/m² 
+ mel. SED30 0.3825. UVA30 12072.6 J/m². UVB30 158.58 J/m². Conf 11. interpo
+ lated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T0930@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T163000Z
 DTEND:20261029T170000Z
-SUMMARY:Sun 09:30 (Abs 8/100)
-DESCRIPTION:Abs 8/100. Overall 12/100. Local 38/100. TanDose30 272.7 J/m² m
- el. SED30 0.54. UVA30 23342.4 J/m². UVB30 369.827 J/m². Conf 24. native HR
- RR. tier C. cold
+SUMMARY:Sun 09:30 (Abs 5/100)
+DESCRIPTION:Abs 5/100. Overall 7/100. Local 31/100. TanDose30 166.878 J/m² 
+ mel. SED30 0.55134. UVA30 12675.3 J/m². UVB30 234.24 J/m². Conf 14. interp
+ olated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1000@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T170000Z
 DTEND:20261029T173000Z
-SUMMARY:Sun 10:00 (Abs 13/100)
-DESCRIPTION:Abs 13/100. Overall 18/100. Local 48/100. TanDose30 430.704 J/m
- ² mel. SED30 0.72. UVA30 34413.9 J/m². UVB30 596.181 J/m². Conf 37. native
-  HRRR. tier C
+SUMMARY:Sun 10:00 (Abs 6/100)
+DESCRIPTION:Abs 6/100. Overall 8/100. Local 33/100. TanDose30 194.652 J/m² 
+ mel. SED30 0.72. UVA30 11242.8 J/m². UVB30 290.7 J/m². Conf 17. interpolat
+ ed hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1030@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T173000Z
 DTEND:20261029T180000Z
-SUMMARY:Sun 10:30 (Abs 14/100)
-DESCRIPTION:Abs 14/100. Overall 18/100. Local 50/100. TanDose30 467.334 J/m
- ² mel. SED30 0.6975. UVA30 29630.2 J/m². UVB30 684.934 J/m². Conf 30. nati
- ve HRRR. tier C
+SUMMARY:Sun 10:30 (Abs 9/100)
+DESCRIPTION:Abs 9/100. Overall 10/100. Local 38/100. TanDose30 282.33 J/m² 
+ mel. SED30 0.75384. UVA30 17084.7 J/m². UVB30 417.805 J/m². Conf 20. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1100@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T180000Z
 DTEND:20261029T183000Z
-SUMMARY:Sun 11:00 (Abs 21/100)
-DESCRIPTION:Abs 21/100. Overall 24/100. Local 62/100. TanDose30 677.16 J/m²
-  mel. SED30 0.675. UVA30 44748.3 J/m². UVB30 983.507 J/m². Conf 23. native
-  HRRR. tier C
+SUMMARY:Sun 11:00 (Abs 12/100)
+DESCRIPTION:Abs 12/100. Overall 13/100. Local 44/100. TanDose30 372.384 J/m
+ ² mel. SED30 0.7875. UVA30 23173.2 J/m². UVB30 547.92 J/m². Conf 22. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1130@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T183000Z
 DTEND:20261029T190000Z
-SUMMARY:Sun 11:30 (Abs 18/100)
-DESCRIPTION:Abs 18/100. Overall 18/100. Local 56/100. TanDose30 567.306 J/m
- ² mel. SED30 0.68616. UVA30 30066.1 J/m². UVB30 860.548 J/m². Conf 19. nat
- ive HRRR. tier C. cold
+SUMMARY:Sun 11:30 (Abs 15/100)
+DESCRIPTION:Abs 15/100. Overall 16/100. Local 50/100. TanDose30 470.34 J/m²
+  mel. SED30 0.7875. UVA30 26624.9 J/m². UVB30 705.077 J/m². Conf 18. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1200@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T190000Z
 DTEND:20261029T193000Z
-SUMMARY:Sun 12:00 (Abs 25/100)
-DESCRIPTION:Abs 25/100. Overall 25/100. Local 70/100. TanDose30 816.822 J/m
- ² mel. SED30 0.6975. UVA30 51529 J/m². UVB30 1198.4 J/m². Conf 14. native 
- HRRR. tier C. cold
+SUMMARY:Sun 12:00 (Abs 15/100)
+DESCRIPTION:Abs 15/100. Overall 16/100. Local 52/100. TanDose30 497.736 J/m
+ ² mel. SED30 0.7875. UVA30 23822.1 J/m². UVB30 767.633 J/m². Conf 14. nati
+ ve HRRR. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1230@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T193000Z
 DTEND:20261029T200000Z
-SUMMARY:Sun 12:30 (Abs 10/100)
-DESCRIPTION:Abs 10/100. Overall 5/100. Local 42/100. TanDose30 334.584 J/m²
-  mel. SED30 0.7425. UVA30 13614.1 J/m². UVB30 527.838 J/m². Conf 12. nativ
- e HRRR. tier C. light precipitation — usable\, expect damp\; cold
+SUMMARY:Sun 12:30 (Abs 22/100)
+DESCRIPTION:Abs 22/100. Overall 22/100. Local 63/100. TanDose30 700.164 J/m
+ ² mel. SED30 0.81. UVA30 41149.7 J/m². UVB30 1042.14 J/m². Conf 12. native
+  HRRR. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1300@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T200000Z
 DTEND:20261029T203000Z
-SUMMARY:Sun 13:00 (Abs 11/100)
-DESCRIPTION:Abs 11/100. Overall 10/100. Local 43/100. TanDose30 353.376 J/m
- ² mel. SED30 0.7875. UVA30 21065.9 J/m². UVB30 524.519 J/m². Conf 11. nati
- ve HRRR. tier C. cold
+SUMMARY:Sun 13:00 (Abs 22/100)
+DESCRIPTION:Abs 22/100. Overall 22/100. Local 63/100. TanDose30 703.71 J/m²
+  mel. SED30 0.8325. UVA30 39585.8 J/m². UVB30 1056.16 J/m². Conf 11. nativ
+ e HRRR. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1330@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T203000Z
 DTEND:20261029T210000Z
-SUMMARY:Sun 13:30 (Abs 17/100)
-DESCRIPTION:Abs 17/100. Overall 16/100. Local 54/100. TanDose30 543.186 J/m
- ² mel. SED30 0.8775. UVA30 38231.4 J/m². UVB30 777.396 J/m². Conf 12. nati
- ve HRRR. tier C. cold
+SUMMARY:Sun 13:30 (Abs 16/100)
+DESCRIPTION:Abs 16/100. Overall 17/100. Local 53/100. TanDose30 531.558 J/m
+ ² mel. SED30 0.91116. UVA30 27546.3 J/m². UVB30 809.425 J/m². Conf 12. nat
+ ive HRRR. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1400@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T210000Z
 DTEND:20261029T213000Z
-SUMMARY:Sun 14:00 (Abs 12/100)
-DESCRIPTION:Abs 12/100. Overall 12/100. Local 44/100. TanDose30 379.818 J/m
- ² mel. SED30 0.9675. UVA30 18405 J/m². UVB30 584.651 J/m². Conf 13. native
-  HRRR. tier C. cold
+SUMMARY:Sun 14:00 (Abs 18/100)
+DESCRIPTION:Abs 18/100. Overall 19/100. Local 56/100. TanDose30 588.69 J/m²
+  mel. SED30 0.99. UVA30 37951.1 J/m². UVB30 859.684 J/m². Conf 13. native 
+ HRRR. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1430@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T213000Z
 DTEND:20261029T220000Z
-SUMMARY:Sun 14:30 (Abs 13/100)
-DESCRIPTION:Abs 13/100. Overall 14/100. Local 48/100. TanDose30 431.838 J/m
- ² mel. SED30 1.1025. UVA30 27404.4 J/m². UVB30 632.766 J/m². Conf 13. nati
- ve HRRR. tier C. cold
+SUMMARY:Sun 14:30 (Abs 20/100)
+DESCRIPTION:Abs 20/100. Overall 22/100. Local 60/100. TanDose30 641.952 J/m
+ ² mel. SED30 1.2375. UVA30 46628.9 J/m². UVB30 911.588 J/m². Conf 12. nati
+ ve HRRR. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1500@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T220000Z
 DTEND:20261029T223000Z
-SUMMARY:Sun 15:00 (Abs 14/100)
-DESCRIPTION:Abs 14/100. Overall 16/100. Local 49/100. TanDose30 454.986 J/m
- ² mel. SED30 1.2375. UVA30 36183.2 J/m². UVB30 630.628 J/m². Conf 13. nati
- ve HRRR. tier C. cold
+SUMMARY:Sun 15:00 (Abs 19/100)
+DESCRIPTION:Abs 19/100. Overall 22/100. Local 58/100. TanDose30 617.652 J/m
+ ² mel. SED30 1.485. UVA30 46011.1 J/m². UVB30 871.45 J/m². Conf 11. native
+  HRRR. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1530@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T223000Z
 DTEND:20261029T230000Z
-SUMMARY:Sun 15:30 (Abs 11/100)
-DESCRIPTION:Abs 11/100. Overall 14/100. Local 43/100. TanDose30 349.164 J/m
- ² mel. SED30 0.97884. UVA30 29438 J/m². UVB30 475.729 J/m². Conf 16. nativ
- e HRRR. tier C. cold
+SUMMARY:Sun 15:30 (Abs 13/100)
+DESCRIPTION:Abs 13/100. Overall 16/100. Local 46/100. TanDose30 413.406 J/m
+ ² mel. SED30 1.125. UVA30 31351.1 J/m². UVB30 580.519 J/m². Conf 14. nativ
+ e HRRR. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1600@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T230000Z
 DTEND:20261029T233000Z
-SUMMARY:Sun 16:00 (Abs 10/100)
-DESCRIPTION:Abs 10/100. Overall 14/100. Local 41/100. TanDose30 333.936 J/m
- ² mel. SED30 0.72. UVA30 35421.6 J/m². UVB30 419.116 J/m². Conf 18. native
-  HRRR. tier C. cold
+SUMMARY:Sun 16:00 (Abs 9/100)
+DESCRIPTION:Abs 9/100. Overall 13/100. Local 39/100. TanDose30 296.478 J/m²
+  mel. SED30 0.765. UVA30 27644 J/m². UVB30 390.866 J/m². Conf 18. native H
+ RRR. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1630@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261029T233000Z
 DTEND:20261030T000000Z
-SUMMARY:Sun 16:30 (Abs 5/100)
-DESCRIPTION:Abs 5/100. Overall 8/100. Local 31/100. TanDose30 165.276 J/m² 
- mel. SED30 0.52884. UVA30 17254.3 J/m². UVB30 208.794 J/m². Conf 26. nativ
- e HRRR. tier C. cold
+SUMMARY:Sun 16:30 (Abs 7/100)
+DESCRIPTION:Abs 7/100. Overall 11/100. Local 35/100. TanDose30 230.112 J/m²
+  mel. SED30 0.55134. UVA30 25817.8 J/m². UVB30 281.874 J/m². Conf 26. nati
+ ve HRRR. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1700@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T000000Z
 DTEND:20261030T003000Z
 SUMMARY:Sun 17:00 (Abs 3/100)
-DESCRIPTION:Abs 3/100. Overall 5/100. Local 21/100. TanDose30 82.584 J/m² m
- el. SED30 0.3375. UVA30 12706.4 J/m². UVB30 84.1821 J/m². Conf 34. native 
+DESCRIPTION:Abs 3/100. Overall 6/100. Local 23/100. TanDose30 98.406 J/m² m
+ el. SED30 0.3375. UVA30 12831.6 J/m². UVB30 111.709 J/m². Conf 34. native 
  HRRR. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T003000Z
 DTEND:20261030T010000Z
 SUMMARY:Sun 17:30 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 3/100. Local 17/100. TanDose30 47.448 J/m² m
- el. SED30 0.225. UVA30 7763.53 J/m². UVB30 46.0812 J/m². Conf 36. native H
- RRR. tier C. cold
+DESCRIPTION:Abs 2/100. Overall 4/100. Local 17/100. TanDose30 51.3 J/m² mel
+ . SED30 0.2025. UVA30 6941.95 J/m². UVB30 57.0005 J/m². Conf 37. native HR
+ RR. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T010000Z
 DTEND:20261030T013000Z
 SUMMARY:Sun 18:00 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.1125. UVA30 0 J/m². UVB30 0 J/m². Conf 39. native HRRR. tier C. cold
+ D30 0.0675. UVA30 0 J/m². UVB30 0 J/m². Conf 40. native HRRR. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261029T1830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T013000Z
 DTEND:20261030T020000Z
 SUMMARY:Sun 18:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.05616. UVA30 0 J/m². UVB30 0 J/m². Conf 40. native HRRR. tier C. col
+ D30 0.03384. UVA30 0 J/m². UVB30 0 J/m². Conf 41. native HRRR. tier C. col
  d
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T0730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T143000Z
 DTEND:20261030T150000Z
@@ -269,7 +269,7 @@ DESCRIPTION:Abs 0/100. Overall 1/100. Local 3/100. TanDose30 0 J/m² mel. SE
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T0800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T150000Z
 DTEND:20261030T153000Z
@@ -280,706 +280,706 @@ DESCRIPTION:Abs 1/100. Overall 1/100. Local 10/100. TanDose30 20.448 J/m² m
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T0830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T153000Z
 DTEND:20261030T160000Z
 SUMMARY:Sun 08:30 (Abs 3/100)
 DESCRIPTION:Abs 3/100. Overall 5/100. Local 23/100. TanDose30 94.158 J/m² m
- el. SED30 0.2025. UVA30 10168.4 J/m². UVB30 117.303 J/m². Conf 21. interpo
- lated hourly. tier C. cold
+ el. SED30 0.23634. UVA30 10168.4 J/m². UVB30 117.303 J/m². Conf 22. interp
+ olated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T0900@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T160000Z
 DTEND:20261030T163000Z
 SUMMARY:Sun 09:00 (Abs 6/100)
 DESCRIPTION:Abs 6/100. Overall 8/100. Local 32/100. TanDose30 177.48 J/m² m
- el. SED30 0.36. UVA30 18480.6 J/m². UVB30 224.46 J/m². Conf 21. interpolat
- ed hourly. tier C. cold
+ el. SED30 0.4275. UVA30 18480.6 J/m². UVB30 224.46 J/m². Conf 22. interpol
+ ated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T0930@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T163000Z
 DTEND:20261030T170000Z
 SUMMARY:Sun 09:30 (Abs 6/100)
-DESCRIPTION:Abs 6/100. Overall 7/100. Local 32/100. TanDose30 175.986 J/m² 
- mel. SED30 0.57384. UVA30 15968.6 J/m². UVB30 234.207 J/m². Conf 18. inter
+DESCRIPTION:Abs 6/100. Overall 8/100. Local 32/100. TanDose30 175.986 J/m² 
+ mel. SED30 0.68616. UVA30 15968.6 J/m². UVB30 234.207 J/m². Conf 21. inter
  polated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1000@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T170000Z
 DTEND:20261030T173000Z
 SUMMARY:Sun 10:00 (Abs 4/100)
 DESCRIPTION:Abs 4/100. Overall 5/100. Local 29/100. TanDose30 145.224 J/m² 
- mel. SED30 0.7875. UVA30 9298.8 J/m². UVB30 212.4 J/m². Conf 15. interpola
- ted hourly. tier C. cold
+ mel. SED30 0.945. UVA30 9298.8 J/m². UVB30 212.4 J/m². Conf 20. interpolat
+ ed hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1030@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T173000Z
 DTEND:20261030T180000Z
 SUMMARY:Sun 10:30 (Abs 5/100)
 DESCRIPTION:Abs 5/100. Overall 6/100. Local 32/100. TanDose30 169.308 J/m² 
- mel. SED30 0.93384. UVA30 10547.4 J/m². UVB30 249.044 J/m². Conf 19. inter
+ mel. SED30 1.20384. UVA30 10547.4 J/m². UVB30 249.044 J/m². Conf 21. inter
  polated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1100@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T180000Z
 DTEND:20261030T183000Z
 SUMMARY:Sun 11:00 (Abs 6/100)
 DESCRIPTION:Abs 6/100. Overall 7/100. Local 33/100. TanDose30 190.044 J/m² 
- mel. SED30 1.08. UVA30 11444.4 J/m². UVB30 281.52 J/m². Conf 23. interpola
- ted hourly. tier C. cold
+ mel. SED30 1.4625. UVA30 11444.4 J/m². UVB30 281.52 J/m². Conf 23. interpo
+ lated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1130@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T183000Z
 DTEND:20261030T190000Z
 SUMMARY:Sun 11:30 (Abs 7/100)
 DESCRIPTION:Abs 7/100. Overall 4/100. Local 36/100. TanDose30 230.868 J/m² 
- mel. SED30 1.09116. UVA30 11479.5 J/m². UVB30 353.93 J/m². Conf 36. interp
- olated hourly. tier C. light precipitation — usable\, expect damp\; cold
+ mel. SED30 1.6875. UVA30 11479.5 J/m². UVB30 353.93 J/m². Conf 16. interpo
+ lated hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1200@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T190000Z
 DTEND:20261030T193000Z
 SUMMARY:Sun 12:00 (Abs 8/100)
 DESCRIPTION:Abs 8/100. Overall 4/100. Local 38/100. TanDose30 267.732 J/m² 
- mel. SED30 1.1025. UVA30 11170.8 J/m². UVB30 421.02 J/m². Conf 48. interpo
- lated hourly. tier C. light precipitation — usable\, expect damp\; cold
+ mel. SED30 1.9125. UVA30 11170.8 J/m². UVB30 421.02 J/m². Conf 9. interpol
+ ated hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1230@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T193000Z
 DTEND:20261030T200000Z
 SUMMARY:Sun 12:30 (Abs 8/100)
 DESCRIPTION:Abs 8/100. Overall 4/100. Local 37/100. TanDose30 261.072 J/m² 
- mel. SED30 1.02384. UVA30 10493.6 J/m². UVB30 412.518 J/m². Conf 45. inter
- polated hourly. tier C. light precipitation — usable\, expect damp\; cold
+ mel. SED30 2.01384. UVA30 10493.6 J/m². UVB30 412.518 J/m². Conf 8. interp
+ olated hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1300@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T200000Z
 DTEND:20261030T203000Z
 SUMMARY:Sun 13:00 (Abs 8/100)
-DESCRIPTION:Abs 8/100. Overall 8/100. Local 37/100. TanDose30 251.19 J/m² m
- el. SED30 0.945. UVA30 9583.2 J/m². UVB30 399.42 J/m². Conf 42. interpolat
- ed hourly. tier C. cold
+DESCRIPTION:Abs 8/100. Overall 7/100. Local 37/100. TanDose30 251.19 J/m² m
+ el. SED30 2.115. UVA30 9583.2 J/m². UVB30 399.42 J/m². Conf 6. interpolate
+ d hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1330@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T203000Z
 DTEND:20261030T210000Z
 SUMMARY:Sun 13:30 (Abs 10/100)
-DESCRIPTION:Abs 10/100. Overall 10/100. Local 40/100. TanDose30 306.396 J/m
- ² mel. SED30 1.24884. UVA30 16572.7 J/m². UVB30 463.143 J/m². Conf 25. int
- erpolated hourly. tier C. cold
+DESCRIPTION:Abs 10/100. Overall 9/100. Local 40/100. TanDose30 306.396 J/m²
+  mel. SED30 1.51884. UVA30 16572.7 J/m². UVB30 463.143 J/m². Conf 17. inte
+ rpolated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1400@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T210000Z
 DTEND:20261030T213000Z
 SUMMARY:Sun 14:00 (Abs 11/100)
-DESCRIPTION:Abs 11/100. Overall 10/100. Local 43/100. TanDose30 351.234 J/m
- ² mel. SED30 1.5525. UVA30 22590 J/m². UVB30 513.18 J/m². Conf 7. interpol
- ated hourly. tier C. cold
+DESCRIPTION:Abs 11/100. Overall 11/100. Local 43/100. TanDose30 351.234 J/m
+ ² mel. SED30 0.9225. UVA30 22590 J/m². UVB30 513.18 J/m². Conf 28. interpo
+ lated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1430@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T213000Z
 DTEND:20261030T220000Z
 SUMMARY:Sun 14:30 (Abs 8/100)
-DESCRIPTION:Abs 8/100. Overall 8/100. Local 37/100. TanDose30 261.504 J/m² 
- mel. SED30 1.24884. UVA30 16925.4 J/m². UVB30 381.555 J/m². Conf 13. inter
- polated hourly. tier C. cold
+DESCRIPTION:Abs 8/100. Overall 9/100. Local 37/100. TanDose30 261.504 J/m² 
+ mel. SED30 0.72. UVA30 16925.4 J/m². UVB30 381.555 J/m². Conf 30. interpol
+ ated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1500@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T220000Z
 DTEND:20261030T223000Z
 SUMMARY:Sun 15:00 (Abs 5/100)
 DESCRIPTION:Abs 5/100. Overall 6/100. Local 32/100. TanDose30 175.338 J/m² 
- mel. SED30 0.945. UVA30 11653.2 J/m². UVB30 254.34 J/m². Conf 19. interpol
- ated hourly. tier C. cold
+ mel. SED30 0.5175. UVA30 11653.2 J/m². UVB30 254.34 J/m². Conf 32. interpo
+ lated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1530@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T223000Z
 DTEND:20261030T230000Z
 SUMMARY:Sun 15:30 (Abs 4/100)
 DESCRIPTION:Abs 4/100. Overall 2/100. Local 26/100. TanDose30 117.306 J/m² 
- mel. SED30 0.765. UVA30 8348.36 J/m². UVB30 167.423 J/m². Conf 21. interpo
- lated hourly. tier C. light precipitation — usable\, expect damp\; cold
+ mel. SED30 0.36. UVA30 8348.36 J/m². UVB30 167.423 J/m². Conf 34. interpol
+ ated hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1600@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T230000Z
 DTEND:20261030T233000Z
 SUMMARY:Sun 16:00 (Abs 2/100)
 DESCRIPTION:Abs 2/100. Overall 1/100. Local 19/100. TanDose30 63.756 J/m² m
- el. SED30 0.585. UVA30 5581.8 J/m². UVB30 85.86 J/m². Conf 23. interpolate
- d hourly. tier C. light precipitation — usable\, expect damp\; cold
+ el. SED30 0.2025. UVA30 5581.8 J/m². UVB30 85.86 J/m². Conf 35. interpolat
+ ed hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1630@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261030T233000Z
 DTEND:20261031T000000Z
 SUMMARY:Sun 16:30 (Abs 1/100)
 DESCRIPTION:Abs 1/100. Overall 0/100. Local 15/100. TanDose30 33.336 J/m² m
- el. SED30 0.50616. UVA30 3792.2 J/m². UVB30 40.5658 J/m². Conf 27. interpo
- lated hourly. tier C. heavy precipitation in interval/code
+ el. SED30 0.1575. UVA30 3792.2 J/m². UVB30 40.5658 J/m². Conf 36. interpol
+ ated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1700@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T000000Z
 DTEND:20261031T003000Z
 SUMMARY:Sun 17:00 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 3/100. TanDose30 8.082 J/m² mel
- . SED30 0.4275. UVA30 2912.4 J/m². UVB30 0 J/m². Conf 30. interpolated hou
+ . SED30 0.1125. UVA30 2912.4 J/m². UVB30 0 J/m². Conf 37. interpolated hou
  rly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T003000Z
 DTEND:20261031T010000Z
 SUMMARY:Sun 17:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 3/100. TanDose30 4.266 J/m² mel
- . SED30 0.27. UVA30 1538.1 J/m². UVB30 0 J/m². Conf 34. interpolated hourl
- y. tier C. heavy precipitation in interval/code
+ . SED30 0.07866. UVA30 1538.1 J/m². UVB30 0 J/m². Conf 38. interpolated ho
+ urly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T010000Z
 DTEND:20261031T013000Z
 SUMMARY:Sun 18:00 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.1125. UVA30 0 J/m². UVB30 0 J/m². Conf 37. interpolated hourly. tier
-  C. cold
+ D30 0.045. UVA30 0 J/m². UVB30 0 J/m². Conf 39. interpolated hourly. tier 
+ C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261030T1830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T013000Z
 DTEND:20261031T020000Z
 SUMMARY:Sun 18:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.05616. UVA30 0 J/m². UVB30 0 J/m². Conf 38. interpolated hourly. tie
- r C. light precipitation — usable\, expect damp\; cold
+ D30 0.0225. UVA30 0 J/m². UVB30 0 J/m². Conf 39. interpolated hourly. tier
+  C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T0730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T143000Z
 DTEND:20261031T150000Z
 SUMMARY:Sun 07:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 3/100. TanDose30 0 J/m² mel. SE
- D30 0.03384. UVA30 1197.63 J/m². UVB30 10.0901 J/m². Conf 36. interpolated
-  hourly. tier C. light precipitation — usable\, expect damp\; cold
+ D30 0.0225. UVA30 1057.77 J/m². UVB30 11.069 J/m². Conf 36. interpolated h
+ ourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T0800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T150000Z
 DTEND:20261031T153000Z
 SUMMARY:Sun 08:00 (Abs 1/100)
-DESCRIPTION:Abs 1/100. Overall 2/100. Local 13/100. TanDose30 23.058 J/m² m
- el. SED30 0.0675. UVA30 3421.8 J/m². UVB30 24.12 J/m². Conf 36. interpolat
- ed hourly. tier C. cold
+DESCRIPTION:Abs 1/100. Overall 1/100. Local 13/100. TanDose30 23.256 J/m² m
+ el. SED30 0.045. UVA30 3022.2 J/m². UVB30 26.46 J/m². Conf 35. interpolate
+ d hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T0830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T153000Z
 DTEND:20261031T160000Z
 SUMMARY:Sun 08:30 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 4/100. Local 21/100. TanDose30 82.17 J/m² me
- l. SED30 0.2475. UVA30 9716.8 J/m². UVB30 98.206 J/m². Conf 36. interpolat
- ed hourly. tier C. cold
+DESCRIPTION:Abs 2/100. Overall 2/100. Local 19/100. TanDose30 60.948 J/m² m
+ el. SED30 0.135. UVA30 5927.87 J/m². UVB30 79.149 J/m². Conf 36. interpola
+ ted hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T0900@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T160000Z
 DTEND:20261031T163000Z
-SUMMARY:Sun 09:00 (Abs 5/100)
-DESCRIPTION:Abs 5/100. Overall 7/100. Local 30/100. TanDose30 147.51 J/m² m
- el. SED30 0.4275. UVA30 17125.2 J/m². UVB30 177.84 J/m². Conf 35. interpol
- ated hourly. tier C. cold
+SUMMARY:Sun 09:00 (Abs 3/100)
+DESCRIPTION:Abs 3/100. Overall 2/100. Local 24/100. TanDose30 98.91 J/m² me
+ l. SED30 0.225. UVA30 8875.8 J/m². UVB30 132.12 J/m². Conf 37. interpolate
+ d hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T0930@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T163000Z
 DTEND:20261031T170000Z
-SUMMARY:Sun 09:30 (Abs 9/100)
-DESCRIPTION:Abs 9/100. Overall 6/100. Local 40/100. TanDose30 300.24 J/m² m
- el. SED30 0.70884. UVA30 26111.7 J/m². UVB30 405.142 J/m². Conf 33. interp
- olated hourly. tier C. light precipitation — usable\, expect damp\; cold
-END:VEVENT
-BEGIN:VEVENT
-UID:sunstack-30m-pacific-palisades-20261031T1000@pacific-palisades
-DTSTAMP:20261029T163332Z
-SEQUENCE:0
-DTSTART:20261031T170000Z
-DTEND:20261031T173000Z
-SUMMARY:Sun 10:00 (Abs 14/100)
-DESCRIPTION:Abs 14/100. Overall 9/100. Local 50/100. TanDose30 455.886 J/m²
-  mel. SED30 0.99. UVA30 35503.2 J/m². UVB30 635.58 J/m². Conf 31. interpol
+SUMMARY:Sun 09:30 (Abs 4/100)
+DESCRIPTION:Abs 4/100. Overall 3/100. Local 29/100. TanDose30 141.912 J/m² 
+ mel. SED30 0.27. UVA30 9913.83 J/m². UVB30 203.455 J/m². Conf 42. interpol
  ated hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
+UID:sunstack-30m-pacific-palisades-20261031T1000@pacific-palisades
+DTSTAMP:20261029T191402Z
+SEQUENCE:0
+DTSTART:20261031T170000Z
+DTEND:20261031T173000Z
+SUMMARY:Sun 10:00 (Abs 5/100)
+DESCRIPTION:Abs 5/100. Overall 3/100. Local 32/100. TanDose30 174.366 J/m² 
+ mel. SED30 0.315. UVA30 9732.6 J/m². UVB30 262.08 J/m². Conf 47. interpola
+ ted hourly. tier C. light precipitation — usable\, expect damp\; cold
+END:VEVENT
+BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1030@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T173000Z
 DTEND:20261031T180000Z
-SUMMARY:Sun 10:30 (Abs 18/100)
-DESCRIPTION:Abs 18/100. Overall 10/100. Local 57/100. TanDose30 572.76 J/m²
-  mel. SED30 1.1925. UVA30 39822 J/m². UVB30 822.131 J/m². Conf 29. interpo
+SUMMARY:Sun 10:30 (Abs 9/100)
+DESCRIPTION:Abs 9/100. Overall 5/100. Local 39/100. TanDose30 280.206 J/m² 
+ mel. SED30 0.585. UVA30 16722.4 J/m². UVB30 415.812 J/m². Conf 47. interpo
  lated hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1100@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T180000Z
 DTEND:20261031T183000Z
-SUMMARY:Sun 11:00 (Abs 21/100)
-DESCRIPTION:Abs 21/100. Overall 12/100. Local 63/100. TanDose30 675.936 J/m
- ² mel. SED30 1.395. UVA30 42548.4 J/m². UVB30 992.16 J/m². Conf 28. interp
- olated hourly. tier C. light precipitation — usable\, expect damp
+SUMMARY:Sun 11:00 (Abs 12/100)
+DESCRIPTION:Abs 12/100. Overall 7/100. Local 46/100. TanDose30 394.38 J/m² 
+ mel. SED30 0.855. UVA30 24570 J/m². UVB30 580.14 J/m². Conf 46. interpolat
+ ed hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1130@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T183000Z
 DTEND:20261031T190000Z
-SUMMARY:Sun 11:30 (Abs 26/100)
-DESCRIPTION:Abs 26/100. Overall 13/100. Local 73/100. TanDose30 843.21 J/m²
-  mel. SED30 1.60884. UVA30 50591.8 J/m². UVB30 1249.97 J/m². Conf 21. inte
- rpolated hourly. tier C. light precipitation — usable\, expect damp
+SUMMARY:Sun 11:30 (Abs 16/100)
+DESCRIPTION:Abs 16/100. Overall 3/100. Local 54/100. TanDose30 518.4 J/m² m
+ el. SED30 1.02384. UVA30 29707.4 J/m². UVB30 775.344 J/m². Conf 38. interp
+ olated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1200@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T190000Z
 DTEND:20261031T193000Z
-SUMMARY:Sun 12:00 (Abs 31/100)
-DESCRIPTION:Abs 31/100. Overall 13/100. Local 84/100. TanDose30 1004.62 J/m
- ² mel. SED30 1.8225. UVA30 58030.2 J/m². UVB30 1500.3 J/m². Conf 15. inter
- polated hourly. tier C. light precipitation — usable\, expect damp\; 52% p
- recipitation risk
+SUMMARY:Sun 12:00 (Abs 20/100)
+DESCRIPTION:Abs 20/100. Overall 3/100. Local 61/100. TanDose30 639.072 J/m²
+  mel. SED30 1.1925. UVA30 34515 J/m². UVB30 966.24 J/m². Conf 29. interpol
+ ated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1230@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T193000Z
 DTEND:20261031T200000Z
-SUMMARY:Sun 12:30 (Abs 27/100)
-DESCRIPTION:Abs 27/100. Overall 11/100. Local 76/100. TanDose30 878.346 J/m
- ² mel. SED30 1.60884. UVA30 51185.3 J/m². UVB30 1309.52 J/m². Conf 15. int
- erpolated hourly. tier C. light precipitation — usable\, expect damp\; 52%
-  precipitation risk
+SUMMARY:Sun 12:30 (Abs 19/100)
+DESCRIPTION:Abs 19/100. Overall 3/100. Local 60/100. TanDose30 627.624 J/m²
+  mel. SED30 1.13616. UVA30 32849.5 J/m². UVB30 954.104 J/m². Conf 27. inte
+ rpolated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1300@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T200000Z
 DTEND:20261031T203000Z
-SUMMARY:Sun 13:00 (Abs 23/100)
-DESCRIPTION:Abs 23/100. Overall 4/100. Local 66/100. TanDose30 740.412 J/m²
-  mel. SED30 1.395. UVA30 43173 J/m². UVB30 1103.76 J/m². Conf 16. interpol
+SUMMARY:Sun 13:00 (Abs 19/100)
+DESCRIPTION:Abs 19/100. Overall 3/100. Local 59/100. TanDose30 608.436 J/m²
+  mel. SED30 1.08. UVA30 30477.6 J/m². UVB30 931.68 J/m². Conf 25. interpol
  ated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1330@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T203000Z
 DTEND:20261031T210000Z
-SUMMARY:Sun 13:30 (Abs 26/100)
-DESCRIPTION:Abs 26/100. Overall 11/100. Local 73/100. TanDose30 848.412 J/m
- ² mel. SED30 1.6875. UVA30 51914.4 J/m². UVB30 1252.67 J/m². Conf 13. inte
- rpolated hourly. tier C. light precipitation — usable\, expect damp\; 52% 
- precipitation risk
+SUMMARY:Sun 13:30 (Abs 22/100)
+DESCRIPTION:Abs 22/100. Overall 4/100. Local 64/100. TanDose30 702.252 J/m²
+  mel. SED30 1.31616. UVA30 39283.8 J/m². UVB30 1055.08 J/m². Conf 19. inte
+ rpolated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1400@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T210000Z
 DTEND:20261031T213000Z
-SUMMARY:Sun 14:00 (Abs 29/100)
-DESCRIPTION:Abs 29/100. Overall 24/100. Local 80/100. TanDose30 937.656 J/m
- ² mel. SED30 1.98. UVA30 58701.6 J/m². UVB30 1377.9 J/m². Conf 10. interpo
- lated hourly. tier C. 52% precipitation risk
+SUMMARY:Sun 14:00 (Abs 24/100)
+DESCRIPTION:Abs 24/100. Overall 4/100. Local 69/100. TanDose30 779.472 J/m²
+  mel. SED30 1.5525. UVA30 46488.6 J/m². UVB30 1156.86 J/m². Conf 13. inter
+ polated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1430@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T213000Z
 DTEND:20261031T220000Z
-SUMMARY:Sun 14:30 (Abs 23/100)
-DESCRIPTION:Abs 23/100. Overall 20/100. Local 67/100. TanDose30 751.878 J/m
- ² mel. SED30 1.67634. UVA30 48954.1 J/m². UVB30 1095.61 J/m². Conf 12. int
- erpolated hourly. tier C. 52% precipitation risk
+SUMMARY:Sun 14:30 (Abs 19/100)
+DESCRIPTION:Abs 19/100. Overall 3/100. Local 60/100. TanDose30 624.42 J/m² 
+ mel. SED30 1.35. UVA30 39251.3 J/m². UVB30 916.825 J/m². Conf 14. interpol
+ ated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1500@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T220000Z
 DTEND:20261031T223000Z
-SUMMARY:Sun 15:00 (Abs 18/100)
-DESCRIPTION:Abs 18/100. Overall 16/100. Local 57/100. TanDose30 568.224 J/m
- ² mel. SED30 1.3725. UVA30 39441.6 J/m². UVB30 815.94 J/m². Conf 13. inter
- polated hourly. tier C. 52% precipitation risk
+SUMMARY:Sun 15:00 (Abs 14/100)
+DESCRIPTION:Abs 14/100. Overall 3/100. Local 51/100. TanDose30 469.386 J/m²
+  mel. SED30 1.1475. UVA30 32014.8 J/m². UVB30 676.8 J/m². Conf 15. interpo
+ lated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1530@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T223000Z
 DTEND:20261031T230000Z
-SUMMARY:Sun 15:30 (Abs 13/100)
-DESCRIPTION:Abs 13/100. Overall 6/100. Local 47/100. TanDose30 407.664 J/m²
-  mel. SED30 1.13616. UVA30 32146.2 J/m². UVB30 566.394 J/m². Conf 14. inte
- rpolated hourly. tier C. light precipitation — usable\, expect damp\; 52% 
- precipitation risk
+SUMMARY:Sun 15:30 (Abs 10/100)
+DESCRIPTION:Abs 10/100. Overall 2/100. Local 42/100. TanDose30 333.198 J/m²
+  mel. SED30 0.93384. UVA30 25282.8 J/m². UVB30 467.842 J/m². Conf 18. inte
+ rpolated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1600@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T230000Z
 DTEND:20261031T233000Z
-SUMMARY:Sun 16:00 (Abs 8/100)
-DESCRIPTION:Abs 8/100. Overall 4/100. Local 37/100. TanDose30 247.05 J/m² m
- el. SED30 0.9. UVA30 24845.4 J/m². UVB30 316.8 J/m². Conf 14. interpolated
-  hourly. tier C. light precipitation — usable\, expect damp\; cold\; 52% p
- recipitation risk
+SUMMARY:Sun 16:00 (Abs 6/100)
+DESCRIPTION:Abs 6/100. Overall 2/100. Local 34/100. TanDose30 200.106 J/m² 
+ mel. SED30 0.72. UVA30 18936 J/m². UVB30 262.44 J/m². Conf 20. interpolate
+ d hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1630@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261031T233000Z
 DTEND:20261101T000000Z
-SUMMARY:Sun 16:30 (Abs 5/100)
-DESCRIPTION:Abs 5/100. Overall 3/100. Local 31/100. TanDose30 154.98 J/m² m
- el. SED30 0.66384. UVA30 17682.9 J/m². UVB30 188.376 J/m². Conf 21. interp
- olated hourly. tier C. light precipitation — usable\, expect damp\; cold\;
-  52% precipitation risk
+SUMMARY:Sun 16:30 (Abs 3/100)
+DESCRIPTION:Abs 3/100. Overall 2/100. Local 24/100. TanDose30 103.806 J/m² 
+ mel. SED30 0.46116. UVA30 10914.9 J/m². UVB30 130.753 J/m². Conf 27. inter
+ polated hourly. tier C. light precipitation — usable\, expect damp\; cold\
+ ; 52% precipitation risk
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1700@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T000000Z
 DTEND:20261101T003000Z
-SUMMARY:Sun 17:00 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 3/100. Local 19/100. TanDose30 66.006 J/m² m
- el. SED30 0.4275. UVA30 11061 J/m². UVB30 62.82 J/m². Conf 29. interpolate
- d hourly. tier C. cold\; 52% precipitation risk
+SUMMARY:Sun 17:00 (Abs 1/100)
+DESCRIPTION:Abs 1/100. Overall 1/100. Local 13/100. TanDose30 23.238 J/m² m
+ el. SED30 0.2025. UVA30 5497.2 J/m². UVB30 14.22 J/m². Conf 33. interpolat
+ ed hourly. tier C. light precipitation — usable\, expect damp\; cold\; 52%
+  precipitation risk
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T003000Z
 DTEND:20261101T010000Z
-SUMMARY:Sun 17:30 (Abs 1/100)
-DESCRIPTION:Abs 1/100. Overall 2/100. Local 15/100. TanDose30 37.098 J/m² m
- el. SED30 0.25884. UVA30 6257.76 J/m². UVB30 35.1139 J/m². Conf 32. interp
- olated hourly. tier C. cold\; 62% precipitation risk
+SUMMARY:Sun 17:30 (Abs 0/100)
+DESCRIPTION:Abs 0/100. Overall 0/100. Local 7/100. TanDose30 15.336 J/m² me
+ l. SED30 0.135. UVA30 3345.71 J/m². UVB30 10.7706 J/m². Conf 35. interpola
+ ted hourly. tier C. light precipitation — usable\, expect damp\; cold\; 62
+ % precipitation risk
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T010000Z
 DTEND:20261101T013000Z
 SUMMARY:Sun 18:00 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.09. UVA30 0 J/m². UVB30 0 J/m². Conf 36. interpolated hourly. tier C
- . cold\; 73% precipitation risk
+ D30 0.0675. UVA30 0 J/m². UVB30 0 J/m². Conf 36. interpolated hourly. tier
+  C. light precipitation — usable\, expect damp\; cold\; 73% precipitation 
+ risk
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261031T1830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T013000Z
 DTEND:20261101T020000Z
 SUMMARY:Sun 18:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.045. UVA30 0 J/m². UVB30 0 J/m². Conf 37. interpolated hourly. tier 
- C. cold\; 73% precipitation risk
+ D30 0.03384. UVA30 0 J/m². UVB30 0 J/m². Conf 37. interpolated hourly. tie
+ r C. light precipitation — usable\, expect damp\; cold\; 73% precipitation
+  risk
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T0730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T153000Z
 DTEND:20261101T160000Z
 SUMMARY:Sun 07:30 (Abs 0/100)
-DESCRIPTION:Abs 0/100. Overall 0/100. Local 7/100. TanDose30 0 J/m² mel. SE
- D30 0.01134. UVA30 1557.59 J/m². UVB30 19.6389 J/m². Conf 33. interpolated
-  hourly. tier C. cold\; 51% precipitation risk
+DESCRIPTION:Abs 0/100. Overall 0/100. Local 11/100. TanDose30 0 J/m² mel. S
+ ED30 0.01134. UVA30 2145.6 J/m². UVB30 22.77 J/m². Conf 33. interpolated h
+ ourly. tier C. light precipitation — usable\, expect damp\; cold\; 51% pre
+ cipitation risk
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T0800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T160000Z
 DTEND:20261101T163000Z
 SUMMARY:Sun 08:00 (Abs 1/100)
-DESCRIPTION:Abs 1/100. Overall 2/100. Local 15/100. TanDose30 37.8 J/m² mel
- . SED30 0.0225. UVA30 4287.6 J/m². UVB30 46.08 J/m². Conf 33. interpolated
-  hourly. tier C. cold\; 51% precipitation risk
+DESCRIPTION:Abs 1/100. Overall 2/100. Local 15/100. TanDose30 37.512 J/m² m
+ el. SED30 0.0225. UVA30 4291.2 J/m². UVB30 45.54 J/m². Conf 33. interpolat
+ ed hourly. tier C. cold\; 51% precipitation risk
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T0830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T163000Z
 DTEND:20261101T170000Z
-SUMMARY:Sun 08:30 (Abs 5/100)
-DESCRIPTION:Abs 5/100. Overall 5/100. Local 31/100. TanDose30 150.228 J/m² 
- mel. SED30 0.23634. UVA30 10967.5 J/m². UVB30 213.05 J/m². Conf 38. interp
+SUMMARY:Sun 08:30 (Abs 3/100)
+DESCRIPTION:Abs 3/100. Overall 3/100. Local 25/100. TanDose30 106.974 J/m² 
+ mel. SED30 0.1125. UVA30 5690.72 J/m². UVB30 162.171 J/m². Conf 39. interp
  olated hourly. tier C. cold\; 51% precipitation risk
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T0900@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T170000Z
 DTEND:20261101T173000Z
-SUMMARY:Sun 09:00 (Abs 9/100)
-DESCRIPTION:Abs 9/100. Overall 9/100. Local 40/100. TanDose30 289.656 J/m² 
- mel. SED30 0.45. UVA30 21006 J/m². UVB30 411.48 J/m². Conf 44. interpolate
- d hourly. tier C. cold\; 51% precipitation risk
+SUMMARY:Sun 09:00 (Abs 6/100)
+DESCRIPTION:Abs 6/100. Overall 6/100. Local 33/100. TanDose30 191.142 J/m² 
+ mel. SED30 0.2025. UVA30 8483.4 J/m². UVB30 298.08 J/m². Conf 46. interpol
+ ated hourly. tier C. cold\; 51% precipitation risk
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T0930@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T173000Z
 DTEND:20261101T180000Z
-SUMMARY:Sun 09:30 (Abs 14/100)
-DESCRIPTION:Abs 14/100. Overall 12/100. Local 49/100. TanDose30 436.338 J/m
- ² mel. SED30 0.73116. UVA30 30074.6 J/m². UVB30 627.605 J/m². Conf 35. int
- erpolated hourly. tier C. cold\; 51% precipitation risk
+SUMMARY:Sun 09:30 (Abs 6/100)
+DESCRIPTION:Abs 6/100. Overall 6/100. Local 34/100. TanDose30 209.07 J/m² m
+ el. SED30 0.2475. UVA30 9570.3 J/m². UVB30 324.596 J/m². Conf 46. interpol
+ ated hourly. tier C. cold\; 51% precipitation risk
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1000@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T180000Z
 DTEND:20261101T183000Z
-SUMMARY:Sun 10:00 (Abs 18/100)
-DESCRIPTION:Abs 18/100. Overall 16/100. Local 58/100. TanDose30 585.342 J/m
- ² mel. SED30 1.0125. UVA30 39412.8 J/m². UVB30 846.54 J/m². Conf 26. inter
- polated hourly. tier C. cold\; 51% precipitation risk
+SUMMARY:Sun 10:00 (Abs 7/100)
+DESCRIPTION:Abs 7/100. Overall 6/100. Local 35/100. TanDose30 221.31 J/m² m
+ el. SED30 0.2925. UVA30 10197 J/m². UVB30 343.26 J/m². Conf 45. interpolat
+ ed hourly. tier C. cold\; 51% precipitation risk
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1030@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T183000Z
 DTEND:20261101T190000Z
-SUMMARY:Sun 10:30 (Abs 23/100)
-DESCRIPTION:Abs 23/100. Overall 20/100. Local 68/100. TanDose30 750.078 J/m
- ² mel. SED30 1.31616. UVA30 47868.7 J/m². UVB30 1097.76 J/m². Conf 19. int
- erpolated hourly. tier C. cold\; 51% precipitation risk
+SUMMARY:Sun 10:30 (Abs 8/100)
+DESCRIPTION:Abs 8/100. Overall 7/100. Local 38/100. TanDose30 260.1 J/m² me
+ l. SED30 0.3375. UVA30 11258.9 J/m². UVB30 407.021 J/m². Conf 44. interpol
+ ated hourly. tier C. cold\; 51% precipitation risk
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1100@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T190000Z
 DTEND:20261101T193000Z
-SUMMARY:Sun 11:00 (Abs 28/100)
-DESCRIPTION:Abs 28/100. Overall 24/100. Local 79/100. TanDose30 909.972 J/m
- ² mel. SED30 1.62. UVA30 55801.8 J/m². UVB30 1342.98 J/m². Conf 13. interp
- olated hourly. tier C. 51% precipitation risk
+SUMMARY:Sun 11:00 (Abs 9/100)
+DESCRIPTION:Abs 9/100. Overall 8/100. Local 40/100. TanDose30 296.01 J/m² m
+ el. SED30 0.3825. UVA30 12097.8 J/m². UVB30 466.74 J/m². Conf 42. interpol
+ ated hourly. tier C. cold\; 51% precipitation risk
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1130@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T193000Z
 DTEND:20261101T200000Z
-SUMMARY:Sun 11:30 (Abs 30/100)
-DESCRIPTION:Abs 30/100. Overall 28/100. Local 82/100. TanDose30 956.232 J/m
- ² mel. SED30 1.8. UVA30 58848 J/m². UVB30 1410.21 J/m². Conf 12. interpola
- ted hourly. tier C
+SUMMARY:Sun 11:30 (Abs 10/100)
+DESCRIPTION:Abs 10/100. Overall 10/100. Local 42/100. TanDose30 329.958 J/m
+ ² mel. SED30 0.52884. UVA30 15675.5 J/m². UVB30 509.454 J/m². Conf 36. int
+ erpolated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1200@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T200000Z
 DTEND:20261101T203000Z
-SUMMARY:Sun 12:00 (Abs 31/100)
-DESCRIPTION:Abs 31/100. Overall 32/100. Local 84/100. TanDose30 990.918 J/m
- ² mel. SED30 1.98. UVA30 60679.8 J/m². UVB30 1462.86 J/m². Conf 10. interp
- olated hourly. tier C
+SUMMARY:Sun 12:00 (Abs 11/100)
+DESCRIPTION:Abs 11/100. Overall 12/100. Local 44/100. TanDose30 360.522 J/m
+ ² mel. SED30 0.675. UVA30 18970.2 J/m². UVB30 547.56 J/m². Conf 29. interp
+ olated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1230@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T203000Z
 DTEND:20261101T210000Z
-SUMMARY:Sun 12:30 (Abs 28/100)
-DESCRIPTION:Abs 28/100. Overall 28/100. Local 78/100. TanDose30 897.714 J/m
- ² mel. SED30 1.9575. UVA30 57617.1 J/m². UVB30 1312.22 J/m². Conf 10. inte
- rpolated hourly. tier C
+SUMMARY:Sun 12:30 (Abs 18/100)
+DESCRIPTION:Abs 18/100. Overall 19/100. Local 58/100. TanDose30 594.396 J/m
+ ² mel. SED30 1.1925. UVA30 37106.7 J/m². UVB30 874.011 J/m². Conf 20. inte
+ rpolated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1300@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T210000Z
 DTEND:20261101T213000Z
 SUMMARY:Sun 13:00 (Abs 25/100)
-DESCRIPTION:Abs 25/100. Overall 26/100. Local 70/100. TanDose30 794.754 J/m
- ² mel. SED30 1.935. UVA30 53494.2 J/m². UVB30 1149.48 J/m². Conf 10. inter
- polated hourly. tier C
-END:VEVENT
-BEGIN:VEVENT
-UID:sunstack-30m-pacific-palisades-20261101T1330@pacific-palisades
-DTSTAMP:20261029T163332Z
-SEQUENCE:0
-DTSTART:20261101T213000Z
-DTEND:20261101T220000Z
-SUMMARY:Sun 13:30 (Abs 22/100)
-DESCRIPTION:Abs 22/100. Overall 23/100. Local 65/100. TanDose30 700.902 J/m
- ² mel. SED30 1.8225. UVA30 51022 J/m². UVB30 994.768 J/m². Conf 10. interp
+DESCRIPTION:Abs 25/100. Overall 26/100. Local 71/100. TanDose30 805.608 J/m
+ ² mel. SED30 1.71. UVA30 52844.4 J/m². UVB30 1171.98 J/m². Conf 11. interp
  olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
+UID:sunstack-30m-pacific-palisades-20261101T1330@pacific-palisades
+DTSTAMP:20261029T191402Z
+SEQUENCE:0
+DTSTART:20261101T213000Z
+DTEND:20261101T220000Z
+SUMMARY:Sun 13:30 (Abs 25/100)
+DESCRIPTION:Abs 25/100. Overall 26/100. Local 71/100. TanDose30 803.448 J/m
+ ² mel. SED30 1.90116. UVA30 57738.4 J/m². UVB30 1143.99 J/m². Conf 9. inte
+ rpolated hourly. tier C
+END:VEVENT
+BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1400@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T220000Z
 DTEND:20261101T223000Z
-SUMMARY:Sun 14:00 (Abs 18/100)
-DESCRIPTION:Abs 18/100. Overall 21/100. Local 58/100. TanDose30 595.17 J/m²
-  mel. SED30 1.71. UVA30 47115 J/m². UVB30 826.02 J/m². Conf 10. interpolat
- ed hourly. tier C
-END:VEVENT
-BEGIN:VEVENT
-UID:sunstack-30m-pacific-palisades-20261101T1430@pacific-palisades
-DTSTAMP:20261029T163332Z
-SEQUENCE:0
-DTSTART:20261101T223000Z
-DTEND:20261101T230000Z
-SUMMARY:Sun 14:30 (Abs 15/100)
-DESCRIPTION:Abs 15/100. Overall 18/100. Local 52/100. TanDose30 489.852 J/m
- ² mel. SED30 1.575. UVA30 44201.4 J/m². UVB30 653.077 J/m². Conf 10. inter
+SUMMARY:Sun 14:00 (Abs 24/100)
+DESCRIPTION:Abs 24/100. Overall 25/100. Local 69/100. TanDose30 775.854 J/m
+ ² mel. SED30 2.0925. UVA30 59599.8 J/m². UVB30 1085.76 J/m². Conf 8. inter
  polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
+UID:sunstack-30m-pacific-palisades-20261101T1430@pacific-palisades
+DTSTAMP:20261029T191402Z
+SEQUENCE:0
+DTSTART:20261101T223000Z
+DTEND:20261101T230000Z
+SUMMARY:Sun 14:30 (Abs 17/100)
+DESCRIPTION:Abs 17/100. Overall 10/100. Local 56/100. TanDose30 559.134 J/m
+ ² mel. SED30 1.755. UVA30 47586 J/m². UVB30 759.618 J/m². Conf 9. interpol
+ ated hourly. tier C. light precipitation — usable\, expect damp
+END:VEVENT
+BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1500@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T230000Z
 DTEND:20261101T233000Z
 SUMMARY:Sun 15:00 (Abs 11/100)
-DESCRIPTION:Abs 11/100. Overall 14/100. Local 45/100. TanDose30 369.126 J/m
- ² mel. SED30 1.44. UVA30 39074.4 J/m². UVB30 463.68 J/m². Conf 9. interpol
- ated hourly. tier C
+DESCRIPTION:Abs 11/100. Overall 7/100. Local 43/100. TanDose30 343.368 J/m²
+  mel. SED30 1.4175. UVA30 35703 J/m². UVB30 434.52 J/m². Conf 10. interpol
+ ated hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1530@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261101T233000Z
 DTEND:20261102T000000Z
-SUMMARY:Sun 15:30 (Abs 10/100)
-DESCRIPTION:Abs 10/100. Overall 13/100. Local 41/100. TanDose30 319.698 J/m
- ² mel. SED30 1.31616. UVA30 42077.8 J/m². UVB30 360.964 J/m². Conf 10. int
- erpolated hourly. tier C
+SUMMARY:Sun 15:30 (Abs 8/100)
+DESCRIPTION:Abs 8/100. Overall 5/100. Local 37/100. TanDose30 243.198 J/m² 
+ mel. SED30 1.1475. UVA30 29011.4 J/m². UVB30 289.373 J/m². Conf 14. interp
+ olated hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1600@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T000000Z
 DTEND:20261102T003000Z
-SUMMARY:Sun 16:00 (Abs 7/100)
-DESCRIPTION:Abs 7/100. Overall 10/100. Local 36/100. TanDose30 227.376 J/m²
-  mel. SED30 1.1925. UVA30 36909 J/m². UVB30 222.3 J/m². Conf 11. interpola
- ted hourly. tier C
+SUMMARY:Sun 16:00 (Abs 4/100)
+DESCRIPTION:Abs 4/100. Overall 3/100. Local 28/100. TanDose30 130.338 J/m² 
+ mel. SED30 0.8775. UVA30 20059.2 J/m². UVB30 132.84 J/m². Conf 19. interpo
+ lated hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1630@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T003000Z
 DTEND:20261102T010000Z
-SUMMARY:Sun 16:30 (Abs 4/100)
-DESCRIPTION:Abs 4/100. Overall 6/100. Local 27/100. TanDose30 121.464 J/m² 
- mel. SED30 0.88884. UVA30 18876.7 J/m². UVB30 122.889 J/m². Conf 16. inter
- polated hourly. tier C. cold
+SUMMARY:Sun 16:30 (Abs 2/100)
+DESCRIPTION:Abs 2/100. Overall 2/100. Local 21/100. TanDose30 79.02 J/m² me
+ l. SED30 0.73116. UVA30 11848.4 J/m². UVB30 82.0763 J/m². Conf 20. interpo
+ lated hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1700@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T010000Z
 DTEND:20261102T013000Z
@@ -990,7 +990,7 @@ DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T013000Z
 DTEND:20261102T020000Z
@@ -1001,7 +1001,7 @@ DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T020000Z
 DTEND:20261102T023000Z
@@ -1012,7 +1012,7 @@ DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261101T1830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T023000Z
 DTEND:20261102T030000Z
@@ -1023,216 +1023,216 @@ DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T0730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T153000Z
 DTEND:20261102T160000Z
 SUMMARY:Sun 07:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 1/100. Local 15/100. TanDose30 0 J/m² mel. S
- ED30 0.03384. UVA30 2130.42 J/m². UVB30 50.7684 J/m². Conf 21. interpolate
+ ED30 0.03384. UVA30 2103.06 J/m². UVB30 48.3946 J/m². Conf 20. interpolate
  d hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T0800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T160000Z
 DTEND:20261102T163000Z
-SUMMARY:Sun 08:00 (Abs 3/100)
-DESCRIPTION:Abs 3/100. Overall 4/100. Local 22/100. TanDose30 83.43 J/m² me
- l. SED30 0.0675. UVA30 5886 J/m². UVB30 119.34 J/m². Conf 21. interpolated
-  hourly. tier C. cold
+SUMMARY:Sun 08:00 (Abs 2/100)
+DESCRIPTION:Abs 2/100. Overall 4/100. Local 22/100. TanDose30 80.082 J/m² m
+ el. SED30 0.0675. UVA30 5810.4 J/m². UVB30 113.76 J/m². Conf 19. interpola
+ ted hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T0830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T163000Z
 DTEND:20261102T170000Z
 SUMMARY:Sun 08:30 (Abs 5/100)
-DESCRIPTION:Abs 5/100. Overall 8/100. Local 33/100. TanDose30 173.592 J/m² 
- mel. SED30 0.25884. UVA30 12895.2 J/m². UVB30 245.109 J/m². Conf 28. inter
+DESCRIPTION:Abs 5/100. Overall 8/100. Local 32/100. TanDose30 170.118 J/m² 
+ mel. SED30 0.25884. UVA30 12617.2 J/m². UVB30 240.292 J/m². Conf 27. inter
  polated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T0900@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T170000Z
 DTEND:20261102T173000Z
-SUMMARY:Sun 09:00 (Abs 9/100)
-DESCRIPTION:Abs 9/100. Overall 12/100. Local 39/100. TanDose30 277.452 J/m²
-  mel. SED30 0.45. UVA30 21609 J/m². UVB30 386.82 J/m². Conf 35. interpolat
- ed hourly. tier C. cold
+SUMMARY:Sun 09:00 (Abs 8/100)
+DESCRIPTION:Abs 8/100. Overall 11/100. Local 39/100. TanDose30 273.132 J/m²
+  mel. SED30 0.45. UVA30 21038.4 J/m². UVB30 381.96 J/m². Conf 35. interpol
+ ated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T0930@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T173000Z
 DTEND:20261102T180000Z
-SUMMARY:Sun 09:30 (Abs 12/100)
-DESCRIPTION:Abs 12/100. Overall 16/100. Local 47/100. TanDose30 402.57 J/m²
-  mel. SED30 0.70884. UVA30 29045.8 J/m². UVB30 572.623 J/m². Conf 37. inte
+SUMMARY:Sun 09:30 (Abs 13/100)
+DESCRIPTION:Abs 13/100. Overall 17/100. Local 49/100. TanDose30 429.606 J/m
+ ² mel. SED30 0.7425. UVA30 30687.2 J/m². UVB30 612.627 J/m². Conf 37. inte
  rpolated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T1000@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T180000Z
 DTEND:20261102T183000Z
-SUMMARY:Sun 10:00 (Abs 16/100)
-DESCRIPTION:Abs 16/100. Overall 20/100. Local 55/100. TanDose30 526.23 J/m²
-  mel. SED30 0.9675. UVA30 36309.6 J/m². UVB30 756.72 J/m². Conf 39. interp
- olated hourly. tier C. cold
+SUMMARY:Sun 10:00 (Abs 18/100)
+DESCRIPTION:Abs 18/100. Overall 23/100. Local 59/100. TanDose30 589.572 J/m
+ ² mel. SED30 1.035. UVA30 40752 J/m². UVB30 847.44 J/m². Conf 38. interpol
+ ated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T1030@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T183000Z
 DTEND:20261102T190000Z
-SUMMARY:Sun 10:30 (Abs 22/100)
-DESCRIPTION:Abs 22/100. Overall 26/100. Local 65/100. TanDose30 696.744 J/m
- ² mel. SED30 1.2825. UVA30 45692.2 J/m². UVB30 1013.65 J/m². Conf 27. inte
- rpolated hourly. tier C
+SUMMARY:Sun 10:30 (Abs 23/100)
+DESCRIPTION:Abs 23/100. Overall 27/100. Local 68/100. TanDose30 738.09 J/m²
+  mel. SED30 1.3275. UVA30 48769.6 J/m². UVB30 1072.01 J/m². Conf 26. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T1100@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T190000Z
 DTEND:20261102T193000Z
 SUMMARY:Sun 11:00 (Abs 27/100)
-DESCRIPTION:Abs 27/100. Overall 30/100. Local 76/100. TanDose30 864.792 J/m
- ² mel. SED30 1.5975. UVA30 54802.8 J/m². UVB30 1267.56 J/m². Conf 16. inte
- rpolated hourly. tier C
+DESCRIPTION:Abs 27/100. Overall 31/100. Local 78/100. TanDose30 881.01 J/m²
+  mel. SED30 1.62. UVA30 56161.8 J/m². UVB30 1289.7 J/m². Conf 15. interpol
+ ated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T1130@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T193000Z
 DTEND:20261102T200000Z
-SUMMARY:Sun 11:30 (Abs 28/100)
-DESCRIPTION:Abs 28/100. Overall 31/100. Local 80/100. TanDose30 910.152 J/m
- ² mel. SED30 1.7325. UVA30 57148.9 J/m². UVB30 1336.65 J/m². Conf 13. inte
- rpolated hourly. tier C
+SUMMARY:Sun 11:30 (Abs 29/100)
+DESCRIPTION:Abs 29/100. Overall 32/100. Local 81/100. TanDose30 927.144 J/m
+ ² mel. SED30 1.755. UVA30 58340.2 J/m². UVB30 1361 J/m². Conf 13. interpol
+ ated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T1200@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T200000Z
 DTEND:20261102T203000Z
-SUMMARY:Sun 12:00 (Abs 29/100)
-DESCRIPTION:Abs 29/100. Overall 32/100. Local 82/100. TanDose30 944.334 J/m
- ² mel. SED30 1.8675. UVA30 58302 J/m². UVB30 1391.76 J/m². Conf 10. interp
+SUMMARY:Sun 12:00 (Abs 30/100)
+DESCRIPTION:Abs 30/100. Overall 32/100. Local 83/100. TanDose30 961.884 J/m
+ ² mel. SED30 1.89. UVA30 59299.2 J/m². UVB30 1418.04 J/m². Conf 10. interp
  olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T1230@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T203000Z
 DTEND:20261102T210000Z
 SUMMARY:Sun 12:30 (Abs 29/100)
-DESCRIPTION:Abs 29/100. Overall 31/100. Local 81/100. TanDose30 928.71 J/m²
-  mel. SED30 1.98. UVA30 60159.8 J/m². UVB30 1354.8 J/m². Conf 9. interpola
- ted hourly. tier C
+DESCRIPTION:Abs 29/100. Overall 31/100. Local 82/100. TanDose30 937.062 J/m
+ ² mel. SED30 1.99116. UVA30 60827.9 J/m². UVB30 1366.36 J/m². Conf 9. inte
+ rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T1300@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T210000Z
 DTEND:20261102T213000Z
 SUMMARY:Sun 13:00 (Abs 28/100)
-DESCRIPTION:Abs 28/100. Overall 30/100. Local 79/100. TanDose30 898.776 J/m
- ² mel. SED30 2.0925. UVA30 60451.2 J/m². UVB30 1300.14 J/m². Conf 8. inter
- polated hourly. tier C
-END:VEVENT
-BEGIN:VEVENT
-UID:sunstack-30m-pacific-palisades-20261102T1330@pacific-palisades
-DTSTAMP:20261029T163332Z
-SEQUENCE:0
-DTSTART:20261102T213000Z
-DTEND:20261102T220000Z
-SUMMARY:Sun 13:30 (Abs 26/100)
-DESCRIPTION:Abs 26/100. Overall 28/100. Local 75/100. TanDose30 848.088 J/m
- ² mel. SED30 2.07. UVA30 60970.6 J/m². UVB30 1207.45 J/m². Conf 8. interpo
+DESCRIPTION:Abs 28/100. Overall 30/100. Local 79/100. TanDose30 898.002 J/m
+ ² mel. SED30 2.0925. UVA30 60795 J/m². UVB30 1297.08 J/m². Conf 8. interpo
  lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
-UID:sunstack-30m-pacific-palisades-20261102T1400@pacific-palisades
-DTSTAMP:20261029T163332Z
+UID:sunstack-30m-pacific-palisades-20261102T1330@pacific-palisades
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
-DTSTART:20261102T220000Z
-DTEND:20261102T223000Z
-SUMMARY:Sun 14:00 (Abs 24/100)
-DESCRIPTION:Abs 24/100. Overall 27/100. Local 70/100. TanDose30 779.526 J/m
- ² mel. SED30 2.0475. UVA30 59351.4 J/m². UVB30 1093.5 J/m². Conf 8. interp
+DTSTART:20261102T213000Z
+DTEND:20261102T220000Z
+SUMMARY:Sun 13:30 (Abs 28/100)
+DESCRIPTION:Abs 28/100. Overall 30/100. Local 78/100. TanDose30 892.314 J/m
+ ² mel. SED30 2.115. UVA30 62736.9 J/m². UVB30 1277.37 J/m². Conf 8. interp
  olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
+UID:sunstack-30m-pacific-palisades-20261102T1400@pacific-palisades
+DTSTAMP:20261029T191402Z
+SEQUENCE:0
+DTSTART:20261102T220000Z
+DTEND:20261102T223000Z
+SUMMARY:Sun 14:00 (Abs 27/100)
+DESCRIPTION:Abs 27/100. Overall 29/100. Local 76/100. TanDose30 866.214 J/m
+ ² mel. SED30 2.1375. UVA30 62285.4 J/m². UVB30 1233.18 J/m². Conf 7. inter
+ polated hourly. tier C
+END:VEVENT
+BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T1430@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T223000Z
 DTEND:20261102T230000Z
-SUMMARY:Sun 14:30 (Abs 19/100)
-DESCRIPTION:Abs 19/100. Overall 22/100. Local 60/100. TanDose30 604.764 J/m
- ² mel. SED30 1.90116. UVA30 57355.4 J/m². UVB30 792.574 J/m². Conf 8. inte
+SUMMARY:Sun 14:30 (Abs 20/100)
+DESCRIPTION:Abs 20/100. Overall 23/100. Local 62/100. TanDose30 645.246 J/m
+ ² mel. SED30 1.94634. UVA30 58600.1 J/m². UVB30 858.424 J/m². Conf 7. inte
  rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T1500@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T230000Z
 DTEND:20261102T233000Z
 SUMMARY:Sun 15:00 (Abs 13/100)
-DESCRIPTION:Abs 13/100. Overall 16/100. Local 48/100. TanDose30 409.878 J/m
- ² mel. SED30 1.755. UVA30 52347.6 J/m². UVB30 470.7 J/m². Conf 7. interpol
- ated hourly. tier C
+DESCRIPTION:Abs 13/100. Overall 16/100. Local 48/100. TanDose30 406.206 J/m
+ ² mel. SED30 1.755. UVA30 52299 J/m². UVB30 464.4 J/m². Conf 7. interpolat
+ ed hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T1530@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261102T233000Z
 DTEND:20261103T000000Z
-SUMMARY:Sun 15:30 (Abs 11/100)
-DESCRIPTION:Abs 11/100. Overall 14/100. Local 44/100. TanDose30 344.106 J/m
- ² mel. SED30 1.47384. UVA30 47612.1 J/m². UVB30 377.086 J/m². Conf 9. inte
+SUMMARY:Sun 15:30 (Abs 10/100)
+DESCRIPTION:Abs 10/100. Overall 14/100. Local 43/100. TanDose30 333.954 J/m
+ ² mel. SED30 1.47384. UVA30 47444.7 J/m². UVB30 359.846 J/m². Conf 9. inte
  rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T1600@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T000000Z
 DTEND:20261103T003000Z
-SUMMARY:Sun 16:00 (Abs 8/100)
-DESCRIPTION:Abs 8/100. Overall 11/100. Local 37/100. TanDose30 249.966 J/m²
-  mel. SED30 1.1925. UVA30 37242 J/m². UVB30 260.82 J/m². Conf 10. interpol
- ated hourly. tier C
+SUMMARY:Sun 16:00 (Abs 7/100)
+DESCRIPTION:Abs 7/100. Overall 11/100. Local 36/100. TanDose30 233.91 J/m² 
+ mel. SED30 1.1925. UVA30 36966.6 J/m². UVB30 233.64 J/m². Conf 10. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T1630@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T003000Z
 DTEND:20261103T010000Z
 SUMMARY:Sun 16:30 (Abs 4/100)
-DESCRIPTION:Abs 4/100. Overall 7/100. Local 29/100. TanDose30 132.264 J/m² 
- mel. SED30 0.88884. UVA30 18880.5 J/m². UVB30 142.09 J/m². Conf 15. interp
- olated hourly. tier C
+DESCRIPTION:Abs 4/100. Overall 7/100. Local 28/100. TanDose30 124.362 J/m² 
+ mel. SED30 0.88884. UVA30 18836.4 J/m². UVB30 128.235 J/m². Conf 15. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T1700@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T010000Z
 DTEND:20261103T013000Z
@@ -1243,227 +1243,227 @@ DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261102T1730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T013000Z
 DTEND:20261103T020000Z
 SUMMARY:Sun 17:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
  D30 0.34884. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tie
- r C. cold
+ r C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T0730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T153000Z
 DTEND:20261103T160000Z
 SUMMARY:Sun 07:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 1/100. Local 15/100. TanDose30 0 J/m² mel. S
- ED30 0.03384. UVA30 2106.16 J/m². UVB30 44.8639 J/m². Conf 25. interpolate
- d hourly. tier C. cold
+ ED30 0.03384. UVA30 2142.5 J/m². UVB30 44.7111 J/m². Conf 25. interpolated
+  hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T0800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T160000Z
 DTEND:20261103T163000Z
 SUMMARY:Sun 08:00 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 4/100. Local 20/100. TanDose30 75.618 J/m² m
- el. SED30 0.0675. UVA30 5841 J/m². UVB30 105.66 J/m². Conf 25. interpolate
+DESCRIPTION:Abs 2/100. Overall 4/100. Local 20/100. TanDose30 75.69 J/m² me
+ l. SED30 0.0675. UVA30 5941.8 J/m². UVB30 105.3 J/m². Conf 25. interpolate
  d hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T0830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T163000Z
 DTEND:20261103T170000Z
 SUMMARY:Sun 08:30 (Abs 5/100)
-DESCRIPTION:Abs 5/100. Overall 8/100. Local 33/100. TanDose30 169.47 J/m² m
- el. SED30 0.315. UVA30 13269.7 J/m². UVB30 235.936 J/m². Conf 28. interpol
- ated hourly. tier C. cold
+DESCRIPTION:Abs 5/100. Overall 8/100. Local 32/100. TanDose30 168.948 J/m² 
+ mel. SED30 0.315. UVA30 13363.3 J/m². UVB30 234.542 J/m². Conf 28. interpo
+ lated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T0900@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T170000Z
 DTEND:20261103T173000Z
-SUMMARY:Sun 09:00 (Abs 9/100)
-DESCRIPTION:Abs 9/100. Overall 12/100. Local 39/100. TanDose30 277.038 J/m²
-  mel. SED30 0.5625. UVA30 22478.4 J/m². UVB30 381.78 J/m². Conf 32. interp
+SUMMARY:Sun 09:00 (Abs 8/100)
+DESCRIPTION:Abs 8/100. Overall 12/100. Local 39/100. TanDose30 275.886 J/m²
+  mel. SED30 0.5625. UVA30 22577.4 J/m². UVB30 379.26 J/m². Conf 32. interp
  olated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T0930@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T173000Z
 DTEND:20261103T180000Z
 SUMMARY:Sun 09:30 (Abs 13/100)
-DESCRIPTION:Abs 13/100. Overall 18/100. Local 50/100. TanDose30 430.92 J/m²
-  mel. SED30 0.8325. UVA30 31906.4 J/m². UVB30 608.952 J/m². Conf 32. inter
- polated hourly. tier C
+DESCRIPTION:Abs 13/100. Overall 18/100. Local 50/100. TanDose30 430.182 J/m
+ ² mel. SED30 0.84384. UVA30 31956.1 J/m². UVB30 607.385 J/m². Conf 32. int
+ erpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1000@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T180000Z
 DTEND:20261103T183000Z
 SUMMARY:Sun 10:00 (Abs 18/100)
-DESCRIPTION:Abs 18/100. Overall 23/100. Local 59/100. TanDose30 586.638 J/m
- ² mel. SED30 1.1025. UVA30 41558.4 J/m². UVB30 838.26 J/m². Conf 32. inter
- polated hourly. tier C
+DESCRIPTION:Abs 18/100. Overall 23/100. Local 59/100. TanDose30 586.368 J/m
+ ² mel. SED30 1.125. UVA30 41567.4 J/m². UVB30 837.72 J/m². Conf 32. interp
+ olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1030@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T183000Z
 DTEND:20261103T190000Z
 SUMMARY:Sun 10:30 (Abs 22/100)
-DESCRIPTION:Abs 22/100. Overall 27/100. Local 67/100. TanDose30 724.59 J/m²
-  mel. SED30 1.36116. UVA30 49911.1 J/m². UVB30 1042.36 J/m². Conf 32. inte
+DESCRIPTION:Abs 22/100. Overall 27/100. Local 67/100. TanDose30 722.268 J/m
+ ² mel. SED30 1.3725. UVA30 49840.4 J/m². UVB30 1038.58 J/m². Conf 32. inte
  rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1100@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T190000Z
 DTEND:20261103T193000Z
 SUMMARY:Sun 11:00 (Abs 26/100)
-DESCRIPTION:Abs 26/100. Overall 32/100. Local 76/100. TanDose30 856.602 J/m
- ² mel. SED30 1.62. UVA30 57578.4 J/m². UVB30 1239.3 J/m². Conf 32. interpo
- lated hourly. tier C
+DESCRIPTION:Abs 26/100. Overall 32/100. Local 76/100. TanDose30 852.228 J/m
+ ² mel. SED30 1.62. UVA30 57427.2 J/m². UVB30 1232.28 J/m². Conf 32. interp
+ olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1130@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T193000Z
 DTEND:20261103T200000Z
 SUMMARY:Sun 11:30 (Abs 29/100)
-DESCRIPTION:Abs 29/100. Overall 35/100. Local 82/100. TanDose30 940.176 J/m
- ² mel. SED30 1.81134. UVA30 62454.4 J/m². UVB30 1363.87 J/m². Conf 32. int
+DESCRIPTION:Abs 29/100. Overall 35/100. Local 82/100. TanDose30 937.566 J/m
+ ² mel. SED30 1.81134. UVA30 62394.5 J/m². UVB30 1359.53 J/m². Conf 32. int
  erpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1200@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T200000Z
 DTEND:20261103T203000Z
 SUMMARY:Sun 12:00 (Abs 31/100)
-DESCRIPTION:Abs 31/100. Overall 38/100. Local 87/100. TanDose30 1012.41 J/m
- ² mel. SED30 2.0025. UVA30 66061.8 J/m². UVB30 1474.56 J/m². Conf 32. inte
- rpolated hourly. tier C
+DESCRIPTION:Abs 31/100. Overall 38/100. Local 87/100. TanDose30 1011.6 J/m²
+  mel. SED30 2.0025. UVA30 66094.2 J/m². UVB30 1472.94 J/m². Conf 32. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1230@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T203000Z
 DTEND:20261103T210000Z
 SUMMARY:Sun 12:30 (Abs 31/100)
-DESCRIPTION:Abs 31/100. Overall 38/100. Local 87/100. TanDose30 1006.29 J/m
- ² mel. SED30 2.05884. UVA30 67677.5 J/m². UVB30 1455.69 J/m². Conf 32. int
+DESCRIPTION:Abs 31/100. Overall 38/100. Local 87/100. TanDose30 1011.17 J/m
+ ² mel. SED30 2.05884. UVA30 67968.1 J/m². UVB30 1462.94 J/m². Conf 32. int
  erpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1300@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T210000Z
 DTEND:20261103T213000Z
-SUMMARY:Sun 13:00 (Abs 30/100)
-DESCRIPTION:Abs 30/100. Overall 37/100. Local 86/100. TanDose30 985.5 J/m² 
- mel. SED30 2.115. UVA30 67635 J/m². UVB30 1418.94 J/m². Conf 32. interpola
- ted hourly. tier C
+SUMMARY:Sun 13:00 (Abs 31/100)
+DESCRIPTION:Abs 31/100. Overall 38/100. Local 86/100. TanDose30 996.012 J/m
+ ² mel. SED30 2.115. UVA30 68176.8 J/m². UVB30 1434.96 J/m². Conf 32. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1330@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T213000Z
 DTEND:20261103T220000Z
-SUMMARY:Sun 13:30 (Abs 29/100)
-DESCRIPTION:Abs 29/100. Overall 36/100. Local 83/100. TanDose30 948.042 J/m
- ² mel. SED30 2.03634. UVA30 67276.1 J/m². UVB30 1354.08 J/m². Conf 32. int
- erpolated hourly. tier C
+SUMMARY:Sun 13:30 (Abs 30/100)
+DESCRIPTION:Abs 30/100. Overall 36/100. Local 83/100. TanDose30 953.208 J/m
+ ² mel. SED30 2.0475. UVA30 67482.5 J/m². UVB30 1362.24 J/m². Conf 32. inte
+ rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1400@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T220000Z
 DTEND:20261103T223000Z
 SUMMARY:Sun 14:00 (Abs 28/100)
-DESCRIPTION:Abs 28/100. Overall 35/100. Local 79/100. TanDose30 893.502 J/m
- ² mel. SED30 1.9575. UVA30 64897.2 J/m². UVB30 1268.82 J/m². Conf 32. inte
- rpolated hourly. tier C
+DESCRIPTION:Abs 28/100. Overall 35/100. Local 79/100. TanDose30 893.214 J/m
+ ² mel. SED30 1.98. UVA30 64762.2 J/m². UVB30 1269 J/m². Conf 32. interpola
+ ted hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1430@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T223000Z
 DTEND:20261103T230000Z
 SUMMARY:Sun 14:30 (Abs 20/100)
-DESCRIPTION:Abs 20/100. Overall 27/100. Local 64/100. TanDose30 662.688 J/m
- ² mel. SED30 1.78884. UVA30 60337.9 J/m². UVB30 880.861 J/m². Conf 28. int
- erpolated hourly. tier C
+DESCRIPTION:Abs 20/100. Overall 27/100. Local 64/100. TanDose30 662.976 J/m
+ ² mel. SED30 1.8. UVA30 60275.5 J/m². UVB30 881.664 J/m². Conf 28. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1500@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T230000Z
 DTEND:20261103T233000Z
 SUMMARY:Sun 15:00 (Abs 13/100)
-DESCRIPTION:Abs 13/100. Overall 18/100. Local 48/100. TanDose30 413.55 J/m²
-  mel. SED30 1.62. UVA30 53121.6 J/m². UVB30 473.4 J/m². Conf 24. interpola
- ted hourly. tier C
+DESCRIPTION:Abs 13/100. Overall 18/100. Local 48/100. TanDose30 414.234 J/m
+ ² mel. SED30 1.62. UVA30 53114.4 J/m². UVB30 474.66 J/m². Conf 24. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1530@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261103T233000Z
 DTEND:20261104T000000Z
-SUMMARY:Sun 15:30 (Abs 10/100)
-DESCRIPTION:Abs 10/100. Overall 16/100. Local 43/100. TanDose30 339.858 J/m
- ² mel. SED30 1.395. UVA30 48564.5 J/m². UVB30 364.844 J/m². Conf 24. inter
+SUMMARY:Sun 15:30 (Abs 11/100)
+DESCRIPTION:Abs 11/100. Overall 16/100. Local 44/100. TanDose30 340.614 J/m
+ ² mel. SED30 1.395. UVA30 48410.8 J/m². UVB30 366.944 J/m². Conf 24. inter
  polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1600@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T000000Z
 DTEND:20261104T003000Z
 SUMMARY:Sun 16:00 (Abs 7/100)
-DESCRIPTION:Abs 7/100. Overall 12/100. Local 37/100. TanDose30 236.754 J/m²
-  mel. SED30 1.17. UVA30 38025 J/m². UVB30 233.46 J/m². Conf 24. interpolat
- ed hourly. tier C
+DESCRIPTION:Abs 7/100. Overall 12/100. Local 37/100. TanDose30 237.636 J/m²
+  mel. SED30 1.17. UVA30 37762.2 J/m². UVB30 236.34 J/m². Conf 24. interpol
+ ated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1630@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T003000Z
 DTEND:20261104T010000Z
 SUMMARY:Sun 16:30 (Abs 4/100)
-DESCRIPTION:Abs 4/100. Overall 7/100. Local 28/100. TanDose30 123.57 J/m² m
- el. SED30 0.91116. UVA30 19267.9 J/m². UVB30 124.696 J/m². Conf 24. interp
- olated hourly. tier C
+DESCRIPTION:Abs 4/100. Overall 7/100. Local 28/100. TanDose30 125.208 J/m² 
+ mel. SED30 0.91116. UVA30 19342.3 J/m². UVB30 127.256 J/m². Conf 24. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1700@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T010000Z
 DTEND:20261104T013000Z
@@ -1474,7 +1474,7 @@ DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261103T1730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T013000Z
 DTEND:20261104T020000Z
@@ -1485,216 +1485,216 @@ DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T0730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T153000Z
 DTEND:20261104T160000Z
 SUMMARY:Sun 07:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 1/100. Local 15/100. TanDose30 0 J/m² mel. S
- ED30 0.03384. UVA30 2117.37 J/m². UVB30 43.3274 J/m². Conf 25. interpolate
+ ED30 0.03384. UVA30 2193.01 J/m². UVB30 40.6575 J/m². Conf 24. interpolate
  d hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T0800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T160000Z
 DTEND:20261104T163000Z
 SUMMARY:Sun 08:00 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 4/100. Local 21/100. TanDose30 73.836 J/m² m
- el. SED30 0.0675. UVA30 5895 J/m². UVB30 102.24 J/m². Conf 25. interpolate
- d hourly. tier C. cold
+DESCRIPTION:Abs 2/100. Overall 4/100. Local 20/100. TanDose30 70.884 J/m² m
+ el. SED30 0.0675. UVA30 6105.6 J/m². UVB30 95.94 J/m². Conf 24. interpolat
+ ed hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T0830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T163000Z
 DTEND:20261104T170000Z
 SUMMARY:Sun 08:30 (Abs 5/100)
-DESCRIPTION:Abs 5/100. Overall 8/100. Local 32/100. TanDose30 166.032 J/m² 
- mel. SED30 0.30384. UVA30 12932 J/m². UVB30 231.484 J/m². Conf 29. interpo
- lated hourly. tier C. cold
+DESCRIPTION:Abs 5/100. Overall 8/100. Local 32/100. TanDose30 162.288 J/m² 
+ mel. SED30 0.30384. UVA30 13035.5 J/m². UVB30 224.308 J/m². Conf 27. inter
+ polated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T0900@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T170000Z
 DTEND:20261104T173000Z
 SUMMARY:Sun 09:00 (Abs 8/100)
-DESCRIPTION:Abs 8/100. Overall 12/100. Local 39/100. TanDose30 272.286 J/m²
-  mel. SED30 0.54. UVA30 21789 J/m². UVB30 376.74 J/m². Conf 33. interpolat
- ed hourly. tier C. cold
+DESCRIPTION:Abs 8/100. Overall 11/100. Local 39/100. TanDose30 267.588 J/m²
+  mel. SED30 0.54. UVA30 21810.6 J/m². UVB30 368.28 J/m². Conf 30. interpol
+ ated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T0930@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T173000Z
 DTEND:20261104T180000Z
-SUMMARY:Sun 09:30 (Abs 13/100)
-DESCRIPTION:Abs 13/100. Overall 16/100. Local 48/100. TanDose30 405.486 J/m
- ² mel. SED30 0.82116. UVA30 31193.7 J/m². UVB30 567.211 J/m². Conf 32. int
+SUMMARY:Sun 09:30 (Abs 12/100)
+DESCRIPTION:Abs 12/100. Overall 16/100. Local 48/100. TanDose30 400.176 J/m
+ ² mel. SED30 0.82116. UVA30 31405.7 J/m². UVB30 556.737 J/m². Conf 30. int
  erpolated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1000@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T180000Z
 DTEND:20261104T183000Z
 SUMMARY:Sun 10:00 (Abs 17/100)
-DESCRIPTION:Abs 17/100. Overall 21/100. Local 57/100. TanDose30 540.648 J/m
- ² mel. SED30 1.1025. UVA30 40849.2 J/m². UVB30 759.96 J/m². Conf 31. inter
- polated hourly. tier C
+DESCRIPTION:Abs 17/100. Overall 20/100. Local 56/100. TanDose30 534.654 J/m
+ ² mel. SED30 1.1025. UVA30 41245.2 J/m². UVB30 747.36 J/m². Conf 30. inter
+ polated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1030@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T183000Z
 DTEND:20261104T190000Z
 SUMMARY:Sun 10:30 (Abs 21/100)
-DESCRIPTION:Abs 21/100. Overall 26/100. Local 66/100. TanDose30 686.016 J/m
- ² mel. SED30 1.35. UVA30 48729.5 J/m². UVB30 979.609 J/m². Conf 31. interp
+DESCRIPTION:Abs 21/100. Overall 26/100. Local 66/100. TanDose30 686.628 J/m
+ ² mel. SED30 1.35. UVA30 48875.4 J/m². UVB30 979.979 J/m². Conf 30. interp
  olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1100@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T190000Z
 DTEND:20261104T193000Z
 SUMMARY:Sun 11:00 (Abs 26/100)
-DESCRIPTION:Abs 26/100. Overall 30/100. Local 75/100. TanDose30 825.732 J/m
- ² mel. SED30 1.5975. UVA30 55938.6 J/m². UVB30 1192.5 J/m². Conf 30. inter
- polated hourly. tier C
+DESCRIPTION:Abs 26/100. Overall 31/100. Local 75/100. TanDose30 832.914 J/m
+ ² mel. SED30 1.5975. UVA30 55830.6 J/m². UVB30 1205.82 J/m². Conf 30. inte
+ rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1130@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T193000Z
 DTEND:20261104T200000Z
 SUMMARY:Sun 11:30 (Abs 28/100)
-DESCRIPTION:Abs 28/100. Overall 33/100. Local 80/100. TanDose30 897.93 J/m²
-  mel. SED30 1.78884. UVA30 61213.4 J/m². UVB30 1294.88 J/m². Conf 30. inte
- rpolated hourly. tier C
+DESCRIPTION:Abs 28/100. Overall 34/100. Local 81/100. TanDose30 902.664 J/m
+ ² mel. SED30 1.78884. UVA30 60699.8 J/m². UVB30 1305.84 J/m². Conf 30. int
+ erpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1200@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T200000Z
 DTEND:20261104T203000Z
 SUMMARY:Sun 12:00 (Abs 30/100)
-DESCRIPTION:Abs 30/100. Overall 36/100. Local 84/100. TanDose30 959.22 J/m²
-  mel. SED30 1.98. UVA30 65239.2 J/m². UVB30 1384.02 J/m². Conf 30. interpo
- lated hourly. tier C
+DESCRIPTION:Abs 30/100. Overall 36/100. Local 85/100. TanDose30 961.452 J/m
+ ² mel. SED30 1.98. UVA30 64328.4 J/m². UVB30 1392.48 J/m². Conf 30. interp
+ olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1230@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T203000Z
 DTEND:20261104T210000Z
 SUMMARY:Sun 12:30 (Abs 30/100)
-DESCRIPTION:Abs 30/100. Overall 36/100. Local 84/100. TanDose30 955.368 J/m
- ² mel. SED30 2.025. UVA30 66731.7 J/m². UVB30 1369.79 J/m². Conf 30. inter
+DESCRIPTION:Abs 30/100. Overall 36/100. Local 85/100. TanDose30 961.182 J/m
+ ² mel. SED30 2.025. UVA30 66085.7 J/m². UVB30 1383.34 J/m². Conf 30. inter
  polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1300@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T210000Z
 DTEND:20261104T213000Z
 SUMMARY:Sun 13:00 (Abs 29/100)
-DESCRIPTION:Abs 29/100. Overall 35/100. Local 83/100. TanDose30 937.44 J/m²
-  mel. SED30 2.07. UVA30 66582 J/m². UVB30 1338.66 J/m². Conf 30. interpola
- ted hourly. tier C
+DESCRIPTION:Abs 29/100. Overall 36/100. Local 84/100. TanDose30 946.872 J/m
+ ² mel. SED30 2.07. UVA30 66223.8 J/m². UVB30 1357.2 J/m². Conf 30. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1330@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T213000Z
 DTEND:20261104T220000Z
 SUMMARY:Sun 13:30 (Abs 27/100)
-DESCRIPTION:Abs 27/100. Overall 33/100. Local 78/100. TanDose30 863.82 J/m²
-  mel. SED30 1.99116. UVA30 65221 J/m². UVB30 1214.46 J/m². Conf 30. interp
- olated hourly. tier C
+DESCRIPTION:Abs 27/100. Overall 33/100. Local 78/100. TanDose30 870.156 J/m
+ ² mel. SED30 2.0025. UVA30 64818.9 J/m². UVB30 1227.69 J/m². Conf 30. inte
+ rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1400@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T220000Z
 DTEND:20261104T223000Z
 SUMMARY:Sun 14:00 (Abs 24/100)
-DESCRIPTION:Abs 24/100. Overall 30/100. Local 71/100. TanDose30 774.594 J/m
- ² mel. SED30 1.9125. UVA30 61914.6 J/m². UVB30 1072.08 J/m². Conf 30. inte
- rpolated hourly. tier C
+DESCRIPTION:Abs 24/100. Overall 30/100. Local 71/100. TanDose30 777.744 J/m
+ ² mel. SED30 1.935. UVA30 61482.6 J/m². UVB30 1079.82 J/m². Conf 30. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1430@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T223000Z
 DTEND:20261104T230000Z
 SUMMARY:Sun 14:30 (Abs 18/100)
-DESCRIPTION:Abs 18/100. Overall 24/100. Local 59/100. TanDose30 583.2 J/m² 
- mel. SED30 1.74384. UVA30 58019.8 J/m². UVB30 750.938 J/m². Conf 27. inter
- polated hourly. tier C
+DESCRIPTION:Abs 18/100. Overall 24/100. Local 59/100. TanDose30 585.882 J/m
+ ² mel. SED30 1.76616. UVA30 57370.6 J/m². UVB30 758.908 J/m². Conf 27. int
+ erpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1500@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T230000Z
 DTEND:20261104T233000Z
 SUMMARY:Sun 15:00 (Abs 12/100)
-DESCRIPTION:Abs 12/100. Overall 17/100. Local 46/100. TanDose30 375.3 J/m² 
- mel. SED30 1.575. UVA30 51559.2 J/m². UVB30 413.1 J/m². Conf 23. interpola
- ted hourly. tier C
+DESCRIPTION:Abs 12/100. Overall 17/100. Local 46/100. TanDose30 377.568 J/m
+ ² mel. SED30 1.5975. UVA30 50733 J/m². UVB30 421.2 J/m². Conf 24. interpol
+ ated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1530@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261104T233000Z
 DTEND:20261105T000000Z
 SUMMARY:Sun 15:30 (Abs 9/100)
-DESCRIPTION:Abs 9/100. Overall 14/100. Local 41/100. TanDose30 302.346 J/m²
-  mel. SED30 1.36116. UVA30 46280.9 J/m². UVB30 309.392 J/m². Conf 23. inte
- rpolated hourly. tier C
+DESCRIPTION:Abs 9/100. Overall 14/100. Local 41/100. TanDose30 301.41 J/m² 
+ mel. SED30 1.38384. UVA30 45708.6 J/m². UVB30 310.552 J/m². Conf 24. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1600@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261105T000000Z
 DTEND:20261105T003000Z
 SUMMARY:Sun 16:00 (Abs 6/100)
-DESCRIPTION:Abs 6/100. Overall 10/100. Local 34/100. TanDose30 202.41 J/m² 
- mel. SED30 1.1475. UVA30 35242.2 J/m². UVB30 186.12 J/m². Conf 23. interpo
- lated hourly. tier C
+DESCRIPTION:Abs 6/100. Overall 10/100. Local 34/100. TanDose30 198.324 J/m²
+  mel. SED30 1.17. UVA30 34970.4 J/m². UVB30 180.18 J/m². Conf 24. interpol
+ ated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1630@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261105T003000Z
 DTEND:20261105T010000Z
 SUMMARY:Sun 16:30 (Abs 3/100)
-DESCRIPTION:Abs 3/100. Overall 6/100. Local 26/100. TanDose30 105.444 J/m² 
- mel. SED30 0.9. UVA30 17423.3 J/m². UVB30 101.579 J/m². Conf 23. interpola
- ted hourly. tier C
+DESCRIPTION:Abs 3/100. Overall 6/100. Local 25/100. TanDose30 104.4 J/m² me
+ l. SED30 0.91116. UVA30 17149.2 J/m². UVB30 101.052 J/m². Conf 24. interpo
+ lated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1700@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261105T010000Z
 DTEND:20261105T013000Z
@@ -1705,7 +1705,7 @@ DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261104T1730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261105T013000Z
 DTEND:20261105T020000Z
@@ -1716,678 +1716,678 @@ DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261105T0730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261105T153000Z
 DTEND:20261105T160000Z
 SUMMARY:Sun 07:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 1/100. Local 15/100. TanDose30 0 J/m² mel. S
- ED30 0.03384. UVA30 2076.7 J/m². UVB30 41.4896 J/m². Conf 23. interpolated
-  hourly. tier C. cold
+ ED30 0.03384. UVA30 2081.85 J/m². UVB30 41.4896 J/m². Conf 23. interpolate
+ d hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261105T0800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261105T160000Z
 DTEND:20261105T163000Z
 SUMMARY:Sun 08:00 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 4/100. Local 20/100. TanDose30 71.262 J/m² m
- el. SED30 0.0675. UVA30 5805 J/m². UVB30 98.1 J/m². Conf 23. interpolated 
- hourly. tier C. cold
+DESCRIPTION:Abs 2/100. Overall 4/100. Local 20/100. TanDose30 71.298 J/m² m
+ el. SED30 0.0675. UVA30 5819.4 J/m². UVB30 98.1 J/m². Conf 23. interpolate
+ d hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261105T0830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261105T163000Z
 DTEND:20261105T170000Z
 SUMMARY:Sun 08:30 (Abs 5/100)
-DESCRIPTION:Abs 5/100. Overall 8/100. Local 32/100. TanDose30 160.902 J/m² 
- mel. SED30 0.2925. UVA30 12039.4 J/m². UVB30 226.767 J/m². Conf 27. interp
- olated hourly. tier C. cold
+DESCRIPTION:Abs 5/100. Overall 7/100. Local 32/100. TanDose30 164.25 J/m² m
+ el. SED30 0.2925. UVA30 12308.8 J/m². UVB30 231.388 J/m². Conf 27. interpo
+ lated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261105T0900@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261105T170000Z
 DTEND:20261105T173000Z
 SUMMARY:Sun 09:00 (Abs 8/100)
-DESCRIPTION:Abs 8/100. Overall 11/100. Local 39/100. TanDose30 263.646 J/m²
-  mel. SED30 0.5175. UVA30 19913.4 J/m². UVB30 370.62 J/m². Conf 31. interp
- olated hourly. tier C. cold
+DESCRIPTION:Abs 8/100. Overall 11/100. Local 39/100. TanDose30 271.818 J/m²
+  mel. SED30 0.5175. UVA30 20631.6 J/m². UVB30 381.6 J/m². Conf 30. interpo
+ lated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261105T0930@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261105T173000Z
 DTEND:20261105T180000Z
 SUMMARY:Sun 09:30 (Abs 12/100)
-DESCRIPTION:Abs 12/100. Overall 15/100. Local 47/100. TanDose30 379.008 J/m
- ² mel. SED30 0.77616. UVA30 28402 J/m². UVB30 533.921 J/m². Conf 31. inter
- polated hourly. tier C. cold
+DESCRIPTION:Abs 12/100. Overall 15/100. Local 47/100. TanDose30 390.636 J/m
+ ² mel. SED30 0.7875. UVA30 29526.9 J/m². UVB30 549.022 J/m². Conf 30. inte
+ rpolated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261105T1000@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261105T180000Z
 DTEND:20261105T183000Z
-SUMMARY:Sun 10:00 (Abs 15/100)
-DESCRIPTION:Abs 15/100. Overall 19/100. Local 54/100. TanDose30 496.476 J/m
- ² mel. SED30 1.035. UVA30 37150.2 J/m². UVB30 699.66 J/m². Conf 32. interp
- olated hourly. tier C. cold
+SUMMARY:Sun 10:00 (Abs 16/100)
+DESCRIPTION:Abs 16/100. Overall 19/100. Local 55/100. TanDose30 511.416 J/m
+ ² mel. SED30 1.0575. UVA30 38669.4 J/m². UVB30 718.74 J/m². Conf 30. inter
+ polated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261105T1030@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261105T183000Z
 DTEND:20261105T190000Z
-SUMMARY:Sun 10:30 (Abs 20/100)
-DESCRIPTION:Abs 20/100. Overall 24/100. Local 64/100. TanDose30 649.926 J/m
- ² mel. SED30 1.2825. UVA30 44075.6 J/m². UVB30 938.363 J/m². Conf 32. inte
- rpolated hourly. tier C
+SUMMARY:Sun 10:30 (Abs 21/100)
+DESCRIPTION:Abs 21/100. Overall 25/100. Local 65/100. TanDose30 669.672 J/m
+ ² mel. SED30 1.2825. UVA30 45661.9 J/m². UVB30 965.66 J/m². Conf 30. inter
+ polated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261105T1100@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261105T190000Z
 DTEND:20261105T193000Z
-SUMMARY:Sun 11:00 (Abs 25/100)
-DESCRIPTION:Abs 25/100. Overall 30/100. Local 74/100. TanDose30 798.426 J/m
- ² mel. SED30 1.53. UVA30 50439.6 J/m². UVB30 1171.08 J/m². Conf 32. interp
- olated hourly. tier C
-END:VEVENT
-BEGIN:VEVENT
-UID:sunstack-30m-pacific-palisades-20261105T1130@pacific-palisades
-DTSTAMP:20261029T163332Z
-SEQUENCE:0
-DTSTART:20261105T193000Z
-DTEND:20261105T200000Z
-SUMMARY:Sun 11:30 (Abs 27/100)
-DESCRIPTION:Abs 27/100. Overall 33/100. Local 80/100. TanDose30 873.324 J/m
- ² mel. SED30 1.7325. UVA30 56945.9 J/m². UVB30 1272.17 J/m². Conf 31. inte
+SUMMARY:Sun 11:00 (Abs 26/100)
+DESCRIPTION:Abs 26/100. Overall 31/100. Local 75/100. TanDose30 822.348 J/m
+ ² mel. SED30 1.5075. UVA30 52016.4 J/m². UVB30 1205.82 J/m². Conf 31. inte
  rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
+UID:sunstack-30m-pacific-palisades-20261105T1130@pacific-palisades
+DTSTAMP:20261029T191402Z
+SEQUENCE:0
+DTSTART:20261105T193000Z
+DTEND:20261105T200000Z
+SUMMARY:Sun 11:30 (Abs 28/100)
+DESCRIPTION:Abs 28/100. Overall 34/100. Local 80/100. TanDose30 886.608 J/m
+ ² mel. SED30 1.69884. UVA30 57700 J/m². UVB30 1292.09 J/m². Conf 31. inter
+ polated hourly. tier C
+END:VEVENT
+BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261105T1200@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261105T200000Z
 DTEND:20261105T203000Z
 SUMMARY:Sun 12:00 (Abs 29/100)
-DESCRIPTION:Abs 29/100. Overall 35/100. Local 84/100. TanDose30 937.836 J/m
- ² mel. SED30 1.935. UVA30 62307 J/m². UVB30 1360.44 J/m². Conf 31. interpo
- lated hourly. tier C
+DESCRIPTION:Abs 29/100. Overall 36/100. Local 84/100. TanDose30 940.176 J/m
+ ² mel. SED30 1.89. UVA30 62204.4 J/m². UVB30 1365.12 J/m². Conf 32. interp
+ olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261105T1230@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261105T203000Z
 DTEND:20261105T210000Z
-SUMMARY:Sun 12:30 (Abs 29/100)
-DESCRIPTION:Abs 29/100. Overall 35/100. Local 83/100. TanDose30 930.24 J/m²
-  mel. SED30 1.98. UVA30 63748.4 J/m². UVB30 1339.83 J/m². Conf 31. interpo
- lated hourly. tier C
-END:VEVENT
-BEGIN:VEVENT
-UID:sunstack-30m-pacific-palisades-20261105T1300@pacific-palisades
-DTSTAMP:20261029T163332Z
-SEQUENCE:0
-DTSTART:20261105T210000Z
-DTEND:20261105T213000Z
-SUMMARY:Sun 13:00 (Abs 28/100)
-DESCRIPTION:Abs 28/100. Overall 35/100. Local 82/100. TanDose30 908.82 J/m²
-  mel. SED30 2.025. UVA30 63601.2 J/m². UVB30 1302.48 J/m². Conf 31. interp
- olated hourly. tier C
-END:VEVENT
-BEGIN:VEVENT
-UID:sunstack-30m-pacific-palisades-20261105T1330@pacific-palisades
-DTSTAMP:20261029T163332Z
-SEQUENCE:0
-DTSTART:20261105T213000Z
-DTEND:20261105T220000Z
-SUMMARY:Sun 13:30 (Abs 25/100)
-DESCRIPTION:Abs 25/100. Overall 32/100. Local 75/100. TanDose30 818.496 J/m
- ² mel. SED30 1.94634. UVA30 61738.8 J/m². UVB30 1151.03 J/m². Conf 31. int
- erpolated hourly. tier C
-END:VEVENT
-BEGIN:VEVENT
-UID:sunstack-30m-pacific-palisades-20261105T1400@pacific-palisades
-DTSTAMP:20261029T163332Z
-SEQUENCE:0
-DTSTART:20261105T220000Z
-DTEND:20261105T223000Z
-SUMMARY:Sun 14:00 (Abs 22/100)
-DESCRIPTION:Abs 22/100. Overall 28/100. Local 68/100. TanDose30 713.61 J/m²
-  mel. SED30 1.8675. UVA30 58064.4 J/m². UVB30 982.62 J/m². Conf 31. interp
- olated hourly. tier C
-END:VEVENT
-BEGIN:VEVENT
-UID:sunstack-30m-pacific-palisades-20261105T1430@pacific-palisades
-DTSTAMP:20261029T163332Z
-SEQUENCE:0
-DTSTART:20261105T223000Z
-DTEND:20261105T230000Z
-SUMMARY:Sun 14:30 (Abs 17/100)
-DESCRIPTION:Abs 17/100. Overall 23/100. Local 57/100. TanDose30 546.696 J/m
- ² mel. SED30 1.69884. UVA30 52971 J/m². UVB30 710.906 J/m². Conf 27. inter
+SUMMARY:Sun 12:30 (Abs 28/100)
+DESCRIPTION:Abs 28/100. Overall 35/100. Local 83/100. TanDose30 919.044 J/m
+ ² mel. SED30 1.935. UVA30 62810.2 J/m². UVB30 1324.56 J/m². Conf 31. inter
  polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
-UID:sunstack-30m-pacific-palisades-20261105T1500@pacific-palisades
-DTSTAMP:20261029T163332Z
+UID:sunstack-30m-pacific-palisades-20261105T1300@pacific-palisades
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
-DTSTART:20261105T230000Z
-DTEND:20261105T233000Z
-SUMMARY:Sun 15:00 (Abs 11/100)
-DESCRIPTION:Abs 11/100. Overall 17/100. Local 46/100. TanDose30 367.326 J/m
- ² mel. SED30 1.53. UVA30 45982.8 J/m². UVB30 426.42 J/m². Conf 24. interpo
+DTSTART:20261105T210000Z
+DTEND:20261105T213000Z
+SUMMARY:Sun 13:00 (Abs 27/100)
+DESCRIPTION:Abs 27/100. Overall 34/100. Local 80/100. TanDose30 884.808 J/m
+ ² mel. SED30 1.98. UVA30 61912.8 J/m². UVB30 1268.1 J/m². Conf 30. interpo
  lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
+UID:sunstack-30m-pacific-palisades-20261105T1330@pacific-palisades
+DTSTAMP:20261029T191402Z
+SEQUENCE:0
+DTSTART:20261105T213000Z
+DTEND:20261105T220000Z
+SUMMARY:Sun 13:30 (Abs 24/100)
+DESCRIPTION:Abs 24/100. Overall 30/100. Local 73/100. TanDose30 787.32 J/m²
+  mel. SED30 1.89. UVA30 59007.5 J/m². UVB30 1109.07 J/m². Conf 30. interpo
+ lated hourly. tier C
+END:VEVENT
+BEGIN:VEVENT
+UID:sunstack-30m-pacific-palisades-20261105T1400@pacific-palisades
+DTSTAMP:20261029T191402Z
+SEQUENCE:0
+DTSTART:20261105T220000Z
+DTEND:20261105T223000Z
+SUMMARY:Sun 14:00 (Abs 21/100)
+DESCRIPTION:Abs 21/100. Overall 27/100. Local 65/100. TanDose30 676.746 J/m
+ ² mel. SED30 1.8. UVA30 54480.6 J/m². UVB30 934.74 J/m². Conf 29. interpol
+ ated hourly. tier C
+END:VEVENT
+BEGIN:VEVENT
+UID:sunstack-30m-pacific-palisades-20261105T1430@pacific-palisades
+DTSTAMP:20261029T191402Z
+SEQUENCE:0
+DTSTART:20261105T223000Z
+DTEND:20261105T230000Z
+SUMMARY:Sun 14:30 (Abs 16/100)
+DESCRIPTION:Abs 16/100. Overall 22/100. Local 56/100. TanDose30 528.876 J/m
+ ² mel. SED30 1.60884. UVA30 48584.7 J/m². UVB30 700.863 J/m². Conf 26. int
+ erpolated hourly. tier C
+END:VEVENT
+BEGIN:VEVENT
+UID:sunstack-30m-pacific-palisades-20261105T1500@pacific-palisades
+DTSTAMP:20261029T191402Z
+SEQUENCE:0
+DTSTART:20261105T230000Z
+DTEND:20261105T233000Z
+SUMMARY:Sun 15:00 (Abs 12/100)
+DESCRIPTION:Abs 12/100. Overall 17/100. Local 46/100. TanDose30 369.54 J/m²
+  mel. SED30 1.4175. UVA30 41014.8 J/m². UVB30 454.86 J/m². Conf 23. interp
+ olated hourly. tier C
+END:VEVENT
+BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261105T1530@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261105T233000Z
 DTEND:20261106T000000Z
 SUMMARY:Sun 15:30 (Abs 9/100)
-DESCRIPTION:Abs 9/100. Overall 14/100. Local 40/100. TanDose30 291.51 J/m² 
- mel. SED30 1.3275. UVA30 41803.2 J/m². UVB30 312.194 J/m². Conf 24. interp
+DESCRIPTION:Abs 9/100. Overall 14/100. Local 40/100. TanDose30 289.404 J/m²
+  mel. SED30 1.1925. UVA30 36698.7 J/m². UVB30 333.63 J/m². Conf 23. interp
  olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261105T1600@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T000000Z
 DTEND:20261106T003000Z
 SUMMARY:Sun 16:00 (Abs 6/100)
-DESCRIPTION:Abs 6/100. Overall 10/100. Local 34/100. TanDose30 188.73 J/m² 
- mel. SED30 1.125. UVA30 32133.6 J/m². UVB30 177.12 J/m². Conf 23. interpol
+DESCRIPTION:Abs 6/100. Overall 10/100. Local 34/100. TanDose30 186.012 J/m²
+  mel. SED30 0.9675. UVA30 28053 J/m². UVB30 192.42 J/m². Conf 23. interpol
  ated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261105T1630@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T003000Z
 DTEND:20261106T010000Z
 SUMMARY:Sun 16:30 (Abs 3/100)
-DESCRIPTION:Abs 3/100. Overall 6/100. Local 25/100. TanDose30 101.142 J/m² 
- mel. SED30 0.8775. UVA30 16036 J/m². UVB30 100.751 J/m². Conf 23. interpol
- ated hourly. tier C. cold
+DESCRIPTION:Abs 3/100. Overall 6/100. Local 24/100. TanDose30 97.398 J/m² m
+ el. SED30 0.72. UVA30 14202.1 J/m². UVB30 103.16 J/m². Conf 23. interpolat
+ ed hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261105T1700@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T010000Z
 DTEND:20261106T013000Z
 SUMMARY:Sun 17:00 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.63. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tier C
- . cold
+ D30 0.4725. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tier
+  C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261105T1730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T013000Z
 DTEND:20261106T020000Z
 SUMMARY:Sun 17:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.3825. UVA30 0 J/m². UVB30 0 J/m². Conf 24. interpolated hourly. tier
-  C. cold
+ D30 0.28116. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tie
+ r C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T0730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T153000Z
 DTEND:20261106T160000Z
 SUMMARY:Sun 07:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 1/100. Local 14/100. TanDose30 0 J/m² mel. S
- ED30 0.03384. UVA30 2108.53 J/m². UVB30 37.3775 J/m². Conf 23. interpolate
+ ED30 0.03384. UVA30 2063.64 J/m². UVB30 37.1496 J/m². Conf 23. interpolate
  d hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T0800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T160000Z
 DTEND:20261106T163000Z
 SUMMARY:Sun 08:00 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 3/100. Local 20/100. TanDose30 66.222 J/m² m
- el. SED30 0.0675. UVA30 5918.4 J/m². UVB30 88.56 J/m². Conf 23. interpolat
+DESCRIPTION:Abs 2/100. Overall 3/100. Local 20/100. TanDose30 65.556 J/m² m
+ el. SED30 0.0675. UVA30 5792.4 J/m². UVB30 88.02 J/m². Conf 23. interpolat
  ed hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T0830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T163000Z
 DTEND:20261106T170000Z
 SUMMARY:Sun 08:30 (Abs 5/100)
-DESCRIPTION:Abs 5/100. Overall 7/100. Local 32/100. TanDose30 157.5 J/m² me
- l. SED30 0.2925. UVA30 12197.8 J/m². UVB30 219.932 J/m². Conf 26. interpol
- ated hourly. tier C. cold
+DESCRIPTION:Abs 5/100. Overall 7/100. Local 32/100. TanDose30 162.072 J/m² 
+ mel. SED30 0.2925. UVA30 12158.7 J/m². UVB30 228.259 J/m². Conf 27. interp
+ olated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T0900@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T170000Z
 DTEND:20261106T173000Z
 SUMMARY:Sun 09:00 (Abs 8/100)
-DESCRIPTION:Abs 8/100. Overall 10/100. Local 39/100. TanDose30 262.872 J/m²
-  mel. SED30 0.5175. UVA30 20293.2 J/m². UVB30 367.38 J/m². Conf 29. interp
- olated hourly. tier C. cold
+DESCRIPTION:Abs 8/100. Overall 11/100. Local 39/100. TanDose30 272.232 J/m²
+  mel. SED30 0.5175. UVA30 20237.4 J/m². UVB30 384.3 J/m². Conf 31. interpo
+ lated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T0930@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T173000Z
 DTEND:20261106T180000Z
 SUMMARY:Sun 09:30 (Abs 12/100)
-DESCRIPTION:Abs 12/100. Overall 15/100. Local 48/100. TanDose30 388.854 J/m
- ² mel. SED30 0.7875. UVA30 29702.7 J/m². UVB30 545.014 J/m². Conf 29. inte
- rpolated hourly. tier C. cold
+DESCRIPTION:Abs 12/100. Overall 14/100. Local 47/100. TanDose30 379.674 J/m
+ ² mel. SED30 0.77616. UVA30 28767.4 J/m². UVB30 533.292 J/m². Conf 31. int
+ erpolated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1000@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T180000Z
 DTEND:20261106T183000Z
-SUMMARY:Sun 10:00 (Abs 16/100)
-DESCRIPTION:Abs 16/100. Overall 19/100. Local 56/100. TanDose30 517.068 J/m
- ² mel. SED30 1.0575. UVA30 39393 J/m². UVB30 725.22 J/m². Conf 29. interpo
- lated hourly. tier C
+SUMMARY:Sun 10:00 (Abs 15/100)
+DESCRIPTION:Abs 15/100. Overall 18/100. Local 54/100. TanDose30 489.222 J/m
+ ² mel. SED30 1.035. UVA30 37560.6 J/m². UVB30 684.72 J/m². Conf 31. interp
+ olated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1030@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T183000Z
 DTEND:20261106T190000Z
-SUMMARY:Sun 10:30 (Abs 21/100)
-DESCRIPTION:Abs 21/100. Overall 24/100. Local 65/100. TanDose30 666.018 J/m
- ² mel. SED30 1.29384. UVA30 46883.2 J/m². UVB30 953.161 J/m². Conf 29. int
- erpolated hourly. tier C
+SUMMARY:Sun 10:30 (Abs 20/100)
+DESCRIPTION:Abs 20/100. Overall 23/100. Local 64/100. TanDose30 651.708 J/m
+ ² mel. SED30 1.2825. UVA30 44913.4 J/m². UVB30 937.426 J/m². Conf 31. inte
+ rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1100@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T190000Z
 DTEND:20261106T193000Z
 SUMMARY:Sun 11:00 (Abs 25/100)
-DESCRIPTION:Abs 25/100. Overall 29/100. Local 75/100. TanDose30 809.622 J/m
- ² mel. SED30 1.53. UVA30 53742.6 J/m². UVB30 1174.68 J/m². Conf 29. interp
+DESCRIPTION:Abs 25/100. Overall 29/100. Local 75/100. TanDose30 809.172 J/m
+ ² mel. SED30 1.53. UVA30 51683.4 J/m². UVB30 1184.04 J/m². Conf 30. interp
  olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1130@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T193000Z
 DTEND:20261106T200000Z
 SUMMARY:Sun 11:30 (Abs 27/100)
-DESCRIPTION:Abs 27/100. Overall 32/100. Local 81/100. TanDose30 883.008 J/m
- ² mel. SED30 1.7325. UVA30 59309.2 J/m². UVB30 1277.73 J/m². Conf 29. inte
- rpolated hourly. tier C
+DESCRIPTION:Abs 27/100. Overall 32/100. Local 81/100. TanDose30 884.862 J/m
+ ² mel. SED30 1.7325. UVA30 57915.3 J/m². UVB30 1287.9 J/m². Conf 31. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1200@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T200000Z
 DTEND:20261106T203000Z
 SUMMARY:Sun 12:00 (Abs 29/100)
-DESCRIPTION:Abs 29/100. Overall 34/100. Local 85/100. TanDose30 945.63 J/m²
-  mel. SED30 1.935. UVA30 63658.8 J/m². UVB30 1367.64 J/m². Conf 30. interp
- olated hourly. tier C
+DESCRIPTION:Abs 29/100. Overall 34/100. Local 85/100. TanDose30 949.896 J/m
+ ² mel. SED30 1.935. UVA30 62969.4 J/m². UVB30 1378.62 J/m². Conf 31. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1230@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T203000Z
 DTEND:20261106T210000Z
 SUMMARY:Sun 12:30 (Abs 30/100)
-DESCRIPTION:Abs 30/100. Overall 34/100. Local 86/100. TanDose30 954.054 J/m
- ² mel. SED30 1.98. UVA30 65608.5 J/m². UVB30 1373.02 J/m². Conf 30. interp
- olated hourly. tier C
+DESCRIPTION:Abs 30/100. Overall 35/100. Local 86/100. TanDose30 959.274 J/m
+ ² mel. SED30 1.99116. UVA30 65235.1 J/m². UVB30 1384.13 J/m². Conf 31. int
+ erpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1300@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T210000Z
 DTEND:20261106T213000Z
-SUMMARY:Sun 13:00 (Abs 29/100)
-DESCRIPTION:Abs 29/100. Overall 34/100. Local 85/100. TanDose30 948.24 J/m²
-  mel. SED30 2.025. UVA30 65916 J/m². UVB30 1361.16 J/m². Conf 30. interpol
- ated hourly. tier C
+SUMMARY:Sun 13:00 (Abs 30/100)
+DESCRIPTION:Abs 30/100. Overall 35/100. Local 86/100. TanDose30 954.108 J/m
+ ² mel. SED30 2.0475. UVA30 65840.4 J/m². UVB30 1371.96 J/m². Conf 31. inte
+ rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1330@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T213000Z
 DTEND:20261106T220000Z
 SUMMARY:Sun 13:30 (Abs 27/100)
-DESCRIPTION:Abs 27/100. Overall 32/100. Local 81/100. TanDose30 876.978 J/m
- ² mel. SED30 1.9575. UVA30 64709.9 J/m². UVB30 1240.36 J/m². Conf 30. inte
- rpolated hourly. tier C
+DESCRIPTION:Abs 27/100. Overall 32/100. Local 81/100. TanDose30 879.372 J/m
+ ² mel. SED30 1.98. UVA30 64831.5 J/m². UVB30 1244.02 J/m². Conf 30. interp
+ olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1400@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T220000Z
 DTEND:20261106T223000Z
 SUMMARY:Sun 14:00 (Abs 24/100)
-DESCRIPTION:Abs 24/100. Overall 30/100. Local 74/100. TanDose30 789.498 J/m
- ² mel. SED30 1.89. UVA30 61525.8 J/m². UVB30 1100.52 J/m². Conf 30. interp
- olated hourly. tier C
+DESCRIPTION:Abs 24/100. Overall 30/100. Local 74/100. TanDose30 788.022 J/m
+ ² mel. SED30 1.9125. UVA30 61795.8 J/m². UVB30 1096.56 J/m². Conf 30. inte
+ rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1430@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T223000Z
 DTEND:20261106T230000Z
 SUMMARY:Sun 14:30 (Abs 18/100)
-DESCRIPTION:Abs 18/100. Overall 24/100. Local 61/100. TanDose30 595.044 J/m
- ² mel. SED30 1.69884. UVA30 57941.1 J/m². UVB30 772.4 J/m². Conf 26. inter
- polated hourly. tier C
+DESCRIPTION:Abs 18/100. Overall 24/100. Local 61/100. TanDose30 595.44 J/m²
+  mel. SED30 1.72134. UVA30 58212.4 J/m². UVB30 771.753 J/m². Conf 26. inte
+ rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1500@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T230000Z
 DTEND:20261106T233000Z
 SUMMARY:Sun 15:00 (Abs 12/100)
-DESCRIPTION:Abs 12/100. Overall 16/100. Local 48/100. TanDose30 383.166 J/m
- ² mel. SED30 1.5075. UVA30 51692.4 J/m². UVB30 426.42 J/m². Conf 23. inter
- polated hourly. tier C
+DESCRIPTION:Abs 12/100. Overall 16/100. Local 48/100. TanDose30 385.416 J/m
+ ² mel. SED30 1.53. UVA30 51955.2 J/m². UVB30 429.12 J/m². Conf 23. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1530@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261106T233000Z
 DTEND:20261107T000000Z
 SUMMARY:Sun 15:30 (Abs 10/100)
-DESCRIPTION:Abs 10/100. Overall 14/100. Local 42/100. TanDose30 308.214 J/m
- ² mel. SED30 1.26. UVA30 46467.1 J/m². UVB30 318.907 J/m². Conf 23. interp
- olated hourly. tier C
+DESCRIPTION:Abs 10/100. Overall 14/100. Local 42/100. TanDose30 315.9 J/m² 
+ mel. SED30 1.2825. UVA30 47197.4 J/m². UVB30 328.98 J/m². Conf 23. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1600@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T000000Z
 DTEND:20261107T003000Z
-SUMMARY:Sun 16:00 (Abs 6/100)
-DESCRIPTION:Abs 6/100. Overall 10/100. Local 35/100. TanDose30 204.336 J/m²
-  mel. SED30 1.0125. UVA30 35134.2 J/m². UVB30 190.08 J/m². Conf 23. interp
- olated hourly. tier C
+SUMMARY:Sun 16:00 (Abs 7/100)
+DESCRIPTION:Abs 7/100. Overall 11/100. Local 36/100. TanDose30 216.072 J/m²
+  mel. SED30 1.035. UVA30 36077.4 J/m². UVB30 206.28 J/m². Conf 23. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1630@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T003000Z
 DTEND:20261107T010000Z
-SUMMARY:Sun 16:30 (Abs 3/100)
-DESCRIPTION:Abs 3/100. Overall 6/100. Local 27/100. TanDose30 106.128 J/m² 
- mel. SED30 0.75384. UVA30 17376.7 J/m². UVB30 103.01 J/m². Conf 23. interp
- olated hourly. tier C
+SUMMARY:Sun 16:30 (Abs 4/100)
+DESCRIPTION:Abs 4/100. Overall 6/100. Local 27/100. TanDose30 113.166 J/m² 
+ mel. SED30 0.765. UVA30 17888.2 J/m². UVB30 113.024 J/m². Conf 23. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1700@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T010000Z
 DTEND:20261107T013000Z
 SUMMARY:Sun 17:00 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
  D30 0.495. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tier 
- C. cold
+ C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261106T1730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T013000Z
 DTEND:20261107T020000Z
 SUMMARY:Sun 17:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
  D30 0.2925. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tier
-  C. cold
+  C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T0730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T153000Z
 DTEND:20261107T160000Z
 SUMMARY:Sun 07:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 1/100. Local 14/100. TanDose30 0 J/m² mel. S
- ED30 0.03384. UVA30 2005.07 J/m². UVB30 37.6013 J/m². Conf 23. interpolate
+ ED30 0.03384. UVA30 1990.39 J/m². UVB30 38.5869 J/m². Conf 23. interpolate
  d hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T0800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T160000Z
 DTEND:20261107T163000Z
 SUMMARY:Sun 08:00 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 3/100. Local 20/100. TanDose30 65.88 J/m² me
- l. SED30 0.0675. UVA30 5652 J/m². UVB30 89.28 J/m². Conf 23. interpolated 
- hourly. tier C. cold
+DESCRIPTION:Abs 2/100. Overall 3/100. Local 20/100. TanDose30 67.086 J/m² m
+ el. SED30 0.0675. UVA30 5610.6 J/m². UVB30 91.62 J/m². Conf 23. interpolat
+ ed hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T0830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T163000Z
 DTEND:20261107T170000Z
 SUMMARY:Sun 08:30 (Abs 5/100)
-DESCRIPTION:Abs 5/100. Overall 7/100. Local 32/100. TanDose30 154.908 J/m² 
- mel. SED30 0.2925. UVA30 12122.2 J/m². UVB30 215.679 J/m². Conf 26. interp
+DESCRIPTION:Abs 5/100. Overall 7/100. Local 32/100. TanDose30 155.286 J/m² 
+ mel. SED30 0.2925. UVA30 12063.6 J/m². UVB30 216.634 J/m². Conf 26. interp
  olated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T0900@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T170000Z
 DTEND:20261107T173000Z
 SUMMARY:Sun 09:00 (Abs 8/100)
-DESCRIPTION:Abs 8/100. Overall 11/100. Local 39/100. TanDose30 257.958 J/m²
-  mel. SED30 0.5175. UVA30 20417.4 J/m². UVB30 358.02 J/m². Conf 29. interp
+DESCRIPTION:Abs 8/100. Overall 11/100. Local 39/100. TanDose30 257.526 J/m²
+  mel. SED30 0.5175. UVA30 20332.8 J/m². UVB30 357.66 J/m². Conf 30. interp
  olated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T0930@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T173000Z
 DTEND:20261107T180000Z
 SUMMARY:Sun 09:30 (Abs 12/100)
-DESCRIPTION:Abs 12/100. Overall 16/100. Local 48/100. TanDose30 392.58 J/m²
-  mel. SED30 0.7875. UVA30 29945.8 J/m². UVB30 550.438 J/m². Conf 29. inter
- polated hourly. tier C
+DESCRIPTION:Abs 12/100. Overall 16/100. Local 48/100. TanDose30 390.204 J/m
+ ² mel. SED30 0.7875. UVA30 29785.7 J/m². UVB30 546.987 J/m². Conf 30. inte
+ rpolated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1000@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T180000Z
 DTEND:20261107T183000Z
 SUMMARY:Sun 10:00 (Abs 16/100)
-DESCRIPTION:Abs 16/100. Overall 21/100. Local 57/100. TanDose30 529.236 J/m
- ² mel. SED30 1.0575. UVA30 39729.6 J/m². UVB30 745.2 J/m². Conf 29. interp
- olated hourly. tier C
+DESCRIPTION:Abs 16/100. Overall 20/100. Local 57/100. TanDose30 524.97 J/m²
+  mel. SED30 1.0575. UVA30 39501 J/m². UVB30 738.72 J/m². Conf 30. interpol
+ ated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1030@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T183000Z
 DTEND:20261107T190000Z
 SUMMARY:Sun 10:30 (Abs 21/100)
-DESCRIPTION:Abs 21/100. Overall 25/100. Local 66/100. TanDose30 669.312 J/m
- ² mel. SED30 1.29384. UVA30 47606.8 J/m². UVB30 955.434 J/m². Conf 29. int
+DESCRIPTION:Abs 21/100. Overall 25/100. Local 66/100. TanDose30 666.864 J/m
+ ² mel. SED30 1.29384. UVA30 47296.4 J/m². UVB30 952.621 J/m². Conf 30. int
  erpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1100@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T190000Z
 DTEND:20261107T193000Z
 SUMMARY:Sun 11:00 (Abs 25/100)
-DESCRIPTION:Abs 25/100. Overall 30/100. Local 76/100. TanDose30 803.808 J/m
- ² mel. SED30 1.53. UVA30 54822.6 J/m². UVB30 1159.02 J/m². Conf 29. interp
- olated hourly. tier C
+DESCRIPTION:Abs 25/100. Overall 30/100. Local 76/100. TanDose30 803.25 J/m²
+  mel. SED30 1.53. UVA30 54437.4 J/m². UVB30 1159.92 J/m². Conf 30. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1130@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T193000Z
 DTEND:20261107T200000Z
-SUMMARY:Sun 11:30 (Abs 28/100)
-DESCRIPTION:Abs 28/100. Overall 33/100. Local 82/100. TanDose30 886.122 J/m
- ² mel. SED30 1.7325. UVA30 59909.2 J/m². UVB30 1280.31 J/m². Conf 29. inte
+SUMMARY:Sun 11:30 (Abs 27/100)
+DESCRIPTION:Abs 27/100. Overall 33/100. Local 82/100. TanDose30 884.034 J/m
+ ² mel. SED30 1.7325. UVA30 59686.2 J/m². UVB30 1277.69 J/m². Conf 30. inte
  rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1200@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T200000Z
 DTEND:20261107T203000Z
 SUMMARY:Sun 12:00 (Abs 30/100)
-DESCRIPTION:Abs 30/100. Overall 36/100. Local 87/100. TanDose30 957.546 J/m
- ² mel. SED30 1.935. UVA30 63757.8 J/m². UVB30 1388.34 J/m². Conf 29. inter
- polated hourly. tier C
+DESCRIPTION:Abs 30/100. Overall 36/100. Local 86/100. TanDose30 953.946 J/m
+ ² mel. SED30 1.935. UVA30 63702 J/m². UVB30 1382.22 J/m². Conf 30. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1230@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T203000Z
 DTEND:20261107T210000Z
 SUMMARY:Sun 12:30 (Abs 30/100)
-DESCRIPTION:Abs 30/100. Overall 36/100. Local 87/100. TanDose30 963.846 J/m
- ² mel. SED30 1.98. UVA30 65609.2 J/m². UVB30 1390.42 J/m². Conf 29. interp
+DESCRIPTION:Abs 30/100. Overall 36/100. Local 87/100. TanDose30 959.094 J/m
+ ² mel. SED30 1.98. UVA30 65549.5 J/m². UVB30 1382.27 J/m². Conf 30. interp
  olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1300@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T210000Z
 DTEND:20261107T213000Z
-SUMMARY:Sun 13:00 (Abs 30/100)
-DESCRIPTION:Abs 30/100. Overall 36/100. Local 86/100. TanDose30 955.764 J/m
- ² mel. SED30 2.025. UVA30 65815.2 J/m². UVB30 1375.02 J/m². Conf 29. inter
- polated hourly. tier C
+SUMMARY:Sun 13:00 (Abs 29/100)
+DESCRIPTION:Abs 29/100. Overall 36/100. Local 86/100. TanDose30 949.914 J/m
+ ² mel. SED30 2.025. UVA30 65754 J/m². UVB30 1364.94 J/m². Conf 30. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1330@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T213000Z
 DTEND:20261107T220000Z
 SUMMARY:Sun 13:30 (Abs 27/100)
-DESCRIPTION:Abs 27/100. Overall 34/100. Local 82/100. TanDose30 884.862 J/m
- ² mel. SED30 1.9575. UVA30 64705.7 J/m². UVB30 1254.4 J/m². Conf 29. inter
+DESCRIPTION:Abs 27/100. Overall 34/100. Local 82/100. TanDose30 880.83 J/m²
+  mel. SED30 1.9575. UVA30 64595.8 J/m². UVB30 1247.78 J/m². Conf 30. inter
  polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1400@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T220000Z
 DTEND:20261107T223000Z
 SUMMARY:Sun 14:00 (Abs 25/100)
-DESCRIPTION:Abs 25/100. Overall 31/100. Local 75/100. TanDose30 797.508 J/m
- ² mel. SED30 1.89. UVA30 61603.2 J/m². UVB30 1114.38 J/m². Conf 29. interp
+DESCRIPTION:Abs 25/100. Overall 31/100. Local 75/100. TanDose30 795.366 J/m
+ ² mel. SED30 1.89. UVA30 61446.6 J/m². UVB30 1111.32 J/m². Conf 30. interp
  olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1430@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T223000Z
 DTEND:20261107T230000Z
 SUMMARY:Sun 14:30 (Abs 18/100)
-DESCRIPTION:Abs 18/100. Overall 24/100. Local 61/100. TanDose30 589.536 J/m
- ² mel. SED30 1.69884. UVA30 58013.9 J/m². UVB30 762.232 J/m². Conf 26. int
- erpolated hourly. tier C
+DESCRIPTION:Abs 18/100. Overall 24/100. Local 61/100. TanDose30 589.05 J/m²
+  mel. SED30 1.69884. UVA30 57929.5 J/m². UVB30 761.767 J/m². Conf 26. inte
+ rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1500@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T230000Z
 DTEND:20261107T233000Z
 SUMMARY:Sun 15:00 (Abs 11/100)
-DESCRIPTION:Abs 11/100. Overall 16/100. Local 47/100. TanDose30 364.194 J/m
- ² mel. SED30 1.5075. UVA30 51748.2 J/m². UVB30 392.4 J/m². Conf 23. interp
+DESCRIPTION:Abs 11/100. Overall 16/100. Local 47/100. TanDose30 365.22 J/m²
+  mel. SED30 1.5075. UVA30 51715.8 J/m². UVB30 394.38 J/m². Conf 23. interp
  olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1530@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261107T233000Z
 DTEND:20261108T000000Z
 SUMMARY:Sun 15:30 (Abs 9/100)
-DESCRIPTION:Abs 9/100. Overall 14/100. Local 42/100. TanDose30 302.31 J/m² 
- mel. SED30 1.27134. UVA30 46599.7 J/m². UVB30 307.755 J/m². Conf 23. inter
- polated hourly. tier C
+DESCRIPTION:Abs 9/100. Overall 14/100. Local 42/100. TanDose30 303.12 J/m² 
+ mel. SED30 1.27134. UVA30 46882 J/m². UVB30 307.789 J/m². Conf 23. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1600@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T000000Z
 DTEND:20261108T003000Z
-SUMMARY:Sun 16:00 (Abs 6/100)
-DESCRIPTION:Abs 6/100. Overall 11/100. Local 36/100. TanDose30 210.834 J/m²
-  mel. SED30 1.035. UVA30 35103.6 J/m². UVB30 201.78 J/m². Conf 23. interpo
+SUMMARY:Sun 16:00 (Abs 7/100)
+DESCRIPTION:Abs 7/100. Overall 11/100. Local 36/100. TanDose30 211.464 J/m²
+  mel. SED30 1.035. UVA30 35695.8 J/m². UVB30 199.98 J/m². Conf 23. interpo
  lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1630@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T003000Z
 DTEND:20261108T010000Z
-SUMMARY:Sun 16:30 (Abs 4/100)
-DESCRIPTION:Abs 4/100. Overall 7/100. Local 28/100. TanDose30 111.618 J/m² 
- mel. SED30 0.765. UVA30 17329.4 J/m². UVB30 113.024 J/m². Conf 23. interpo
+SUMMARY:Sun 16:30 (Abs 3/100)
+DESCRIPTION:Abs 3/100. Overall 7/100. Local 28/100. TanDose30 109.818 J/m² 
+ mel. SED30 0.765. UVA30 17488.2 J/m². UVB30 109.034 J/m². Conf 23. interpo
  lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1700@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T010000Z
 DTEND:20261108T013000Z
@@ -2398,7 +2398,7 @@ DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261107T1730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T013000Z
 DTEND:20261108T020000Z
@@ -2409,927 +2409,915 @@ DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T0730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T153000Z
 DTEND:20261108T160000Z
 SUMMARY:Sun 07:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 1/100. Local 14/100. TanDose30 0 J/m² mel. S
- ED30 0.03384. UVA30 1988.04 J/m². UVB30 36.0818 J/m². Conf 23. interpolate
+ ED30 0.03384. UVA30 2013.47 J/m². UVB30 33.5099 J/m². Conf 23. interpolate
  d hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T0800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T160000Z
 DTEND:20261108T163000Z
 SUMMARY:Sun 08:00 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 4/100. Local 20/100. TanDose30 63.9 J/m² mel
- . SED30 0.0675. UVA30 5628.6 J/m². UVB30 85.86 J/m². Conf 23. interpolated
-  hourly. tier C. cold
+DESCRIPTION:Abs 2/100. Overall 3/100. Local 19/100. TanDose30 60.66 J/m² me
+ l. SED30 0.0675. UVA30 5700.6 J/m². UVB30 79.74 J/m². Conf 23. interpolate
+ d hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T0830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T163000Z
 DTEND:20261108T170000Z
-SUMMARY:Sun 08:30 (Abs 5/100)
-DESCRIPTION:Abs 5/100. Overall 8/100. Local 32/100. TanDose30 150.768 J/m² 
- mel. SED30 0.2925. UVA30 11689.7 J/m². UVB30 210.454 J/m². Conf 27. interp
+SUMMARY:Sun 08:30 (Abs 4/100)
+DESCRIPTION:Abs 4/100. Overall 7/100. Local 32/100. TanDose30 146.394 J/m² 
+ mel. SED30 0.2925. UVA30 11633.5 J/m². UVB30 202.968 J/m². Conf 26. interp
  olated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T0900@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T170000Z
 DTEND:20261108T173000Z
 SUMMARY:Sun 09:00 (Abs 8/100)
-DESCRIPTION:Abs 8/100. Overall 11/100. Local 39/100. TanDose30 252.576 J/m²
-  mel. SED30 0.5175. UVA30 19681.2 J/m². UVB30 352.08 J/m². Conf 30. interp
- olated hourly. tier C
+DESCRIPTION:Abs 8/100. Overall 11/100. Local 38/100. TanDose30 246.636 J/m²
+  mel. SED30 0.5175. UVA30 19477.8 J/m². UVB30 342.54 J/m². Conf 29. interp
+ olated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T0930@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T173000Z
 DTEND:20261108T180000Z
 SUMMARY:Sun 09:30 (Abs 12/100)
-DESCRIPTION:Abs 12/100. Overall 16/100. Local 48/100. TanDose30 380.25 J/m²
-  mel. SED30 0.77616. UVA30 29188.1 J/m². UVB30 532.227 J/m². Conf 30. inte
- rpolated hourly. tier C
+DESCRIPTION:Abs 12/100. Overall 15/100. Local 48/100. TanDose30 375.156 J/m
+ ² mel. SED30 0.77616. UVA30 29162.5 J/m². UVB30 523.303 J/m². Conf 29. int
+ erpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1000@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T180000Z
 DTEND:20261108T183000Z
 SUMMARY:Sun 10:00 (Abs 16/100)
-DESCRIPTION:Abs 16/100. Overall 20/100. Local 57/100. TanDose30 510.318 J/m
- ² mel. SED30 1.035. UVA30 38998.8 J/m². UVB30 715.14 J/m². Conf 30. interp
- olated hourly. tier C
+DESCRIPTION:Abs 16/100. Overall 20/100. Local 56/100. TanDose30 506.106 J/m
+ ² mel. SED30 1.035. UVA30 39159 J/m². UVB30 706.86 J/m². Conf 29. interpol
+ ated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1030@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T183000Z
 DTEND:20261108T190000Z
 SUMMARY:Sun 10:30 (Abs 20/100)
-DESCRIPTION:Abs 20/100. Overall 25/100. Local 66/100. TanDose30 656.586 J/m
- ² mel. SED30 1.26. UVA30 46384.1 J/m². UVB30 938.843 J/m². Conf 31. interp
- olated hourly. tier C
+DESCRIPTION:Abs 20/100. Overall 25/100. Local 65/100. TanDose30 648.432 J/m
+ ² mel. SED30 1.27134. UVA30 46535.7 J/m². UVB30 923.591 J/m². Conf 30. int
+ erpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1100@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T190000Z
 DTEND:20261108T193000Z
-SUMMARY:Sun 11:00 (Abs 25/100)
-DESCRIPTION:Abs 25/100. Overall 30/100. Local 76/100. TanDose30 797.364 J/m
- ² mel. SED30 1.485. UVA30 53119.8 J/m². UVB30 1155.96 J/m². Conf 31. inter
- polated hourly. tier C
+SUMMARY:Sun 11:00 (Abs 24/100)
+DESCRIPTION:Abs 24/100. Overall 30/100. Local 75/100. TanDose30 785.448 J/m
+ ² mel. SED30 1.5075. UVA30 53276.4 J/m². UVB30 1134 J/m². Conf 30. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1130@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T193000Z
 DTEND:20261108T200000Z
 SUMMARY:Sun 11:30 (Abs 27/100)
-DESCRIPTION:Abs 27/100. Overall 33/100. Local 82/100. TanDose30 870.066 J/m
- ² mel. SED30 1.67634. UVA30 57865.5 J/m². UVB30 1261.84 J/m². Conf 31. int
- erpolated hourly. tier C
+DESCRIPTION:Abs 27/100. Overall 32/100. Local 81/100. TanDose30 859.41 J/m²
+  mel. SED30 1.69884. UVA30 58381.9 J/m². UVB30 1240.36 J/m². Conf 30. inte
+ rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1200@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T200000Z
 DTEND:20261108T203000Z
 SUMMARY:Sun 12:00 (Abs 29/100)
-DESCRIPTION:Abs 29/100. Overall 36/100. Local 86/100. TanDose30 931.986 J/m
- ² mel. SED30 1.8675. UVA30 61401.6 J/m². UVB30 1354.5 J/m². Conf 32. inter
- polated hourly. tier C
+DESCRIPTION:Abs 29/100. Overall 35/100. Local 85/100. TanDose30 922.752 J/m
+ ² mel. SED30 1.89. UVA30 62274.6 J/m². UVB30 1333.8 J/m². Conf 31. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1230@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T203000Z
 DTEND:20261108T210000Z
 SUMMARY:Sun 12:30 (Abs 29/100)
-DESCRIPTION:Abs 29/100. Overall 35/100. Local 86/100. TanDose30 928.98 J/m²
-  mel. SED30 1.92384. UVA30 62701.5 J/m². UVB30 1342.77 J/m². Conf 31. inte
- rpolated hourly. tier C
+DESCRIPTION:Abs 29/100. Overall 35/100. Local 85/100. TanDose30 925.434 J/m
+ ² mel. SED30 1.935. UVA30 63854.3 J/m². UVB30 1330.75 J/m². Conf 31. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1300@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T210000Z
 DTEND:20261108T213000Z
 SUMMARY:Sun 13:00 (Abs 28/100)
-DESCRIPTION:Abs 28/100. Overall 35/100. Local 85/100. TanDose30 912.024 J/m
- ² mel. SED30 1.98. UVA30 62415 J/m². UVB30 1314 J/m². Conf 30. interpolate
- d hourly. tier C
+DESCRIPTION:Abs 28/100. Overall 35/100. Local 85/100. TanDose30 914.22 J/m²
+  mel. SED30 1.98. UVA30 63829.8 J/m². UVB30 1310.94 J/m². Conf 32. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1330@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T213000Z
 DTEND:20261108T220000Z
 SUMMARY:Sun 13:30 (Abs 26/100)
-DESCRIPTION:Abs 26/100. Overall 32/100. Local 78/100. TanDose30 823.68 J/m²
-  mel. SED30 1.9125. UVA30 61703.8 J/m². UVB30 1160.43 J/m². Conf 30. inter
- polated hourly. tier C
+DESCRIPTION:Abs 26/100. Overall 32/100. Local 79/100. TanDose30 832.338 J/m
+ ² mel. SED30 1.9125. UVA30 62892.8 J/m². UVB30 1169.95 J/m². Conf 31. inte
+ rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1400@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T220000Z
 DTEND:20261108T223000Z
-SUMMARY:Sun 14:00 (Abs 22/100)
-DESCRIPTION:Abs 22/100. Overall 29/100. Local 70/100. TanDose30 719.532 J/m
- ² mel. SED30 1.845. UVA30 59034.6 J/m². UVB30 988.38 J/m². Conf 30. interp
- olated hourly. tier C
+SUMMARY:Sun 14:00 (Abs 23/100)
+DESCRIPTION:Abs 23/100. Overall 29/100. Local 71/100. TanDose30 734.922 J/m
+ ² mel. SED30 1.845. UVA30 60019.2 J/m². UVB30 1010.88 J/m². Conf 31. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1430@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T223000Z
 DTEND:20261108T230000Z
 SUMMARY:Sun 14:30 (Abs 17/100)
-DESCRIPTION:Abs 17/100. Overall 23/100. Local 59/100. TanDose30 551.214 J/m
- ² mel. SED30 1.665. UVA30 56008 J/m². UVB30 703.978 J/m². Conf 27. interpo
+DESCRIPTION:Abs 17/100. Overall 23/100. Local 60/100. TanDose30 557.262 J/m
+ ² mel. SED30 1.665. UVA30 57106 J/m². UVB30 709.301 J/m². Conf 28. interpo
  lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1500@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T230000Z
 DTEND:20261108T233000Z
 SUMMARY:Sun 15:00 (Abs 11/100)
-DESCRIPTION:Abs 11/100. Overall 16/100. Local 47/100. TanDose30 365.238 J/m
- ² mel. SED30 1.485. UVA30 50193 J/m². UVB30 401.94 J/m². Conf 24. interpol
- ated hourly. tier C
+DESCRIPTION:Abs 11/100. Overall 16/100. Local 47/100. TanDose30 361.818 J/m
+ ² mel. SED30 1.485. UVA30 51366.6 J/m². UVB30 390.06 J/m². Conf 24. interp
+ olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1530@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261108T233000Z
 DTEND:20261109T000000Z
 SUMMARY:Sun 15:30 (Abs 9/100)
-DESCRIPTION:Abs 9/100. Overall 14/100. Local 42/100. TanDose30 304.164 J/m²
-  mel. SED30 1.24884. UVA30 45725.2 J/m². UVB30 315.363 J/m². Conf 24. inte
+DESCRIPTION:Abs 9/100. Overall 14/100. Local 42/100. TanDose30 292.914 J/m²
+  mel. SED30 1.24884. UVA30 45567.3 J/m². UVB30 296.131 J/m². Conf 24. inte
  rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1600@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T000000Z
 DTEND:20261109T003000Z
-SUMMARY:Sun 16:00 (Abs 7/100)
-DESCRIPTION:Abs 7/100. Overall 11/100. Local 36/100. TanDose30 211.932 J/m²
-  mel. SED30 1.0125. UVA30 34696.8 J/m². UVB30 205.74 J/m². Conf 24. interp
+SUMMARY:Sun 16:00 (Abs 6/100)
+DESCRIPTION:Abs 6/100. Overall 10/100. Local 35/100. TanDose30 196.416 J/m²
+  mel. SED30 1.0125. UVA30 33811.2 J/m². UVB30 182.52 J/m². Conf 24. interp
  olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1630@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T003000Z
 DTEND:20261109T010000Z
 SUMMARY:Sun 16:30 (Abs 3/100)
-DESCRIPTION:Abs 3/100. Overall 7/100. Local 28/100. TanDose30 110.304 J/m² 
- mel. SED30 0.75384. UVA30 17099.5 J/m². UVB30 111.82 J/m². Conf 24. interp
- olated hourly. tier C
+DESCRIPTION:Abs 3/100. Overall 6/100. Local 26/100. TanDose30 101.538 J/m² 
+ mel. SED30 0.75384. UVA30 16427.9 J/m². UVB30 99.5458 J/m². Conf 24. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1700@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T010000Z
 DTEND:20261109T013000Z
 SUMMARY:Sun 17:00 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.495. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tier 
+ D30 0.495. UVA30 0 J/m². UVB30 0 J/m². Conf 24. interpolated hourly. tier 
  C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261108T1730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T013000Z
 DTEND:20261109T020000Z
 SUMMARY:Sun 17:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.28116. UVA30 0 J/m². UVB30 0 J/m². Conf 24. interpolated hourly. tie
- r C
+ D30 0.28116. UVA30 0 J/m². UVB30 0 J/m². Conf 25. interpolated hourly. tie
+ r C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T0730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T153000Z
 DTEND:20261109T160000Z
 SUMMARY:Sun 07:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 1/100. Local 14/100. TanDose30 0 J/m² mel. S
- ED30 0.0225. UVA30 1943.65 J/m². UVB30 37.359 J/m². Conf 23. interpolated 
- hourly. tier C. cold
+ ED30 0.0225. UVA30 1924.03 J/m². UVB30 37.1326 J/m². Conf 23. interpolated
+  hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T0800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T160000Z
 DTEND:20261109T163000Z
 SUMMARY:Sun 08:00 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 4/100. Local 20/100. TanDose30 65.43 J/m² me
- l. SED30 0.045. UVA30 5527.8 J/m². UVB30 89.1 J/m². Conf 23. interpolated 
- hourly. tier C. cold
+DESCRIPTION:Abs 2/100. Overall 4/100. Local 20/100. TanDose30 64.98 J/m² me
+ l. SED30 0.045. UVA30 5472 J/m². UVB30 88.56 J/m². Conf 23. interpolated h
+ ourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T0830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T163000Z
 DTEND:20261109T170000Z
 SUMMARY:Sun 08:30 (Abs 4/100)
-DESCRIPTION:Abs 4/100. Overall 7/100. Local 31/100. TanDose30 138.528 J/m² 
- mel. SED30 0.2475. UVA30 10598.6 J/m². UVB30 194.067 J/m². Conf 26. interp
- olated hourly. tier C
+DESCRIPTION:Abs 4/100. Overall 7/100. Local 31/100. TanDose30 140.58 J/m² m
+ el. SED30 0.2475. UVA30 10870.8 J/m². UVB30 196.392 J/m². Conf 26. interpo
+ lated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T0900@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T170000Z
 DTEND:20261109T173000Z
 SUMMARY:Sun 09:00 (Abs 7/100)
-DESCRIPTION:Abs 7/100. Overall 10/100. Local 37/100. TanDose30 225.54 J/m² 
- mel. SED30 0.45. UVA30 17449.2 J/m². UVB30 315 J/m². Conf 30. interpolated
-  hourly. tier C
+DESCRIPTION:Abs 7/100. Overall 10/100. Local 38/100. TanDose30 231.804 J/m²
+  mel. SED30 0.45. UVA30 18284.4 J/m². UVB30 322.02 J/m². Conf 30. interpol
+ ated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T0930@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T173000Z
 DTEND:20261109T180000Z
-SUMMARY:Sun 09:30 (Abs 10/100)
-DESCRIPTION:Abs 10/100. Overall 14/100. Local 45/100. TanDose30 336.654 J/m
- ² mel. SED30 0.68616. UVA30 25416.6 J/m². UVB30 473.319 J/m². Conf 30. int
- erpolated hourly. tier C
+SUMMARY:Sun 09:30 (Abs 11/100)
+DESCRIPTION:Abs 11/100. Overall 14/100. Local 46/100. TanDose30 344.286 J/m
+ ² mel. SED30 0.70884. UVA30 26690.9 J/m². UVB30 480.6 J/m². Conf 30. inter
+ polated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T1000@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T180000Z
 DTEND:20261109T183000Z
 SUMMARY:Sun 10:00 (Abs 14/100)
-DESCRIPTION:Abs 14/100. Overall 18/100. Local 53/100. TanDose30 450.09 J/m²
-  mel. SED30 0.9225. UVA30 33672.6 J/m². UVB30 634.32 J/m². Conf 30. interp
- olated hourly. tier C
+DESCRIPTION:Abs 14/100. Overall 18/100. Local 54/100. TanDose30 459.756 J/m
+ ² mel. SED30 0.9675. UVA30 35478 J/m². UVB30 642.6 J/m². Conf 30. interpol
+ ated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T1030@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T183000Z
 DTEND:20261109T190000Z
-SUMMARY:Sun 10:30 (Abs 18/100)
-DESCRIPTION:Abs 18/100. Overall 22/100. Local 61/100. TanDose30 573.066 J/m
- ² mel. SED30 1.1475. UVA30 40172 J/m². UVB30 820.947 J/m². Conf 30. interp
- olated hourly. tier C
-END:VEVENT
-BEGIN:VEVENT
-UID:sunstack-30m-pacific-palisades-20261109T1100@pacific-palisades
-DTSTAMP:20261029T163332Z
-SEQUENCE:0
-DTSTART:20261109T190000Z
-DTEND:20261109T193000Z
-SUMMARY:Sun 11:00 (Abs 21/100)
-DESCRIPTION:Abs 21/100. Overall 26/100. Local 69/100. TanDose30 691.596 J/m
- ² mel. SED30 1.3725. UVA30 46150.2 J/m². UVB30 1002.24 J/m². Conf 30. inte
+SUMMARY:Sun 10:30 (Abs 19/100)
+DESCRIPTION:Abs 19/100. Overall 23/100. Local 64/100. TanDose30 607.14 J/m²
+  mel. SED30 1.20384. UVA30 42872.3 J/m². UVB30 868.229 J/m². Conf 31. inte
  rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
+UID:sunstack-30m-pacific-palisades-20261109T1100@pacific-palisades
+DTSTAMP:20261029T191402Z
+SEQUENCE:0
+DTSTART:20261109T190000Z
+DTEND:20261109T193000Z
+SUMMARY:Sun 11:00 (Abs 23/100)
+DESCRIPTION:Abs 23/100. Overall 29/100. Local 73/100. TanDose30 750.168 J/m
+ ² mel. SED30 1.44. UVA30 49752 J/m². UVB30 1088.64 J/m². Conf 31. interpol
+ ated hourly. tier C
+END:VEVENT
+BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T1130@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T193000Z
 DTEND:20261109T200000Z
-SUMMARY:Sun 11:30 (Abs 24/100)
-DESCRIPTION:Abs 24/100. Overall 30/100. Local 76/100. TanDose30 791.082 J/m
- ² mel. SED30 1.54116. UVA30 52343.7 J/m². UVB30 1148.61 J/m². Conf 30. int
+SUMMARY:Sun 11:30 (Abs 26/100)
+DESCRIPTION:Abs 26/100. Overall 32/100. Local 79/100. TanDose30 824.994 J/m
+ ² mel. SED30 1.63134. UVA30 55964.4 J/m². UVB30 1191.06 J/m². Conf 31. int
  erpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T1200@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T200000Z
 DTEND:20261109T203000Z
-SUMMARY:Sun 12:00 (Abs 27/100)
-DESCRIPTION:Abs 27/100. Overall 34/100. Local 83/100. TanDose30 880.992 J/m
- ² mel. SED30 1.71. UVA30 57468.6 J/m². UVB30 1283.22 J/m². Conf 30. interp
+SUMMARY:Sun 12:00 (Abs 28/100)
+DESCRIPTION:Abs 28/100. Overall 34/100. Local 84/100. TanDose30 889.758 J/m
+ ² mel. SED30 1.8225. UVA30 61029 J/m². UVB30 1281.24 J/m². Conf 32. interp
  olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T1230@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T203000Z
 DTEND:20261109T210000Z
-SUMMARY:Sun 12:30 (Abs 26/100)
-DESCRIPTION:Abs 26/100. Overall 33/100. Local 81/100. TanDose30 854.424 J/m
- ² mel. SED30 1.74384. UVA30 58171.7 J/m². UVB30 1232.52 J/m². Conf 30. int
+SUMMARY:Sun 12:30 (Abs 28/100)
+DESCRIPTION:Abs 28/100. Overall 34/100. Local 84/100. TanDose30 891.468 J/m
+ ² mel. SED30 1.87884. UVA30 62793.8 J/m². UVB30 1275.58 J/m². Conf 32. int
  erpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T1300@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T210000Z
 DTEND:20261109T213000Z
-SUMMARY:Sun 13:00 (Abs 25/100)
-DESCRIPTION:Abs 25/100. Overall 32/100. Local 78/100. TanDose30 815.472 J/m
- ² mel. SED30 1.7775. UVA30 57457.8 J/m². UVB30 1166.76 J/m². Conf 30. inte
- rpolated hourly. tier C
+SUMMARY:Sun 13:00 (Abs 27/100)
+DESCRIPTION:Abs 27/100. Overall 34/100. Local 83/100. TanDose30 879.336 J/m
+ ² mel. SED30 1.935. UVA30 62931.6 J/m². UVB30 1253.34 J/m². Conf 31. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T1330@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T213000Z
 DTEND:20261109T220000Z
-SUMMARY:Sun 13:30 (Abs 22/100)
-DESCRIPTION:Abs 22/100. Overall 28/100. Local 70/100. TanDose30 711.072 J/m
- ² mel. SED30 1.6875. UVA30 54260.7 J/m². UVB30 996.877 J/m². Conf 30. inte
+SUMMARY:Sun 13:30 (Abs 25/100)
+DESCRIPTION:Abs 25/100. Overall 32/100. Local 78/100. TanDose30 805.77 J/m²
+  mel. SED30 1.87884. UVA30 62281.6 J/m². UVB30 1125.71 J/m². Conf 31. inte
  rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T1400@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T220000Z
 DTEND:20261109T223000Z
-SUMMARY:Sun 14:00 (Abs 18/100)
-DESCRIPTION:Abs 18/100. Overall 24/100. Local 63/100. TanDose30 595.422 J/m
- ² mel. SED30 1.5975. UVA30 49649.4 J/m². UVB30 813.96 J/m². Conf 29. inter
- polated hourly. tier C
+SUMMARY:Sun 14:00 (Abs 22/100)
+DESCRIPTION:Abs 22/100. Overall 29/100. Local 70/100. TanDose30 716.58 J/m²
+  mel. SED30 1.8225. UVA30 59650.2 J/m². UVB30 980.1 J/m². Conf 31. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T1430@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T223000Z
 DTEND:20261109T230000Z
-SUMMARY:Sun 14:30 (Abs 14/100)
-DESCRIPTION:Abs 14/100. Overall 19/100. Local 53/100. TanDose30 437.742 J/m
- ² mel. SED30 1.4175. UVA30 42030.9 J/m². UVB30 571.115 J/m². Conf 26. inte
+SUMMARY:Sun 14:30 (Abs 17/100)
+DESCRIPTION:Abs 17/100. Overall 23/100. Local 59/100. TanDose30 539.784 J/m
+ ² mel. SED30 1.6425. UVA30 57246.9 J/m². UVB30 677.545 J/m². Conf 27. inte
  rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T1500@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T230000Z
 DTEND:20261109T233000Z
-SUMMARY:Sun 15:00 (Abs 8/100)
-DESCRIPTION:Abs 8/100. Overall 13/100. Local 40/100. TanDose30 273.636 J/m²
-  mel. SED30 1.2375. UVA30 33442.2 J/m². UVB30 321.66 J/m². Conf 23. interp
+SUMMARY:Sun 15:00 (Abs 11/100)
+DESCRIPTION:Abs 11/100. Overall 16/100. Local 46/100. TanDose30 344.61 J/m²
+  mel. SED30 1.4625. UVA30 51843.6 J/m². UVB30 357.12 J/m². Conf 24. interp
  olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T1530@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261109T233000Z
 DTEND:20261110T000000Z
-SUMMARY:Sun 15:30 (Abs 7/100)
-DESCRIPTION:Abs 7/100. Overall 11/100. Local 37/100. TanDose30 219.222 J/m²
-  mel. SED30 1.04634. UVA30 29126.7 J/m². UVB30 246.165 J/m². Conf 23. inte
- rpolated hourly. tier C
+SUMMARY:Sun 15:30 (Abs 9/100)
+DESCRIPTION:Abs 9/100. Overall 14/100. Local 41/100. TanDose30 278.226 J/m²
+  mel. SED30 1.22634. UVA30 45410.5 J/m². UVB30 270.79 J/m². Conf 23. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T1600@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T000000Z
 DTEND:20261110T003000Z
-SUMMARY:Sun 16:00 (Abs 4/100)
-DESCRIPTION:Abs 4/100. Overall 8/100. Local 32/100. TanDose30 145.836 J/m² 
- mel. SED30 0.855. UVA30 21157.2 J/m². UVB30 154.98 J/m². Conf 23. interpol
- ated hourly. tier C
+SUMMARY:Sun 16:00 (Abs 6/100)
+DESCRIPTION:Abs 6/100. Overall 10/100. Local 34/100. TanDose30 185.832 J/m²
+  mel. SED30 0.99. UVA30 33170.4 J/m². UVB30 166.86 J/m². Conf 23. interpol
+ ated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T1630@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T003000Z
 DTEND:20261110T010000Z
-SUMMARY:Sun 16:30 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 5/100. Local 21/100. TanDose30 75.51 J/m² me
- l. SED30 0.64134. UVA30 10933.6 J/m². UVB30 80.3445 J/m². Conf 23. interpo
- lated hourly. tier C
+SUMMARY:Sun 16:30 (Abs 3/100)
+DESCRIPTION:Abs 3/100. Overall 6/100. Local 26/100. TanDose30 95.508 J/m² m
+ el. SED30 0.7425. UVA30 16052.4 J/m². UVB30 90.6605 J/m². Conf 23. interpo
+ lated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T1700@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T010000Z
 DTEND:20261110T013000Z
 SUMMARY:Sun 17:00 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.4275. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tier
-  C
+ D30 0.495. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tier 
+ C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261109T1730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T013000Z
 DTEND:20261110T020000Z
 SUMMARY:Sun 17:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.2475. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tier
-  C
-END:VEVENT
-BEGIN:VEVENT
-UID:sunstack-30m-pacific-palisades-20261110T0730@pacific-palisades
-DTSTAMP:20261029T163332Z
-SEQUENCE:0
-DTSTART:20261110T153000Z
-DTEND:20261110T160000Z
-SUMMARY:Sun 07:30 (Abs 0/100)
-DESCRIPTION:Abs 0/100. Overall 1/100. Local 14/100. TanDose30 0 J/m² mel. S
- ED30 0.01134. UVA30 1944.18 J/m². UVB30 36.219 J/m². Conf 23. interpolated
-  hourly. tier C. cold
+ D30 0.28116. UVA30 0 J/m². UVB30 0 J/m². Conf 24. interpolated hourly. tie
+ r C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T0800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T160000Z
 DTEND:20261110T163000Z
-SUMMARY:Sun 08:00 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 4/100. Local 20/100. TanDose30 64.098 J/m² m
- el. SED30 0.0225. UVA30 5554.8 J/m². UVB30 86.58 J/m². Conf 23. interpolat
- ed hourly. tier C. cold
+SUMMARY:Sun 08:00 (Abs 1/100)
+DESCRIPTION:Abs 1/100. Overall 1/100. Local 14/100. TanDose30 21.87 J/m² me
+ l. SED30 0. UVA30 4123.8 J/m². UVB30 18.54 J/m². Conf 23. interpolated hou
+ rly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T0830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T163000Z
 DTEND:20261110T170000Z
-SUMMARY:Sun 08:30 (Abs 4/100)
-DESCRIPTION:Abs 4/100. Overall 6/100. Local 29/100. TanDose30 118.638 J/m² 
- mel. SED30 0.14616. UVA30 6949.17 J/m². UVB30 176.7 J/m². Conf 26. interpo
- lated hourly. tier C. cold
+SUMMARY:Sun 08:30 (Abs 2/100)
+DESCRIPTION:Abs 2/100. Overall 0/100. Local 20/100. TanDose30 61.326 J/m² m
+ el. SED30 0.01134. UVA30 4697.1 J/m². UVB30 85.9018 J/m². Conf 26. interpo
+ lated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T0900@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T170000Z
 DTEND:20261110T173000Z
-SUMMARY:Sun 09:00 (Abs 6/100)
-DESCRIPTION:Abs 6/100. Overall 8/100. Local 34/100. TanDose30 181.89 J/m² m
- el. SED30 0.27. UVA30 9230.4 J/m². UVB30 277.92 J/m². Conf 29. interpolate
- d hourly. tier C
+SUMMARY:Sun 09:00 (Abs 3/100)
+DESCRIPTION:Abs 3/100. Overall 1/100. Local 26/100. TanDose30 99.324 J/m² m
+ el. SED30 0.0225. UVA30 5085 J/m². UVB30 151.56 J/m². Conf 29. interpolate
+ d hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T0930@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T173000Z
 DTEND:20261110T180000Z
-SUMMARY:Sun 09:30 (Abs 7/100)
-DESCRIPTION:Abs 7/100. Overall 10/100. Local 38/100. TanDose30 235.278 J/m²
-  mel. SED30 0.4275. UVA30 13749.9 J/m². UVB30 350.592 J/m². Conf 29. inter
- polated hourly. tier C
+SUMMARY:Sun 09:30 (Abs 4/100)
+DESCRIPTION:Abs 4/100. Overall 1/100. Local 30/100. TanDose30 121.338 J/m² 
+ mel. SED30 0.045. UVA30 5797.04 J/m². UVB30 187.198 J/m². Conf 29. interpo
+ lated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1000@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T180000Z
 DTEND:20261110T183000Z
-SUMMARY:Sun 10:00 (Abs 9/100)
-DESCRIPTION:Abs 9/100. Overall 11/100. Local 42/100. TanDose30 290.592 J/m²
-  mel. SED30 0.585. UVA30 18460.8 J/m². UVB30 425.7 J/m². Conf 29. interpol
- ated hourly. tier C
+SUMMARY:Sun 10:00 (Abs 4/100)
+DESCRIPTION:Abs 4/100. Overall 1/100. Local 31/100. TanDose30 140.724 J/m² 
+ mel. SED30 0.0675. UVA30 6287.4 J/m². UVB30 219.24 J/m². Conf 29. interpol
+ ated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1030@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T183000Z
 DTEND:20261110T190000Z
-SUMMARY:Sun 10:30 (Abs 11/100)
-DESCRIPTION:Abs 11/100. Overall 13/100. Local 46/100. TanDose30 346.824 J/m
- ² mel. SED30 0.7425. UVA30 22609.2 J/m². UVB30 505.252 J/m². Conf 29. inte
- rpolated hourly. tier C
+SUMMARY:Sun 10:30 (Abs 5/100)
+DESCRIPTION:Abs 5/100. Overall 1/100. Local 33/100. TanDose30 159.552 J/m² 
+ mel. SED30 0.07866. UVA30 6948.6 J/m². UVB30 249.469 J/m². Conf 29. interp
+ olated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1100@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T190000Z
 DTEND:20261110T193000Z
-SUMMARY:Sun 11:00 (Abs 12/100)
-DESCRIPTION:Abs 12/100. Overall 15/100. Local 50/100. TanDose30 401.04 J/m²
-  mel. SED30 0.9. UVA30 26533.8 J/m². UVB30 582.3 J/m². Conf 29. interpolat
- ed hourly. tier C
+SUMMARY:Sun 11:00 (Abs 6/100)
+DESCRIPTION:Abs 6/100. Overall 1/100. Local 34/100. TanDose30 176.472 J/m² 
+ mel. SED30 0.09. UVA30 7461 J/m². UVB30 277.02 J/m². Conf 29. interpolated
+  hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1130@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T193000Z
 DTEND:20261110T200000Z
-SUMMARY:Sun 11:30 (Abs 15/100)
-DESCRIPTION:Abs 15/100. Overall 18/100. Local 56/100. TanDose30 483.138 J/m
- ² mel. SED30 1.04634. UVA30 32402.3 J/m². UVB30 699.342 J/m². Conf 29. int
- erpolated hourly. tier C
+SUMMARY:Sun 11:30 (Abs 6/100)
+DESCRIPTION:Abs 6/100. Overall 1/100. Local 34/100. TanDose30 181.242 J/m² 
+ mel. SED30 0.10134. UVA30 7619.35 J/m². UVB30 284.713 J/m². Conf 29. inter
+ polated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1200@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T200000Z
 DTEND:20261110T203000Z
-SUMMARY:Sun 12:00 (Abs 17/100)
-DESCRIPTION:Abs 17/100. Overall 21/100. Local 61/100. TanDose30 559.548 J/m
- ² mel. SED30 1.1925. UVA30 37630.8 J/m². UVB30 809.46 J/m². Conf 29. inter
- polated hourly. tier C
+SUMMARY:Sun 12:00 (Abs 6/100)
+DESCRIPTION:Abs 6/100. Overall 1/100. Local 34/100. TanDose30 183.51 J/m² m
+ el. SED30 0.1125. UVA30 7590.6 J/m². UVB30 288.9 J/m². Conf 29. interpolat
+ ed hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1230@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T203000Z
 DTEND:20261110T210000Z
-SUMMARY:Sun 12:30 (Abs 18/100)
-DESCRIPTION:Abs 18/100. Overall 21/100. Local 62/100. TanDose30 569.34 J/m²
-  mel. SED30 1.24884. UVA30 39133.1 J/m². UVB30 819.446 J/m². Conf 29. inte
- rpolated hourly. tier C
+SUMMARY:Sun 12:30 (Abs 6/100)
+DESCRIPTION:Abs 6/100. Overall 1/100. Local 34/100. TanDose30 177.552 J/m² 
+ mel. SED30 0.135. UVA30 7354.57 J/m². UVB30 279.456 J/m². Conf 29. interpo
+ lated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1300@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T210000Z
 DTEND:20261110T213000Z
-SUMMARY:Sun 13:00 (Abs 18/100)
-DESCRIPTION:Abs 18/100. Overall 22/100. Local 62/100. TanDose30 569.754 J/m
- ² mel. SED30 1.305. UVA30 39556.8 J/m². UVB30 818.1 J/m². Conf 29. interpo
- lated hourly. tier C
+SUMMARY:Sun 13:00 (Abs 5/100)
+DESCRIPTION:Abs 5/100. Overall 1/100. Local 33/100. TanDose30 166.986 J/m² 
+ mel. SED30 0.1575. UVA30 6778.8 J/m². UVB30 263.52 J/m². Conf 29. interpol
+ ated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1330@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T213000Z
 DTEND:20261110T220000Z
-SUMMARY:Sun 13:30 (Abs 16/100)
-DESCRIPTION:Abs 16/100. Overall 20/100. Local 58/100. TanDose30 510.642 J/m
- ² mel. SED30 1.27134. UVA30 38441.3 J/m². UVB30 718.465 J/m². Conf 29. int
- erpolated hourly. tier C
+SUMMARY:Sun 13:30 (Abs 4/100)
+DESCRIPTION:Abs 4/100. Overall 1/100. Local 31/100. TanDose30 142.632 J/m² 
+ mel. SED30 0.2025. UVA30 6563.32 J/m². UVB30 221.289 J/m². Conf 29. interp
+ olated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1400@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T220000Z
 DTEND:20261110T223000Z
-SUMMARY:Sun 14:00 (Abs 14/100)
-DESCRIPTION:Abs 14/100. Overall 19/100. Local 54/100. TanDose30 440.874 J/m
- ² mel. SED30 1.2375. UVA30 36003.6 J/m². UVB30 606.42 J/m². Conf 29. inter
- polated hourly. tier C
+SUMMARY:Sun 14:00 (Abs 4/100)
+DESCRIPTION:Abs 4/100. Overall 1/100. Local 28/100. TanDose30 112.068 J/m² 
+ mel. SED30 0.2475. UVA30 5842.8 J/m². UVB30 170.46 J/m². Conf 29. interpol
+ ated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1430@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T223000Z
 DTEND:20261110T230000Z
-SUMMARY:Sun 14:30 (Abs 10/100)
-DESCRIPTION:Abs 10/100. Overall 15/100. Local 46/100. TanDose30 338.652 J/m
- ² mel. SED30 1.1475. UVA30 31916.4 J/m². UVB30 444.796 J/m². Conf 26. inte
- rpolated hourly. tier C
+SUMMARY:Sun 14:30 (Abs 2/100)
+DESCRIPTION:Abs 2/100. Overall 1/100. Local 22/100. TanDose30 78.858 J/m² m
+ el. SED30 0.2925. UVA30 6592.18 J/m². UVB30 107.733 J/m². Conf 26. interpo
+ lated hourly. tier C. heavy precipitation in interval/code
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1500@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T230000Z
 DTEND:20261110T233000Z
-SUMMARY:Sun 15:00 (Abs 7/100)
-DESCRIPTION:Abs 7/100. Overall 11/100. Local 38/100. TanDose30 226.728 J/m²
-  mel. SED30 1.0575. UVA30 26386.2 J/m². UVB30 273.06 J/m². Conf 23. interp
- olated hourly. tier C
+SUMMARY:Sun 15:00 (Abs 1/100)
+DESCRIPTION:Abs 1/100. Overall 1/100. Local 15/100. TanDose30 36.18 J/m² me
+ l. SED30 0.3375. UVA30 6073.2 J/m². UVB30 34.38 J/m². Conf 23. interpolate
+ d hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1530@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261110T233000Z
 DTEND:20261111T000000Z
-SUMMARY:Sun 15:30 (Abs 5/100)
-DESCRIPTION:Abs 5/100. Overall 9/100. Local 34/100. TanDose30 173.016 J/m² 
- mel. SED30 0.91116. UVA30 23013.5 J/m². UVB30 194.153 J/m². Conf 23. inter
- polated hourly. tier C
+SUMMARY:Sun 15:30 (Abs 1/100)
+DESCRIPTION:Abs 1/100. Overall 1/100. Local 15/100. TanDose30 30.942 J/m² m
+ el. SED30 0.3375. UVA30 7327.42 J/m². UVB30 18.879 J/m². Conf 23. interpol
+ ated hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1600@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T000000Z
 DTEND:20261111T003000Z
-SUMMARY:Sun 16:00 (Abs 3/100)
-DESCRIPTION:Abs 3/100. Overall 6/100. Local 26/100. TanDose30 99.468 J/m² m
- el. SED30 0.765. UVA30 15829.2 J/m². UVB30 98.82 J/m². Conf 23. interpolat
- ed hourly. tier C
+SUMMARY:Sun 16:00 (Abs 0/100)
+DESCRIPTION:Abs 0/100. Overall 1/100. Local 9/100. TanDose30 16.848 J/m² me
+ l. SED30 0.3375. UVA30 6076.8 J/m². UVB30 0 J/m². Conf 23. interpolated ho
+ urly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1630@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T003000Z
 DTEND:20261111T010000Z
-SUMMARY:Sun 16:30 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 4/100. Local 18/100. TanDose30 55.872 J/m² m
- el. SED30 0.585. UVA30 8833.23 J/m². UVB30 55.7969 J/m². Conf 23. interpol
- ated hourly. tier C
+SUMMARY:Sun 16:30 (Abs 0/100)
+DESCRIPTION:Abs 0/100. Overall 0/100. Local 5/100. TanDose30 12.852 J/m² me
+ l. SED30 0.2925. UVA30 3531.78 J/m². UVB30 5.42156 J/m². Conf 23. interpol
+ ated hourly. tier C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1700@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T010000Z
 DTEND:20261111T013000Z
 SUMMARY:Sun 17:00 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.405. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tier 
- C. cold
+ D30 0.2475. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tier
+  C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261110T1730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T013000Z
 DTEND:20261111T020000Z
 SUMMARY:Sun 17:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.23634. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tie
- r C. cold
+ D30 0.1575. UVA30 0 J/m². UVB30 0 J/m². Conf 24. interpolated hourly. tier
+  C. light precipitation — usable\, expect damp\; cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T0730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T153000Z
 DTEND:20261111T160000Z
 SUMMARY:Sun 07:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 1/100. Local 14/100. TanDose30 0 J/m² mel. S
- ED30 0.0225. UVA30 1990.8 J/m². UVB30 30.2704 J/m². Conf 23. interpolated 
- hourly. tier C. cold
+ ED30 0.0225. UVA30 1993.32 J/m². UVB30 29.8939 J/m². Conf 23. interpolated
+  hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T0800@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T160000Z
 DTEND:20261111T163000Z
 SUMMARY:Sun 08:00 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 3/100. Local 18/100. TanDose30 56.466 J/m² m
- el. SED30 0.045. UVA30 5688 J/m². UVB30 72.36 J/m². Conf 23. interpolated 
- hourly. tier C. cold
+DESCRIPTION:Abs 2/100. Overall 2/100. Local 18/100. TanDose30 55.98 J/m² me
+ l. SED30 0.045. UVA30 5695.2 J/m². UVB30 71.46 J/m². Conf 23. interpolated
+  hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T0830@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T163000Z
 DTEND:20261111T170000Z
 SUMMARY:Sun 08:30 (Abs 4/100)
-DESCRIPTION:Abs 4/100. Overall 3/100. Local 31/100. TanDose30 136.314 J/m² 
- mel. SED30 0.25884. UVA30 12103.6 J/m². UVB30 182.706 J/m². Conf 26. inter
- polated hourly. tier C. light precipitation — usable\, expect damp\; cold
+DESCRIPTION:Abs 4/100. Overall 5/100. Local 30/100. TanDose30 129.168 J/m² 
+ mel. SED30 0.27. UVA30 11295.9 J/m². UVB30 173.995 J/m². Conf 26. interpol
+ ated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T0900@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T170000Z
 DTEND:20261111T173000Z
 SUMMARY:Sun 09:00 (Abs 7/100)
-DESCRIPTION:Abs 7/100. Overall 5/100. Local 38/100. TanDose30 233.208 J/m² 
- mel. SED30 0.4725. UVA30 20986.2 J/m². UVB30 311.22 J/m². Conf 29. interpo
- lated hourly. tier C. light precipitation — usable\, expect damp\; cold
+DESCRIPTION:Abs 7/100. Overall 8/100. Local 37/100. TanDose30 216.216 J/m² 
+ mel. SED30 0.495. UVA30 18871.2 J/m². UVB30 291.42 J/m². Conf 29. interpol
+ ated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T0930@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T173000Z
 DTEND:20261111T180000Z
-SUMMARY:Sun 09:30 (Abs 11/100)
-DESCRIPTION:Abs 11/100. Overall 7/100. Local 48/100. TanDose30 367.236 J/m²
-  mel. SED30 0.68616. UVA30 30109.1 J/m². UVB30 504.559 J/m². Conf 29. inte
- rpolated hourly. tier C. light precipitation — usable\, expect damp\; cold
+SUMMARY:Sun 09:30 (Abs 10/100)
+DESCRIPTION:Abs 10/100. Overall 12/100. Local 46/100. TanDose30 336.348 J/m
+ ² mel. SED30 0.75384. UVA30 28350.8 J/m². UVB30 458.293 J/m². Conf 29. int
+ erpolated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1000@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T180000Z
 DTEND:20261111T183000Z
-SUMMARY:Sun 10:00 (Abs 16/100)
-DESCRIPTION:Abs 16/100. Overall 9/100. Local 58/100. TanDose30 501.552 J/m²
-  mel. SED30 0.9. UVA30 39270.6 J/m². UVB30 698.22 J/m². Conf 29. interpola
- ted hourly. tier C. light precipitation — usable\, expect damp\; cold
+SUMMARY:Sun 10:00 (Abs 14/100)
+DESCRIPTION:Abs 14/100. Overall 16/100. Local 55/100. TanDose30 458.892 J/m
+ ² mel. SED30 1.0125. UVA30 38161.8 J/m². UVB30 627.84 J/m². Conf 29. inter
+ polated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1030@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T183000Z
 DTEND:20261111T190000Z
 SUMMARY:Sun 10:30 (Abs 18/100)
-DESCRIPTION:Abs 18/100. Overall 11/100. Local 63/100. TanDose30 584.568 J/m
- ² mel. SED30 1.02384. UVA30 43177.8 J/m². UVB30 826.571 J/m². Conf 30. int
- erpolated hourly. tier C. light precipitation — usable\, expect damp\; col
- d
+DESCRIPTION:Abs 18/100. Overall 20/100. Local 64/100. TanDose30 598.572 J/m
+ ² mel. SED30 1.24884. UVA30 45332.7 J/m². UVB30 840.838 J/m². Conf 29. int
+ erpolated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1100@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T190000Z
 DTEND:20261111T193000Z
-SUMMARY:Sun 11:00 (Abs 20/100)
-DESCRIPTION:Abs 20/100. Overall 12/100. Local 68/100. TanDose30 659.43 J/m²
-  mel. SED30 1.1475. UVA30 46089 J/m². UVB30 945.36 J/m². Conf 30. interpol
- ated hourly. tier C. light precipitation — usable\, expect damp\; cold
+SUMMARY:Sun 11:00 (Abs 23/100)
+DESCRIPTION:Abs 23/100. Overall 26/100. Local 73/100. TanDose30 733.32 J/m²
+  mel. SED30 1.485. UVA30 51890.4 J/m². UVB30 1048.14 J/m². Conf 29. interp
+ olated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1130@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T193000Z
 DTEND:20261111T200000Z
-SUMMARY:Sun 11:30 (Abs 19/100)
-DESCRIPTION:Abs 19/100. Overall 11/100. Local 66/100. TanDose30 624.96 J/m²
-  mel. SED30 1.17. UVA30 43570.5 J/m². UVB30 896.476 J/m². Conf 30. interpo
- lated hourly. tier C. light precipitation — usable\, expect damp\; cold
+SUMMARY:Sun 11:30 (Abs 25/100)
+DESCRIPTION:Abs 25/100. Overall 29/100. Local 78/100. TanDose30 793.404 J/m
+ ² mel. SED30 1.67634. UVA30 57222.6 J/m². UVB30 1128.68 J/m². Conf 29. int
+ erpolated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1200@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T200000Z
 DTEND:20261111T203000Z
-SUMMARY:Sun 12:00 (Abs 18/100)
-DESCRIPTION:Abs 18/100. Overall 10/100. Local 63/100. TanDose30 581.832 J/m
- ² mel. SED30 1.1925. UVA30 40042.8 J/m². UVB30 837.18 J/m². Conf 31. inter
- polated hourly. tier C. light precipitation — usable\, expect damp\; cold
+SUMMARY:Sun 12:00 (Abs 26/100)
+DESCRIPTION:Abs 26/100. Overall 31/100. Local 82/100. TanDose30 843.48 J/m²
+  mel. SED30 1.8675. UVA30 61354.8 J/m². UVB30 1197.36 J/m². Conf 29. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1230@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T203000Z
 DTEND:20261111T210000Z
-SUMMARY:Sun 12:30 (Abs 16/100)
-DESCRIPTION:Abs 16/100. Overall 9/100. Local 59/100. TanDose30 533.718 J/m²
-  mel. SED30 1.13616. UVA30 37426.1 J/m². UVB30 764.514 J/m². Conf 31. inte
- rpolated hourly. tier C. light precipitation — usable\, expect damp\; cold
+SUMMARY:Sun 12:30 (Abs 26/100)
+DESCRIPTION:Abs 26/100. Overall 32/100. Local 83/100. TanDose30 854.424 J/m
+ ² mel. SED30 1.9125. UVA30 62862.1 J/m². UVB30 1209.38 J/m². Conf 29. inte
+ rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1300@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T210000Z
 DTEND:20261111T213000Z
-SUMMARY:Sun 13:00 (Abs 15/100)
-DESCRIPTION:Abs 15/100. Overall 9/100. Local 56/100. TanDose30 480.708 J/m²
-  mel. SED30 1.08. UVA30 34236 J/m². UVB30 685.98 J/m². Conf 31. interpolat
- ed hourly. tier C. light precipitation — usable\, expect damp\; cold
+SUMMARY:Sun 13:00 (Abs 26/100)
+DESCRIPTION:Abs 26/100. Overall 32/100. Local 83/100. TanDose30 852.12 J/m²
+  mel. SED30 1.9575. UVA30 62755.2 J/m². UVB30 1205.82 J/m². Conf 29. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1330@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T213000Z
 DTEND:20261111T220000Z
-SUMMARY:Sun 13:30 (Abs 12/100)
-DESCRIPTION:Abs 12/100. Overall 7/100. Local 50/100. TanDose30 389.34 J/m² 
- mel. SED30 0.95634. UVA30 28980.7 J/m². UVB30 549.42 J/m². Conf 31. interp
- olated hourly. tier C. light precipitation — usable\, expect damp\; cold
+SUMMARY:Sun 13:30 (Abs 24/100)
+DESCRIPTION:Abs 24/100. Overall 29/100. Local 75/100. TanDose30 757.872 J/m
+ ² mel. SED30 1.89. UVA30 61909.8 J/m². UVB30 1042.38 J/m². Conf 29. interp
+ olated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1400@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T220000Z
 DTEND:20261111T223000Z
-SUMMARY:Sun 14:00 (Abs 9/100)
-DESCRIPTION:Abs 9/100. Overall 6/100. Local 43/100. TanDose30 296.784 J/m² 
- mel. SED30 0.8325. UVA30 23580 J/m². UVB30 411.48 J/m². Conf 30. interpola
- ted hourly. tier C. light precipitation — usable\, expect damp\; cold
+SUMMARY:Sun 14:00 (Abs 20/100)
+DESCRIPTION:Abs 20/100. Overall 26/100. Local 67/100. TanDose30 648.882 J/m
+ ² mel. SED30 1.8225. UVA30 59104.8 J/m². UVB30 862.38 J/m². Conf 29. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1430@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T223000Z
 DTEND:20261111T230000Z
-SUMMARY:Sun 14:30 (Abs 6/100)
-DESCRIPTION:Abs 6/100. Overall 4/100. Local 36/100. TanDose30 197.46 J/m² m
- el. SED30 0.66384. UVA30 17580.5 J/m². UVB30 264.422 J/m². Conf 27. interp
- olated hourly. tier C. light precipitation — usable\, expect damp\; cold
+SUMMARY:Sun 14:30 (Abs 15/100)
+DESCRIPTION:Abs 15/100. Overall 21/100. Local 57/100. TanDose30 494.226 J/m
+ ² mel. SED30 1.6425. UVA30 55167.2 J/m². UVB30 606.789 J/m². Conf 26. inte
+ rpolated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1500@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T230000Z
 DTEND:20261111T233000Z
-SUMMARY:Sun 15:00 (Abs 3/100)
-DESCRIPTION:Abs 3/100. Overall 1/100. Local 27/100. TanDose30 102.15 J/m² m
- el. SED30 0.495. UVA30 12157.2 J/m². UVB30 121.68 J/m². Conf 23. interpola
- ted hourly. tier C. heavy precipitation in interval/code
+SUMMARY:Sun 15:00 (Abs 10/100)
+DESCRIPTION:Abs 10/100. Overall 15/100. Local 45/100. TanDose30 324.054 J/m
+ ² mel. SED30 1.4625. UVA30 48591 J/m². UVB30 336.6 J/m². Conf 23. interpol
+ ated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1530@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261111T233000Z
 DTEND:20261112T000000Z
-SUMMARY:Sun 15:30 (Abs 2/100)
-DESCRIPTION:Abs 2/100. Overall 1/100. Local 20/100. TanDose30 60.21 J/m² me
- l. SED30 0.37116. UVA30 9245.91 J/m². UVB30 61.4631 J/m². Conf 23. interpo
- lated hourly. tier C. heavy precipitation in interval/code
+SUMMARY:Sun 15:30 (Abs 8/100)
+DESCRIPTION:Abs 8/100. Overall 13/100. Local 41/100. TanDose30 272.322 J/m²
+  mel. SED30 1.2375. UVA30 44605.3 J/m². UVB30 264.248 J/m². Conf 23. inter
+ polated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1600@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261112T000000Z
 DTEND:20261112T003000Z
-SUMMARY:Sun 16:00 (Abs 0/100)
-DESCRIPTION:Abs 0/100. Overall 0/100. Local 10/100. TanDose30 16.542 J/m² m
- el. SED30 0.2475. UVA30 5961.6 J/m². UVB30 0 J/m². Conf 23. interpolated h
- ourly. tier C. heavy precipitation in interval/code
+SUMMARY:Sun 16:00 (Abs 6/100)
+DESCRIPTION:Abs 6/100. Overall 10/100. Local 35/100. TanDose30 190.44 J/m² 
+ mel. SED30 1.0125. UVA30 33879.6 J/m². UVB30 171.54 J/m². Conf 23. interpo
+ lated hourly. tier C
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1630@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261112T003000Z
 DTEND:20261112T010000Z
-SUMMARY:Sun 16:30 (Abs 0/100)
-DESCRIPTION:Abs 0/100. Overall 0/100. Local 5/100. TanDose30 6.498 J/m² mel
- . SED30 0.16884. UVA30 2339.82 J/m². UVB30 0 J/m². Conf 23. interpolated h
- ourly. tier C. heavy precipitation in interval/code
+SUMMARY:Sun 16:30 (Abs 3/100)
+DESCRIPTION:Abs 3/100. Overall 6/100. Local 26/100. TanDose30 97.902 J/m² m
+ el. SED30 0.75384. UVA30 16548.2 J/m². UVB30 92.4677 J/m². Conf 23. interp
+ olated hourly. tier C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1700@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261112T010000Z
 DTEND:20261112T013000Z
 SUMMARY:Sun 17:00 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.09. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tier C
- . heavy precipitation in interval/code
+ D30 0.495. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tier 
+ C. cold
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-30m-pacific-palisades-20261111T1730@pacific-palisades
-DTSTAMP:20261029T163332Z
+DTSTAMP:20261029T191402Z
 SEQUENCE:0
 DTSTART:20261112T013000Z
 DTEND:20261112T020000Z
 SUMMARY:Sun 17:30 (Abs 0/100)
 DESCRIPTION:Abs 0/100. Overall 0/100. Local 0/100. TanDose30 0 J/m² mel. SE
- D30 0.05616. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tie
- r C. heavy precipitation in interval/code
+ D30 0.28116. UVA30 0 J/m². UVB30 0 J/m². Conf 23. interpolated hourly. tie
+ r C. cold
 END:VEVENT
 END:VCALENDAR
