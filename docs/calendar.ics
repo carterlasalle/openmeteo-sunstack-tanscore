@@ -6,185 +6,184 @@ METHOD:PUBLISH
 X-WR-CALNAME:SunStack best sun windows
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-11-12@south-bend
-DTSTAMP:20261112T213752Z
+DTSTAMP:20261113T023550Z
 SEQUENCE:0
 DTSTART:20261112T163000Z
 DTEND:20261112T170000Z
-SUMMARY:Best sun 11:30 AM-12:00 PM - 395.5 J/m² pigment-weighted dose
-DESCRIPTION:Strongest 30 min 11:30 AM-12:00 PM - 395.5 J/m² pigment-weighte
- d dose. Absolute 12/100 (worldwide scale) · Local 81/100 (percentile withi
- n this location). Peak UV 2.5 at 12:00 PM. Day total 3090.5 J/m² pigment-w
+SUMMARY:Best sun 11:30 AM-12:00 PM - 389.3 J/m² pigment-weighted dose
+DESCRIPTION:Strongest 30 min 11:30 AM-12:00 PM - 389.3 J/m² pigment-weighte
+ d dose. Absolute 12/100 (worldwide scale) · Local 80/100 (percentile withi
+ n this location). Peak UV 2.5 at 12:00 PM. Day total 3044.3 J/m² pigment-w
  eighted (partial). SED 10.35 (standard erythema dose) (partial). NO USABLE
   WINDOW. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-11-13@south-bend
-DTSTAMP:20261112T213752Z
+DTSTAMP:20261113T023550Z
 SEQUENCE:0
-DTSTART:20261113T163000Z
-DTEND:20261113T170000Z
-SUMMARY:Best sun 11:30 AM-12:00 PM - 476.3 J/m² pigment-weighted dose
-DESCRIPTION:Strongest 30 min 11:30 AM-12:00 PM - 476.3 J/m² pigment-weighte
- d dose. Absolute 15/100 (worldwide scale) · Local 88/100 (percentile withi
- n this location). Peak UV 3 at 1:00 PM. Day total 4696 J/m² pigment-weight
- ed (partial). SED 14.625 (standard erythema dose) (partial). NO USABLE WIN
- DOW. Times refresh with each SunStack run.
+DTSTART:20261113T170000Z
+DTEND:20261113T173000Z
+SUMMARY:Best sun 12:00 PM-12:30 PM - 510.7 J/m² pigment-weighted dose
+DESCRIPTION:Strongest 30 min 12:00 PM-12:30 PM - 510.7 J/m² pigment-weighte
+ d dose. Absolute 16/100 (worldwide scale) · Local 90/100 (percentile withi
+ n this location). Peak UV 3 at 1:00 PM. Day total 4640.6 J/m² pigment-weig
+ hted (partial). SED 13.995 (standard erythema dose) (partial). NO USABLE W
+ INDOW. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-11-14@south-bend
-DTSTAMP:20261112T213752Z
+DTSTAMP:20261113T023550Z
 SEQUENCE:0
-DTSTART:20261114T163000Z
-DTEND:20261114T170000Z
-SUMMARY:Best sun 11:30 AM-12:00 PM - 265.8 J/m² pigment-weighted dose
-DESCRIPTION:Strongest 30 min 11:30 AM-12:00 PM - 265.8 J/m² pigment-weighte
- d dose. Absolute 8/100 (worldwide scale) · Local 68/100 (percentile within
-  this location). Peak UV 0.8 at 11:00 AM. Day total 2064.1 J/m² pigment-we
- ighted (partial). SED 4.005 (standard erythema dose) (partial). NO USABLE 
- WINDOW. Times refresh with each SunStack run.
+DTSTART:20261114T173000Z
+DTEND:20261114T180000Z
+SUMMARY:Best sun 12:30 PM-1:00 PM - 387.8 J/m² pigment-weighted dose
+DESCRIPTION:Strongest 30 min 12:30 PM-1:00 PM - 387.8 J/m² pigment-weighted
+  dose. Absolute 12/100 (worldwide scale) · Local 82/100 (percentile within
+  this location). Peak UV 0.6 at 2:00 PM. Day total 3568.9 J/m² pigment-wei
+ ghted (partial). SED 2.07 (standard erythema dose) (partial). NO USABLE WI
+ NDOW. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-11-15@south-bend
-DTSTAMP:20261112T213752Z
+DTSTAMP:20261113T023550Z
 SEQUENCE:0
-DTSTART:20261115T183000Z
-DTEND:20261115T190000Z
-SUMMARY:Best sun 1:30 PM-2:00 PM - 191.6 J/m² pigment-weighted dose
-DESCRIPTION:Strongest 30 min 1:30 PM-2:00 PM - 191.6 J/m² pigment-weighted 
- dose. Absolute 6/100 (worldwide scale) · Local 56/100 (percentile within t
- his location). Peak UV 1.45 at 2:00 PM. Day total 1686.4 J/m² pigment-weig
- hted (partial). SED 5.58 (standard erythema dose) (partial). NO USABLE WIN
- DOW. Times refresh with each SunStack run.
+DTSTART:20261115T173000Z
+DTEND:20261115T180000Z
+SUMMARY:Best sun 12:30 PM-1:00 PM - 142.5 J/m² pigment-weighted dose
+DESCRIPTION:Strongest 30 min 12:30 PM-1:00 PM - 142.5 J/m² pigment-weighted
+  dose. Absolute 4/100 (worldwide scale) · Local 46/100 (percentile within 
+ this location). Peak UV 0.85 at 1:00 PM. Day total 1414.5 J/m² pigment-wei
+ ghted (partial). SED 4.905 (standard erythema dose) (partial). NO USABLE W
+ INDOW. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-11-16@south-bend
-DTSTAMP:20261112T213752Z
+DTSTAMP:20261113T023550Z
 SEQUENCE:0
-DTSTART:20261116T190000Z
-DTEND:20261116T193000Z
-SUMMARY:Best sun 2:00 PM-2:30 PM - 311.5 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 2:00 PM-2:30 PM - 311.5 J/m² pigment-weighted d
- ose. Absolute 16/100 (worldwide scale) · Local 91/100 (percentile within t
- his location). Peak UV 2.9 at 1:00 PM. Day total 4497.9 J/m² pigment-weigh
- ted (partial). SED 14.04 (standard erythema dose) (partial). strongest win
- dow is blocked by outdoor constraints. POOR. Times refresh with each SunSt
- ack run.
+DTSTART:20261116T173000Z
+DTEND:20261116T180000Z
+SUMMARY:Best sun 12:30 PM-1:00 PM - 503.8 J/m² pigment-weighted dose
+DESCRIPTION:Strongest 30 min 12:30 PM-1:00 PM - 503.8 J/m² pigment-weighted
+  dose. Absolute 16/100 (worldwide scale) · Local 92/100 (percentile within
+  this location). Peak UV 2.9 at 1:00 PM. Day total 4631 J/m² pigment-weigh
+ ted (partial). SED 14.04 (standard erythema dose) (partial). NO USABLE WIN
+ DOW. Times refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-11-17@south-bend
-DTSTAMP:20261112T213752Z
+DTSTAMP:20261113T023550Z
 SEQUENCE:0
 DTSTART:20261117T173000Z
 DTEND:20261117T180000Z
-SUMMARY:Best sun 12:30 PM-1:00 PM - 449.4 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 449.4 J/m² pigment-weighted 
- dose. Absolute 14/100 (worldwide scale) · Local 88/100 (percentile within 
- this location). Peak UV 2.75 at 1:00 PM. Day total 4180.5 J/m² pigment-wei
- ghted (partial). SED 13.995 (standard erythema dose) (partial). POOR. Time
- s refresh with each SunStack run.
+SUMMARY:Best sun 12:30 PM-1:00 PM - 466 J/m² pigment-weighted dose
+DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 466 J/m² pigment-weighted do
+ se. Absolute 14/100 (worldwide scale) · Local 90/100 (percentile within th
+ is location). Peak UV 2.95 at 1:00 PM. Day total 4212.8 J/m² pigment-weigh
+ ted (partial). SED 13.995 (standard erythema dose) (partial). POOR. Times 
+ refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-11-18@south-bend
-DTSTAMP:20261112T213752Z
+DTSTAMP:20261113T023550Z
 SEQUENCE:0
-DTSTART:20261118T173000Z
-DTEND:20261118T180000Z
-SUMMARY:Best sun 12:30 PM-1:00 PM - 429 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 429 J/m² pigment-weighted do
- se. Absolute 13/100 (worldwide scale) · Local 88/100 (percentile within th
- is location). Peak UV 2.6 at 1:00 PM. Day total 3943.9 J/m² pigment-weight
- ed (partial). SED 13.456 (standard erythema dose) (partial). POOR. Times r
- efresh with each SunStack run.
+DTSTART:20261118T170000Z
+DTEND:20261118T173000Z
+SUMMARY:Best sun 12:00 PM-12:30 PM - 444.1 J/m² pigment-weighted dose
+DESCRIPTION:Best usable sun 12:00 PM-12:30 PM - 444.1 J/m² pigment-weighted
+  dose. Absolute 14/100 (worldwide scale) · Local 89/100 (percentile within
+  this location). Peak UV 2.65 at 1:00 PM. Day total 4127.1 J/m² pigment-we
+ ighted (partial). SED 13.77 (standard erythema dose) (partial). POOR. Time
+ s refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-11-19@south-bend
-DTSTAMP:20261112T213752Z
+DTSTAMP:20261113T023550Z
 SEQUENCE:0
-DTSTART:20261119T173000Z
-DTEND:20261119T180000Z
-SUMMARY:Best sun 12:30 PM-1:00 PM - 373.6 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 373.6 J/m² pigment-weighted 
- dose. Absolute 12/100 (worldwide scale) · Local 84/100 (percentile within 
- this location). Peak UV 2.4 at 1:00 PM. Day total 3256.3 J/m² pigment-weig
- hted (partial). SED 12.015 (standard erythema dose) (partial). POOR. Times
-  refresh with each SunStack run.
+DTSTART:20261119T183000Z
+DTEND:20261119T190000Z
+SUMMARY:Best sun 1:30 PM-2:00 PM - 284 J/m² pigment-weighted dose
+DESCRIPTION:Best usable sun 1:30 PM-2:00 PM - 284 J/m² pigment-weighted dos
+ e. Absolute 9/100 (worldwide scale) · Local 74/100 (percentile within this
+  location). Peak UV 2 at 2:00 PM. Day total 2462.9 J/m² pigment-weighted (
+ partial). SED 9.45 (standard erythema dose) (partial). POOR. Times refresh
+  with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-11-20@south-bend
-DTSTAMP:20261112T213752Z
+DTSTAMP:20261113T023550Z
 SEQUENCE:0
-DTSTART:20261120T163000Z
-DTEND:20261120T170000Z
-SUMMARY:Best sun 11:30 AM-12:00 PM - 290.6 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 11:30 AM-12:00 PM - 290.6 J/m² pigment-weighted
-  dose. Absolute 9/100 (worldwide scale) · Local 76/100 (percentile within 
- this location). Peak UV 1.5 at 12:00 PM. Day total 1767 J/m² pigment-weigh
- ted (partial). SED 6.075 (standard erythema dose) (partial). POOR. Times r
- efresh with each SunStack run.
+DTSTART:20261120T170000Z
+DTEND:20261120T173000Z
+SUMMARY:Best sun 12:00 PM-12:30 PM - 344.1 J/m² pigment-weighted dose
+DESCRIPTION:Best usable sun 12:00 PM-12:30 PM - 344.1 J/m² pigment-weighted
+  dose. Absolute 11/100 (worldwide scale) · Local 82/100 (percentile within
+  this location). Peak UV 2.2 at 1:00 PM. Day total 3188.3 J/m² pigment-wei
+ ghted (partial). SED 11.52 (standard erythema dose) (partial). POOR. Times
+  refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-11-21@south-bend
-DTSTAMP:20261112T213752Z
+DTSTAMP:20261113T023550Z
 SEQUENCE:0
 DTSTART:20261121T173000Z
 DTEND:20261121T180000Z
-SUMMARY:Best sun 12:30 PM-1:00 PM - 414.2 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 414.2 J/m² pigment-weighted 
- dose. Absolute 13/100 (worldwide scale) · Local 88/100 (percentile within 
- this location). Peak UV 2.65 at 1:00 PM. Day total 3682.1 J/m² pigment-wei
- ghted (partial). SED 13.455 (standard erythema dose) (partial). POOR. Time
+SUMMARY:Best sun 12:30 PM-1:00 PM - 333.2 J/m² pigment-weighted dose
+DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 333.2 J/m² pigment-weighted 
+ dose. Absolute 10/100 (worldwide scale) · Local 81/100 (percentile within 
+ this location). Peak UV 2.25 at 1:00 PM. Day total 3119.4 J/m² pigment-wei
+ ghted (partial). SED 11.295 (standard erythema dose) (partial). POOR. Time
  s refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-11-22@south-bend
-DTSTAMP:20261112T213752Z
+DTSTAMP:20261113T023550Z
 SEQUENCE:0
-DTSTART:20261122T170000Z
-DTEND:20261122T173000Z
-SUMMARY:Best sun 12:00 PM-12:30 PM - 402.8 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 12:00 PM-12:30 PM - 402.8 J/m² pigment-weighted
-  dose. Absolute 13/100 (worldwide scale) · Local 89/100 (percentile within
-  this location). Peak UV 2.55 at 1:00 PM. Day total 3686.5 J/m² pigment-we
- ighted (partial). SED 13.14 (standard erythema dose) (partial). POOR. Time
- s refresh with each SunStack run.
-END:VEVENT
-BEGIN:VEVENT
-UID:sunstack-best-south-bend-2026-11-23@south-bend
-DTSTAMP:20261112T213752Z
-SEQUENCE:0
-DTSTART:20261123T183000Z
-DTEND:20261123T190000Z
-SUMMARY:Best sun 1:30 PM-2:00 PM - 160.9 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 1:30 PM-2:00 PM - 160.9 J/m² pigment-weighted d
- ose. Absolute 5/100 (worldwide scale) · Local 54/100 (percentile within th
- is location). Peak UV 1.15 at 2:00 PM. Day total 1381.6 J/m² pigment-weigh
- ted (partial). SED 5.4 (standard erythema dose) (partial). POOR. Times ref
- resh with each SunStack run.
-END:VEVENT
-BEGIN:VEVENT
-UID:sunstack-best-south-bend-2026-11-24@south-bend
-DTSTAMP:20261112T213752Z
-SEQUENCE:0
-DTSTART:20261124T183000Z
-DTEND:20261124T190000Z
-SUMMARY:Best sun 1:30 PM-2:00 PM - 302.8 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 1:30 PM-2:00 PM - 302.8 J/m² pigment-weighted d
- ose. Absolute 9/100 (worldwide scale) · Local 80/100 (percentile within th
- is location). Peak UV 1.95 at 2:00 PM. Day total 2374.7 J/m² pigment-weigh
- ted (partial). SED 8.37 (standard erythema dose) (partial). POOR. Times re
+DTSTART:20261122T173000Z
+DTEND:20261122T180000Z
+SUMMARY:Best sun 12:30 PM-1:00 PM - 401 J/m² pigment-weighted dose
+DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 401 J/m² pigment-weighted do
+ se. Absolute 12/100 (worldwide scale) · Local 88/100 (percentile within th
+ is location). Peak UV 2.55 at 1:00 PM. Day total 3617.1 J/m² pigment-weigh
+ ted (partial). SED 12.6 (standard erythema dose) (partial). POOR. Times re
  fresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
+UID:sunstack-best-south-bend-2026-11-23@south-bend
+DTSTAMP:20261113T023550Z
+SEQUENCE:0
+DTSTART:20261123T183000Z
+DTEND:20261123T190000Z
+SUMMARY:Best sun 1:30 PM-2:00 PM - 74 J/m² pigment-weighted dose
+DESCRIPTION:Best usable sun 1:30 PM-2:00 PM - 74 J/m² pigment-weighted dose
+ . Absolute 2/100 (worldwide scale) · Local 33/100 (percentile within this 
+ location). Peak UV 0.5 at 2:00 PM. Day total 597.4 J/m² pigment-weighted (
+ partial). SED 2.16 (standard erythema dose) (partial). POOR. Times refresh
+  with each SunStack run.
+END:VEVENT
+BEGIN:VEVENT
+UID:sunstack-best-south-bend-2026-11-24@south-bend
+DTSTAMP:20261113T023550Z
+SEQUENCE:0
+DTSTART:20261124T170000Z
+DTEND:20261124T173000Z
+SUMMARY:Best sun 12:00 PM-12:30 PM - 39 J/m² pigment-weighted dose
+DESCRIPTION:Strongest 30 min 12:00 PM-12:30 PM - 39 J/m² pigment-weighted d
+ ose. Absolute 1/100 (worldwide scale) · Local 21/100 (percentile within th
+ is location). Peak UV 0.2 at 1:00 PM. Day total 358 J/m² pigment-weighted 
+ (partial). SED 0.945 (standard erythema dose) (partial). NO USABLE WINDOW.
+  Times refresh with each SunStack run.
+END:VEVENT
+BEGIN:VEVENT
 UID:sunstack-best-south-bend-2026-11-25@south-bend
-DTSTAMP:20261112T213752Z
+DTSTAMP:20261113T023550Z
 SEQUENCE:0
 DTSTART:20261125T173000Z
 DTEND:20261125T180000Z
-SUMMARY:Best sun 12:30 PM-1:00 PM - 375.4 J/m² pigment-weighted dose
-DESCRIPTION:Strongest 30 min 12:30 PM-1:00 PM - 375.4 J/m² pigment-weighted
-  dose. Absolute 12/100 (worldwide scale) · Local 88/100 (percentile within
-  this location). Peak UV 2.5 at 1:00 PM. Day total 3463.5 J/m² pigment-wei
- ghted (partial). SED 12.33 (standard erythema dose) (partial). NO USABLE W
- INDOW. Times refresh with each SunStack run.
+SUMMARY:Best sun 12:30 PM-1:00 PM - 256 J/m² pigment-weighted dose
+DESCRIPTION:Strongest 30 min 12:30 PM-1:00 PM - 256 J/m² pigment-weighted d
+ ose. Absolute 8/100 (worldwide scale) · Local 74/100 (percentile within th
+ is location). Peak UV 1.8 at 1:00 PM. Day total 2369 J/m² pigment-weighted
+  (partial). SED 9.135 (standard erythema dose) (partial). NO USABLE WINDOW
+ . Times refresh with each SunStack run.
 END:VEVENT
 END:VCALENDAR
