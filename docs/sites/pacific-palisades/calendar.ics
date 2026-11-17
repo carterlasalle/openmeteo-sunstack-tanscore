@@ -6,72 +6,72 @@ METHOD:PUBLISH
 X-WR-CALNAME:SunStack best sun windows
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-11-16@pacific-palisades
-DTSTAMP:20261116T234804Z
+DTSTAMP:20261117T023708Z
 SEQUENCE:0
 DTSTART:20261116T203000Z
 DTEND:20261116T210000Z
-SUMMARY:Best sun 12:30 PM-1:00 PM - 672.3 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 672.3 J/m² pigment-weighted 
+SUMMARY:Best sun 12:30 PM-1:00 PM - 671.5 J/m² pigment-weighted dose
+DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 671.5 J/m² pigment-weighted 
  dose. Absolute 21/100 (worldwide scale) · Local 72/100 (percentile within 
- this location). Peak UV 4.15 at 1:00 PM. Day total 6637.9 J/m² pigment-wei
+ this location). Peak UV 4.15 at 1:00 PM. Day total 6654.5 J/m² pigment-wei
  ghted (partial). SED 19.17 (standard erythema dose) (partial). POOR. Times
   refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-11-17@pacific-palisades
-DTSTAMP:20261116T234804Z
+DTSTAMP:20261117T023708Z
 SEQUENCE:0
 DTSTART:20261117T193000Z
 DTEND:20261117T200000Z
-SUMMARY:Best sun 11:30 AM-12:00 PM - 914.7 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 11:30 AM-12:00 PM - 914.7 J/m² pigment-weighted
+SUMMARY:Best sun 11:30 AM-12:00 PM - 913.4 J/m² pigment-weighted dose
+DESCRIPTION:Best usable sun 11:30 AM-12:00 PM - 913.4 J/m² pigment-weighted
   dose. Absolute 28/100 (worldwide scale) · Local 91/100 (percentile within
-  this location). Peak UV 4.25 at 12:00 PM. Day total 8984.2 J/m² pigment-w
- eighted (partial). SED 21.916 (standard erythema dose) (partial). FAIR. Ti
- mes refresh with each SunStack run.
+  this location). Peak UV 4.25 at 12:00 PM. Day total 8926 J/m² pigment-wei
+ ghted (partial). SED 21.916 (standard erythema dose) (partial). POOR. Time
+ s refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-11-18@pacific-palisades
-DTSTAMP:20261116T234804Z
+DTSTAMP:20261117T023708Z
 SEQUENCE:0
 DTSTART:20261118T193000Z
 DTEND:20261118T200000Z
-SUMMARY:Best sun 11:30 AM-12:00 PM - 854.9 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 11:30 AM-12:00 PM - 854.9 J/m² pigment-weighted
+SUMMARY:Best sun 11:30 AM-12:00 PM - 853.1 J/m² pigment-weighted dose
+DESCRIPTION:Best usable sun 11:30 AM-12:00 PM - 853.1 J/m² pigment-weighted
   dose. Absolute 26/100 (worldwide scale) · Local 88/100 (percentile within
-  this location). Peak UV 4.15 at 12:00 PM. Day total 8385.9 J/m² pigment-w
+  this location). Peak UV 4.15 at 12:00 PM. Day total 8373.8 J/m² pigment-w
  eighted (partial). SED 21.42 (standard erythema dose) (partial). POOR. Tim
  es refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-11-19@pacific-palisades
-DTSTAMP:20261116T234804Z
+DTSTAMP:20261117T023708Z
 SEQUENCE:0
 DTSTART:20261119T203000Z
 DTEND:20261119T210000Z
-SUMMARY:Best sun 12:30 PM-1:00 PM - 548.1 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 548.1 J/m² pigment-weighted 
+SUMMARY:Best sun 12:30 PM-1:00 PM - 547.7 J/m² pigment-weighted dose
+DESCRIPTION:Best usable sun 12:30 PM-1:00 PM - 547.7 J/m² pigment-weighted 
  dose. Absolute 17/100 (worldwide scale) · Local 65/100 (percentile within 
- this location). Peak UV 2.8 at 1:00 PM. Day total 2890.3 J/m² pigment-weig
+ this location). Peak UV 2.8 at 1:00 PM. Day total 2891.2 J/m² pigment-weig
  hted (partial). SED 6.12 (standard erythema dose) (partial). POOR. Times r
  efresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-11-20@pacific-palisades
-DTSTAMP:20261116T234804Z
+DTSTAMP:20261117T023708Z
 SEQUENCE:0
 DTSTART:20261120T193000Z
 DTEND:20261120T200000Z
-SUMMARY:Best sun 11:30 AM-12:00 PM - 830.3 J/m² pigment-weighted dose
-DESCRIPTION:Best usable sun 11:30 AM-12:00 PM - 830.3 J/m² pigment-weighted
+SUMMARY:Best sun 11:30 AM-12:00 PM - 828.3 J/m² pigment-weighted dose
+DESCRIPTION:Best usable sun 11:30 AM-12:00 PM - 828.3 J/m² pigment-weighted
   dose. Absolute 26/100 (worldwide scale) · Local 88/100 (percentile within
-  this location). Peak UV 4 at 12:00 PM. Day total 8208.7 J/m² pigment-weig
+  this location). Peak UV 4 at 12:00 PM. Day total 8183.9 J/m² pigment-weig
  hted (partial). SED 20.656 (standard erythema dose) (partial). POOR. Times
   refresh with each SunStack run.
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-11-21@pacific-palisades
-DTSTAMP:20261116T234804Z
+DTSTAMP:20261117T023708Z
 SEQUENCE:0
 DTSTART:20261121T193000Z
 DTEND:20261121T200000Z
@@ -84,7 +84,7 @@ DESCRIPTION:Best usable sun 11:30 AM-12:00 PM - 806.1 J/m² pigment-weighted
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-11-22@pacific-palisades
-DTSTAMP:20261116T234804Z
+DTSTAMP:20261117T023708Z
 SEQUENCE:0
 DTSTART:20261122T183000Z
 DTEND:20261122T190000Z
@@ -97,7 +97,7 @@ DESCRIPTION:Best usable sun 10:30 AM-11:00 AM - 539.7 J/m² pigment-weighted
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-11-23@pacific-palisades
-DTSTAMP:20261116T234804Z
+DTSTAMP:20261117T023708Z
 SEQUENCE:0
 DTSTART:20261123T193000Z
 DTEND:20261123T200000Z
@@ -110,7 +110,7 @@ DESCRIPTION:Best usable sun 11:30 AM-12:00 PM - 745 J/m² pigment-weighted d
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-11-24@pacific-palisades
-DTSTAMP:20261116T234804Z
+DTSTAMP:20261117T023708Z
 SEQUENCE:0
 DTSTART:20261124T193000Z
 DTEND:20261124T200000Z
@@ -123,7 +123,7 @@ DESCRIPTION:Best usable sun 11:30 AM-12:00 PM - 682.5 J/m² pigment-weighted
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-11-25@pacific-palisades
-DTSTAMP:20261116T234804Z
+DTSTAMP:20261117T023708Z
 SEQUENCE:0
 DTSTART:20261125T193000Z
 DTEND:20261125T200000Z
@@ -136,7 +136,7 @@ DESCRIPTION:Best usable sun 11:30 AM-12:00 PM - 684.6 J/m² pigment-weighted
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-11-26@pacific-palisades
-DTSTAMP:20261116T234804Z
+DTSTAMP:20261117T023708Z
 SEQUENCE:0
 DTSTART:20261126T193000Z
 DTEND:20261126T200000Z
@@ -149,7 +149,7 @@ DESCRIPTION:Best usable sun 11:30 AM-12:00 PM - 764.2 J/m² pigment-weighted
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-11-27@pacific-palisades
-DTSTAMP:20261116T234804Z
+DTSTAMP:20261117T023708Z
 SEQUENCE:0
 DTSTART:20261127T193000Z
 DTEND:20261127T200000Z
@@ -162,7 +162,7 @@ DESCRIPTION:Best usable sun 11:30 AM-12:00 PM - 749.2 J/m² pigment-weighted
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-11-28@pacific-palisades
-DTSTAMP:20261116T234804Z
+DTSTAMP:20261117T023708Z
 SEQUENCE:0
 DTSTART:20261128T193000Z
 DTEND:20261128T200000Z
@@ -175,7 +175,7 @@ DESCRIPTION:Best usable sun 11:30 AM-12:00 PM - 762.4 J/m² pigment-weighted
 END:VEVENT
 BEGIN:VEVENT
 UID:sunstack-best-pacific-palisades-2026-11-29@pacific-palisades
-DTSTAMP:20261116T234804Z
+DTSTAMP:20261117T023708Z
 SEQUENCE:0
 DTSTART:20261129T193000Z
 DTEND:20261129T200000Z
